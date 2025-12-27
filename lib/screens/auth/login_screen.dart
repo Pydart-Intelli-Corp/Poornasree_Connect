@@ -12,13 +12,34 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
+    _animationController.dispose();
     _emailController.dispose();
     super.dispose();
   }
@@ -40,7 +61,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     if (success && mounted) {
-      // Navigate to OTP screen with custom transition
       Navigator.push(
         context,
         PageTransition(
@@ -49,7 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } else if (mounted) {
-      // Show error message
       CustomSnackbar.showError(
         context,
         message: authProvider.errorMessage ?? 'Failed to send OTP',
@@ -59,144 +78,115 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isLargeScreen = size.width > UIConstants.breakpointTablet;
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.primaryGreen,
-              AppTheme.primaryTeal,
-            ],
-          ),
-        ),
+      body: PremiumGradientBackground(
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // App Logo
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(
+                horizontal: isLargeScreen ? UIConstants.spacing3XL : UIConstants.spacingL,
+                vertical: UIConstants.spacingXL,
+              ),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isLargeScreen ? UIConstants.maxWidthMobile : double.infinity,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.asset(
-                        'assets/images/fulllogo.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.agriculture,
-                            size: 64,
-                            color: AppTheme.primaryGreen,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Title
-                  const Text(
-                    'Poornasree Connect',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Sign in to continue',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 48),
-
-                  // Login Form Card
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Email Field
-                          CustomTextField(
-                            label: 'Email Address',
-                            hintText: 'Enter your email address',
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            prefixIcon: const Icon(
-                              Icons.email_outlined,
-                              color: AppTheme.textSecondary,
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter your email';
-                              }
-                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                  .hasMatch(value)) {
-                                return 'Please enter a valid email';
-                              }
-                              return null;
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Premium Logo Container
+                        PremiumIconContainer(
+                          size: UIConstants.iconContainerLarge,
+                          borderRadius: UIConstants.radius3XL,
+                          heroTag: 'app_logo',
+                          child: Image.asset(
+                            'assets/images/fulllogo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.agriculture_rounded,
+                                size: 70,
+                                color: AppTheme.primaryGreen,
+                              );
                             },
                           ),
-                          const SizedBox(height: 24),
+                        ),
+                        const SizedBox(height: UIConstants.spacingXXL),
 
-                          // Send OTP Button
-                          CustomButton(
-                            text: 'Send OTP',
-                            onPressed: _isLoading ? null : _sendOtp,
-                            isLoading: _isLoading,
-                            isFullWidth: true,
+                        // Welcome Text
+                        const GradientText(
+                          text: 'Welcome Back',
+                          fontSize: UIConstants.fontSize7XL,
+                        ),
+                        SizedBox(height: UIConstants.spacingS),
+                        Text(
+                          'Sign in to continue to ${AppConstants.appName}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: UIConstants.fontSizeL,
+                            color: Colors.white.withOpacity(0.85),
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+                        ),
+                        const SizedBox(height: UIConstants.spacing4XL),
 
-                  // Info Text
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      'We will send you a one-time password to your email',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
+                        // Premium Login Card
+                        PremiumCard(
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Email Field
+                                PremiumTextField(
+                                  controller: _emailController,
+                                  labelText: 'Email Address',
+                                  hintText: 'your.email@example.com',
+                                  icon: Icons.email_rounded,
+                                  keyboardType: TextInputType.emailAddress,
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter your email';
+                                    }
+                                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                      return 'Please enter a valid email';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: UIConstants.spacingXL),
+
+                                // Premium Send OTP Button
+                                PremiumGradientButton(
+                                  text: 'Send OTP',
+                                  icon: Icons.arrow_forward_rounded,
+                                  onPressed: _sendOtp,
+                                  isLoading: _isLoading,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: UIConstants.spacingXL),
+
+                        // Info Container
+                        const InfoContainer(
+                          icon: Icons.info_outline_rounded,
+                          text: 'A one-time password will be sent to your email address',
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
