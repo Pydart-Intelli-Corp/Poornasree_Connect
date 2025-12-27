@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../screens/screens.dart';
 import '../../utils/utils.dart';
 import '../../providers/providers.dart';
-import '../ui/flower_spinner.dart';
+import '../widgets.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -85,7 +85,13 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     print('🔍 SplashScreen: isAuthenticated = ${authProvider.isAuthenticated}');
-    print('🔍 SplashScreen: user = ${authProvider.user?.email}');
+    print('🔍 SplashScreen: user exists = ${authProvider.user != null}');
+    if (authProvider.user != null) {
+      print('🔍 SplashScreen: User ID = ${authProvider.user!.id}');
+      print('🔍 SplashScreen: User Email = ${authProvider.user!.email}');
+      print('🔍 SplashScreen: User Name = ${authProvider.user!.name}');
+      print('🔍 SplashScreen: User Role = ${authProvider.user!.role}');
+    }
 
     // Navigate based on authentication status
     if (authProvider.isAuthenticated && authProvider.user != null) {
@@ -162,79 +168,49 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      body: Container(
+      body: SizedBox(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.primaryGreen,
-              AppTheme.primaryTeal,
-            ],
-            stops: const [0.0, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(flex: 2),
-                
-                // Logo section
-                ScaleTransition(
-                  scale: _logoAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
+        child: PremiumGradientBackground(
+          child: SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+                  
+                  // Premium Logo Section with Hero Animation
+                  ScaleTransition(
+                    scale: _logoAnimation,
                     child: Column(
                       children: [
-                        // App logo
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
+                        // Premium Icon Container for Logo
+                        PremiumIconContainer(
+                          size: UIConstants.iconContainerLarge,
+                          borderRadius: UIConstants.radius3XL,
+                          shadowColor: AppTheme.primaryTeal,
+                          heroTag: 'app_logo',
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(
+                              UIConstants.radius3XL - UIConstants.spacingXS,
+                            ),
                             child: Image.asset(
                               'assets/images/fulllogo.png',
-                              width: 120,
-                              height: 120,
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
-                                  width: 120,
-                                  height: 120,
                                   decoration: BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(
+                                      UIConstants.radius3XL - UIConstants.spacingXS,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    Icons.agriculture,
-                                    size: 60,
+                                  child: const Icon(
+                                    Icons.agriculture_rounded,
+                                    size: 80,
                                     color: AppTheme.primaryGreen,
                                   ),
                                 );
@@ -242,46 +218,67 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        
-                        // App name
-                        Text(
-                          'Poornasree Connect',
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      const SizedBox(height: UIConstants.spacingXXL),
+                      
+                      // Premium App Name with Gradient
+                      GradientText(
+                        text: 'Poornasree Connect',
+                        fontSize: UIConstants.fontSize7XL,
+                      ),
+                      const SizedBox(height: UIConstants.spacingM),
+                      
+                      // App Tagline
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: UIConstants.spacingXL,
                         ),
-                        const SizedBox(height: 8),
-                        
-                        // App tagline
-                        Text(
+                        child: Text(
                           'Connecting Farmers to Success',
-                          style: theme.textTheme.bodyLarge?.copyWith(
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: UIConstants.fontSizeL,
                             color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 
                 const Spacer(flex: 1),
                 
-                // Loading section
+                // Loading Section with Premium Spinner
                 Column(
                   children: [
+                    // White flower spinner for green background
                     const FlowerSpinner(
-                      size: 40,
+                      size: 48,
                       color: Colors.white,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Loading...',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.8),
-                        fontWeight: FontWeight.w500,
+                    const SizedBox(height: UIConstants.spacingL),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: UIConstants.spacingL,
+                        vertical: UIConstants.spacingS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(UIConstants.radiusXL),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        'Loading your dashboard...',
+                        style: TextStyle(
+                          fontSize: UIConstants.fontSizeM,
+                          color: Colors.white.withOpacity(0.95),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -289,26 +286,59 @@ class _SplashScreenState extends State<SplashScreen>
                 
                 const Spacer(flex: 1),
                 
-                // Footer section
+                // Premium Footer Section
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  padding: const EdgeInsets.only(
+                    bottom: UIConstants.spacingXL,
+                    left: UIConstants.spacingXL,
+                    right: UIConstants.spacingXL,
+                  ),
                   child: Column(
                     children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: UIConstants.spacingL,
+                          vertical: UIConstants.spacingM,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(UIConstants.radiusL),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.verified_rounded,
+                              size: 20,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                            const SizedBox(width: UIConstants.spacingS),
+                            Text(
+                              'Powered by Poornasree Equipments',
+                              style: TextStyle(
+                                fontSize: UIConstants.fontSizeM,
+                                color: Colors.white.withOpacity(0.95),
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: UIConstants.spacingM),
                       Text(
-                        'Powered by',
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        'Version 1.0.0',
+                        style: TextStyle(
+                          fontSize: UIConstants.fontSizeS,
                           color: Colors.white.withOpacity(0.6),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Poornasree Equipments',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -317,6 +347,6 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
       ),
-    );
+     ) );
   }
 }

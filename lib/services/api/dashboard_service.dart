@@ -38,6 +38,7 @@ class DashboardService {
   // Fetch machines list
   Future<Map<String, dynamic>> getMachinesList(String token) async {
     try {
+      print('📡 Fetching machines list...');
       final response = await http.get(
         Uri.parse(ApiConfig.machines),
         headers: {
@@ -46,21 +47,45 @@ class DashboardService {
         },
       );
 
+      print('📡 Machines API response status: ${response.statusCode}');
+      print('📡 Machines API response body: ${response.body}');
+
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ Machines API success');
+        print('✅ Data type: ${data['data'].runtimeType}');
+        print('✅ Data keys: ${data['data'] is Map ? (data['data'] as Map).keys.toList() : "Not a Map"}');
+        
+        // Handle different response structures
+        List<dynamic> machines = [];
+        if (data['data'] is List) {
+          machines = data['data'];
+        } else if (data['data'] is Map && data['data']['machines'] != null) {
+          machines = data['data']['machines'];
+        } else if (data['data'] is Map) {
+          // If data is a map but doesn't have 'machines' key, try to extract from known keys
+          print('✅ Data map contents: ${data['data']}');
+          machines = [];
+        }
+        
+        print('✅ Machines count: ${machines.length}');
+        
         return {
           'success': true,
-          'machines': data['data'] ?? [],
+          'machines': machines,
         };
       } else {
+        print('❌ Machines API error: ${data['message']}');
         return {
           'success': false,
           'message': data['message'] ?? 'Failed to fetch machines',
           'machines': [],
         };
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Network/Parse error in getMachinesList: $e');
+      print('❌ Stack trace: $stackTrace');
       return {
         'success': false,
         'message': 'Network error: ${e.toString()}',

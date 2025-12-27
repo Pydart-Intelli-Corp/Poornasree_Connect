@@ -41,6 +41,10 @@ class AuthService {
   // Verify OTP and login
   Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
     try {
+      print('📡 Sending OTP verification request...');
+      print('📡 URL: ${ApiConfig.verifyOtp}');
+      print('📡 Email: $email');
+      
       final response = await http.post(
         Uri.parse(ApiConfig.verifyOtp),
         headers: {
@@ -52,11 +56,17 @@ class AuthService {
         }),
       );
 
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ API Success: Parsing user data...');
         // Parse user data
         final userData = data['data'];
+        print('✅ User data keys: ${userData.keys.toList()}');
+        
         final user = UserModel.fromJson({
           'id': userData['id'],
           'email': userData['email'],
@@ -65,6 +75,8 @@ class AuthService {
           'token': userData['token'],
           'refreshToken': userData['refreshToken'],
         });
+        
+        print('✅ UserModel created successfully');
 
         return {
           'success': true,
@@ -72,12 +84,15 @@ class AuthService {
           'user': user,
         };
       } else {
+        print('❌ API Error: ${data['message']}');
         return {
           'success': false,
           'message': data['message'] ?? 'Invalid OTP',
         };
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Network/Parse Error: $e');
+      print('❌ Stack trace: $stackTrace');
       return {
         'success': false,
         'message': 'Network error: ${e.toString()}',

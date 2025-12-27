@@ -37,17 +37,28 @@ class AuthProvider with ChangeNotifier {
       print('🔍 AuthProvider.init: Token exists: ${token != null}');
 
       if (userData != null && token != null) {
+        print('🔍 AuthProvider.init: Raw user data: $userData');
         final userMap = jsonDecode(userData);
+        print('🔍 AuthProvider.init: Parsed user map: $userMap');
+        print('🔍 AuthProvider.init: User map keys: ${userMap.keys.toList()}');
+        
         _user = UserModel.fromJson(userMap);
         _isAuthenticated = true;
-        print('✅ AuthProvider.init: User authenticated - ${_user?.email}');
+        
+        print('✅ AuthProvider.init: User authenticated');
+        print('✅ ID: ${_user?.id}');
+        print('✅ Email: ${_user?.email}');
+        print('✅ Name: ${_user?.name}');
+        print('✅ Role: ${_user?.role}');
+        print('✅ User toString: ${_user.toString()}');
       } else {
         _isAuthenticated = false;
         _user = null;
         print('ℹ️ AuthProvider.init: No stored credentials found');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ AuthProvider.init: Error loading user data: $e');
+      print('❌ Stack trace: $stackTrace');
       _isAuthenticated = false;
       _user = null;
     }
@@ -90,13 +101,23 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('🔐 Starting OTP verification for: $email');
       final result = await _authService.verifyOtp(email, otp);
       
+      print('🔐 API Response received: ${result['success']}');
+      print('🔐 Result keys: ${result.keys.toList()}');
+      
       if (result['success']) {
-        _user = UserModel.fromJson(result['user']);
+        print('🔐 Parsing user data...');
+        print('🔐 User data type: ${result['user'].runtimeType}');
         
-        print('✅ Login Success: Storing user data and tokens...');
+        // result['user'] is already a UserModel object from auth_service
+        _user = result['user'] as UserModel;
+        
+        print('✅ Login Success: User parsed successfully');
         print('✅ User: ${_user?.email}, Role: ${_user?.role}');
+        print('✅ Token: ${_user?.token != null ? "Present" : "Missing"}');
+        print('✅ Refresh Token: ${_user?.refreshToken != null ? "Present" : "Missing"}');
 
         // Store user data and tokens securely
         await _storage.write(key: _userKey, value: jsonEncode(_user!.toJson()));
@@ -110,12 +131,15 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
+        print('❌ Verification failed: ${result['message']}');
         _errorMessage = result['message'];
         _isLoading = false;
         notifyListeners();
         return false;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ ERROR in verifyOtp: $e');
+      print('❌ Stack trace: $stackTrace');
       _errorMessage = 'An error occurred: ${e.toString()}';
       _isLoading = false;
       notifyListeners();

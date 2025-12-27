@@ -69,9 +69,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
       );
     } else if (mounted) {
+      final errorMsg = authProvider.errorMessage ?? 'Failed to send OTP';
+      String submessage = 'Please try again';
+      
+      if (errorMsg.toLowerCase().contains('network')) {
+        submessage = 'Check your internet connection and retry';
+      } else if (errorMsg.toLowerCase().contains('not found') || 
+                 errorMsg.toLowerCase().contains('not registered')) {
+        submessage = 'This email is not registered in the system';
+      } else if (errorMsg.toLowerCase().contains('invalid email')) {
+        submessage = 'Please enter a valid email address';
+      } else if (errorMsg.toLowerCase().contains('server')) {
+        submessage = 'Server temporarily unavailable';
+      }
+      
       CustomSnackbar.showError(
         context,
-        message: authProvider.errorMessage ?? 'Failed to send OTP',
+        message: errorMsg,
+        submessage: submessage,
       );
     }
   }

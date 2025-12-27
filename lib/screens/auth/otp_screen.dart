@@ -132,10 +132,24 @@ class _OtpScreenState extends State<OtpScreen>
         (route) => false,
       );
     } else if (mounted) {
-      // Show error message
+      // Show detailed error message
+      final errorMsg = authProvider.errorMessage ?? 'Verification failed';
+      String submessage = 'Please check your OTP and try again';
+      
+      if (errorMsg.toLowerCase().contains('network')) {
+        submessage = 'Check your internet connection';
+      } else if (errorMsg.toLowerCase().contains('expired')) {
+        submessage = 'Request a new OTP to continue';
+      } else if (errorMsg.toLowerCase().contains('invalid')) {
+        submessage = 'The OTP you entered is incorrect';
+      } else if (errorMsg.toLowerCase().contains('server')) {
+        submessage = 'Server temporarily unavailable';
+      }
+      
       CustomSnackbar.showError(
         context,
-        message: authProvider.errorMessage ?? 'Invalid OTP',
+        message: errorMsg,
+        submessage: submessage,
       );
     }
   }
@@ -156,12 +170,29 @@ class _OtpScreenState extends State<OtpScreen>
     });
 
     if (success && mounted) {
+      if (mounted) _otpController.clear(); // Clear the OTP field
       _startResendTimer();
-      CustomSnackbar.showSuccess(context, message: 'OTP sent successfully');
+      CustomSnackbar.showSuccess(
+        context,
+        message: 'OTP sent successfully',
+        submessage: 'Check your email for the verification code',
+      );
     } else if (mounted) {
+      final errorMsg = authProvider.errorMessage ?? 'Failed to resend OTP';
+      String submessage = 'Please try again';
+      
+      if (errorMsg.toLowerCase().contains('network')) {
+        submessage = 'Check your internet connection';
+      } else if (errorMsg.toLowerCase().contains('not found')) {
+        submessage = 'Email address not registered';
+      } else if (errorMsg.toLowerCase().contains('limit')) {
+        submessage = 'Too many attempts, wait before retrying';
+      }
+      
       CustomSnackbar.showError(
         context,
-        message: authProvider.errorMessage ?? 'Failed to resend OTP',
+        message: errorMsg,
+        submessage: submessage,
       );
     }
   }
