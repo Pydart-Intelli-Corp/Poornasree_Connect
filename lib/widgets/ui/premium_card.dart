@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/utils.dart';
 
 class PremiumCard extends StatelessWidget {
   final Widget child;
@@ -15,16 +16,20 @@ class PremiumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding ?? const EdgeInsets.all(32),
+      padding: padding ?? const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(borderRadius ?? 28),
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(borderRadius ?? 16),
+        border: Border.all(
+          color: AppTheme.primaryGreen.withOpacity(0.2),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 50,
-            spreadRadius: 5,
-            offset: const Offset(0, 20),
+            color: AppTheme.primaryGreen.withOpacity(0.05),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

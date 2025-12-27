@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/utils.dart';
+import 'flower_spinner.dart';
 
 class PremiumGradientButton extends StatelessWidget {
   final String text;
@@ -48,13 +49,9 @@ class PremiumGradientButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(borderRadius ?? 16),
           child: Center(
             child: isLoading
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
+                ? const FlowerSpinner(
+                    size: 28,
+                    color: Colors.white,
                   )
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,

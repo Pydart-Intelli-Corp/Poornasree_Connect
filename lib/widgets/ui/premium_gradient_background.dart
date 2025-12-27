@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../utils/utils.dart';
 
 class PremiumGradientBackground extends StatelessWidget {
   final Widget child;
@@ -21,9 +20,9 @@ class PremiumGradientBackground extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: colors ?? [
-            const Color(0xFF1A5F3A),
-            const Color(0xFF2D8B5E),
-            AppTheme.primaryTeal,
+            const Color(0xFF0A0E27),
+            const Color(0xFF1A1F3A),
+            const Color(0xFF0F172A),
           ],
           stops: stops ?? const [0.0, 0.5, 1.0],
         ),

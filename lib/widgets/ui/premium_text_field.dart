@@ -27,46 +27,54 @@ class PremiumTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
+        color: AppTheme.darkBg2,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.grey[200]!,
-          width: 1.5,
+          color: AppTheme.primaryGreen.withOpacity(0.2),
+          width: 1,
         ),
       ),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         style: const TextStyle(
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: FontWeight.w500,
+          color: AppTheme.textPrimary,
+          letterSpacing: 0.3,
         ),
         decoration: InputDecoration(
           labelText: labelText,
+          labelStyle: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 14,
+            letterSpacing: 0.3,
+          ),
           hintText: hintText,
           hintStyle: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 15,
+            color: AppTheme.textSecondary.withOpacity(0.5),
+            fontSize: 14,
+            letterSpacing: 0.3,
           ),
           prefixIcon: Container(
-            margin: const EdgeInsets.all(12),
+            margin: const EdgeInsets.all(10),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: iconBackgroundColor ?? AppTheme.primaryGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: iconBackgroundColor ?? AppTheme.primaryGreen.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               icon,
               color: iconColor ?? AppTheme.primaryGreen,
-              size: 20,
+              size: 18,
             ),
           ),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
+            horizontal: 16,
+            vertical: 18,
           ),
-          floatingLabelBehavior: FloatingLabelBehavior.never,
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
         validator: validator,
       ),

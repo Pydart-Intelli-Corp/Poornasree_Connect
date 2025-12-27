@@ -70,22 +70,37 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
     } else if (mounted) {
       final errorMsg = authProvider.errorMessage ?? 'Failed to send OTP';
+      String message = 'Error Occurred';
       String submessage = 'Please try again';
       
-      if (errorMsg.toLowerCase().contains('network')) {
+      if (errorMsg.toLowerCase().contains('network') || 
+          errorMsg.toLowerCase().contains('connection')) {
+        message = 'Connection Failed';
         submessage = 'Check your internet connection and retry';
       } else if (errorMsg.toLowerCase().contains('not found') || 
-                 errorMsg.toLowerCase().contains('not registered')) {
-        submessage = 'This email is not registered in the system';
+                 errorMsg.toLowerCase().contains('not registered') ||
+                 (errorMsg.toLowerCase().contains('contact') && 
+                  errorMsg.toLowerCase().contains('supervisor'))) {
+        message = 'Email Not Registered';
+        submessage = 'Your email address is not registered in the system. Please contact your admin or supervisor to add your account';
       } else if (errorMsg.toLowerCase().contains('invalid email')) {
+        message = 'Invalid Email';
         submessage = 'Please enter a valid email address';
-      } else if (errorMsg.toLowerCase().contains('server')) {
-        submessage = 'Server temporarily unavailable';
+      } else if (errorMsg.toLowerCase().contains('server') || 
+                 errorMsg.toLowerCase().contains('failed to send')) {
+        message = 'Server Error';
+        submessage = 'Server is temporarily unavailable. Please try again later';
+      } else if (errorMsg.toLowerCase().contains('try again')) {
+        message = 'Request Failed';
+        submessage = 'Something went wrong, please try again';
+      } else {
+        message = 'Error Occurred';
+        submessage = errorMsg;
       }
       
       CustomSnackbar.showError(
         context,
-        message: errorMsg,
+        message: message,
         submessage: submessage,
       );
     }
@@ -93,8 +108,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isLargeScreen = size.width > UIConstants.breakpointTablet;
+    final horizontalPadding = ResponsiveHelper.getHorizontalPadding(context);
+    final verticalPadding = ResponsiveHelper.getVerticalPadding(context);
+    final maxWidth = ResponsiveHelper.getMaxContentWidth(context);
 
     return Scaffold(
       body: PremiumGradientBackground(
@@ -103,8 +119,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               padding: EdgeInsets.symmetric(
-                horizontal: isLargeScreen ? UIConstants.spacing3XL : UIConstants.spacingL,
-                vertical: UIConstants.spacingXL,
+                horizontal: horizontalPadding,
+                vertical: verticalPadding,
               ),
               child: FadeTransition(
                 opacity: _fadeAnimation,
@@ -112,47 +128,64 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   position: _slideAnimation,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: isLargeScreen ? UIConstants.maxWidthMobile : double.infinity,
+                      maxWidth: maxWidth,
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Premium Logo Container
-                        PremiumIconContainer(
-                          size: UIConstants.iconContainerLarge,
-                          borderRadius: UIConstants.radius3XL,
-                          heroTag: 'app_logo',
+                        // Logo
+                        Container(
+                          width: ResponsiveHelper.getIconSize(context, 120),
+                          height: ResponsiveHelper.getIconSize(context, 120),
+                          decoration: BoxDecoration(
+                            color: AppTheme.darkBg2,
+                            borderRadius: BorderRadius.circular(
+                              ResponsiveHelper.getSpacing(context, 20),
+                            ),
+                            border: Border.all(
+                              color: AppTheme.primaryGreen.withOpacity(0.3),
+                              width: 2,
+                            ),
+                          ),
+                          padding: EdgeInsets.all(
+                            ResponsiveHelper.getSpacing(context, 20),
+                          ),
                           child: Image.asset(
                             'assets/images/fulllogo.png',
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
+                              return Icon(
                                 Icons.agriculture_rounded,
-                                size: 70,
+                                size: ResponsiveHelper.getIconSize(context, 60),
                                 color: AppTheme.primaryGreen,
                               );
                             },
                           ),
                         ),
-                        const SizedBox(height: UIConstants.spacingXXL),
+                        SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
 
                         // Welcome Text
-                        const GradientText(
-                          text: 'Welcome Back',
-                          fontSize: UIConstants.fontSize7XL,
-                        ),
-                        SizedBox(height: UIConstants.spacingS),
                         Text(
-                          'Sign in to continue to ${AppConstants.appName}',
-                          textAlign: TextAlign.center,
+                          'Welcome Back',
                           style: TextStyle(
-                            fontSize: UIConstants.fontSizeL,
-                            color: Colors.white.withOpacity(0.85),
-                            fontWeight: FontWeight.w500,
-                            height: 1.4,
+                            fontSize: ResponsiveHelper.getFontSize(context, 32),
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                        const SizedBox(height: UIConstants.spacing4XL),
+                        SizedBox(height: ResponsiveHelper.getSpacing(context, 8)),
+                        Text(
+                          'Sign in to continue',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: ResponsiveHelper.getFontSize(context, 15),
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
 
                         // Premium Login Card
                         PremiumCard(

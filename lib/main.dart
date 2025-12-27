@@ -24,6 +24,16 @@ class MyApp extends StatelessWidget {
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.light,
         home: const SplashScreen(),
+        builder: (context, child) {
+          // Lock text scale factor to 1.0 to prevent system font size from affecting layout
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaleFactor: 1.0,
+              boldText: false,
+            ),
+            child: child!,
+          );
+        },
       ),
     );
   }

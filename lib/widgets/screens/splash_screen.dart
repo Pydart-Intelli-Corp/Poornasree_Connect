@@ -71,91 +71,107 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Wait for splash duration
-    await Future.delayed(const Duration(seconds: 3));
+    // Wait for splash duration (reduced for faster testing)
+    await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    print('🔍 SplashScreen: Checking authentication...');
+    try {
+      print('🔍 SplashScreen: Checking authentication...');
 
-    // Get auth provider and check if user is already logged in
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.init();
+      // Get auth provider and check if user is already logged in
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.init();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    print('🔍 SplashScreen: isAuthenticated = ${authProvider.isAuthenticated}');
-    print('🔍 SplashScreen: user exists = ${authProvider.user != null}');
-    if (authProvider.user != null) {
-      print('🔍 SplashScreen: User ID = ${authProvider.user!.id}');
-      print('🔍 SplashScreen: User Email = ${authProvider.user!.email}');
-      print('🔍 SplashScreen: User Name = ${authProvider.user!.name}');
-      print('🔍 SplashScreen: User Role = ${authProvider.user!.role}');
-    }
-
-    // Navigate based on authentication status
-    if (authProvider.isAuthenticated && authProvider.user != null) {
-      print('✅ SplashScreen: User authenticated, navigating to dashboard...');
-      
-      // User is already logged in, navigate to appropriate dashboard
-      Widget nextScreen;
-      
-      if (authProvider.user?.role == 'farmer') {
-        nextScreen = const FarmerDashboardScreen();
-        print('✅ SplashScreen: Navigating to Farmer Dashboard');
-      } else {
-        nextScreen = const DashboardScreen();
-        print('✅ SplashScreen: Navigating to Dashboard');
+      print('🔍 SplashScreen: isAuthenticated = ${authProvider.isAuthenticated}');
+      print('🔍 SplashScreen: user exists = ${authProvider.user != null}');
+      if (authProvider.user != null) {
+        print('🔍 SplashScreen: User ID = ${authProvider.user!.id}');
+        print('🔍 SplashScreen: User Email = ${authProvider.user!.email}');
+        print('🔍 SplashScreen: User Name = ${authProvider.user!.name}');
+        print('🔍 SplashScreen: User Role = ${authProvider.user!.role}');
       }
 
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
-          transitionDuration: const Duration(milliseconds: 600),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.0, 0.1),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                )),
-                child: child,
-              ),
-            );
-          },
-        ),
-      );
-    } else {
-      print('ℹ️ SplashScreen: User not authenticated, navigating to login...');
+      // Navigate based on authentication status
+      if (authProvider.isAuthenticated && authProvider.user != null) {
+        print('✅ SplashScreen: User authenticated, navigating to dashboard...');
+        
+        // User is already logged in, navigate to appropriate dashboard
+        Widget nextScreen;
+        
+        if (authProvider.user?.role == 'farmer') {
+          nextScreen = const FarmerDashboardScreen();
+          print('✅ SplashScreen: Navigating to Farmer Dashboard');
+        } else {
+          nextScreen = const DashboardScreen();
+          print('✅ SplashScreen: Navigating to Dashboard');
+        }
+
+        if (!mounted) return;
+
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 0.1),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  )),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        );
+      } else {
+        print('ℹ️ SplashScreen: User not authenticated, navigating to login...');
+        
+        if (!mounted) return;
+
+        // User is not logged in, navigate to login screen
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const LoginScreen(),
+            transitionDuration: const Duration(milliseconds: 600),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 0.1),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  )),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      print('❌ SplashScreen Navigation Error: $e');
+      print('❌ Stack trace: $stackTrace');
       
-      // User is not logged in, navigate to login screen
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const LoginScreen(),
-          transitionDuration: const Duration(milliseconds: 600),
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.0, 0.1),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                )),
-                child: child,
-              ),
-            );
-          },
-        ),
-      );
+      // Fallback to login screen on error
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
     }
   }
 
@@ -168,185 +184,205 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      body: SizedBox(
+      body: Container(
         width: double.infinity,
         height: double.infinity,
-        child: PremiumGradientBackground(
-          child: SafeArea(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  
-                  // Premium Logo Section with Hero Animation
-                  ScaleTransition(
-                    scale: _logoAnimation,
-                    child: Column(
-                      children: [
-                        // Premium Icon Container for Logo
-                        PremiumIconContainer(
-                          size: UIConstants.iconContainerLarge,
-                          borderRadius: UIConstants.radius3XL,
-                          shadowColor: AppTheme.primaryTeal,
-                          heroTag: 'app_logo',
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              UIConstants.radius3XL - UIConstants.spacingXS,
-                            ),
-                            child: Image.asset(
-                              'assets/images/fulllogo.png',
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(
-                                      UIConstants.radius3XL - UIConstants.spacingXS,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.agriculture_rounded,
-                                    size: 80,
-                                    color: AppTheme.primaryGreen,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: UIConstants.spacingXXL),
-                      
-                      // Premium App Name with Gradient
-                      GradientText(
-                        text: 'Poornasree Connect',
-                        fontSize: UIConstants.fontSize7XL,
-                      ),
-                      const SizedBox(height: UIConstants.spacingM),
-                      
-                      // App Tagline
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: UIConstants.spacingXL,
-                        ),
-                        child: Text(
-                          'Connecting Farmers to Success',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: UIConstants.fontSizeL,
-                            color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0A0E27),
+              Color(0xFF1A1F3A),
+              Color(0xFF0F172A),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Stack(
+              children: [
+                // Subtle grid pattern overlay
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0.03,
+                    child: CustomPaint(
+                      painter: GridPainter(),
+                    ),
                   ),
                 ),
                 
-                const Spacer(flex: 1),
-                
-                // Loading Section with Premium Spinner
+                // Main content
                 Column(
                   children: [
-                    // White flower spinner for green background
-                    const FlowerSpinner(
-                      size: 48,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(height: UIConstants.spacingL),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: UIConstants.spacingL,
-                        vertical: UIConstants.spacingS,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(UIConstants.radiusXL),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        'Loading your dashboard...',
-                        style: TextStyle(
-                          fontSize: UIConstants.fontSizeM,
-                          color: Colors.white.withOpacity(0.95),
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const Spacer(flex: 1),
-                
-                // Premium Footer Section
-                Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: UIConstants.spacingXL,
-                    left: UIConstants.spacingXL,
-                    right: UIConstants.spacingXL,
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
+                    // Dairy Management System at top
+                    Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: UIConstants.spacingL,
-                          vertical: UIConstants.spacingM,
+                          horizontal: 20,
+                          vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(UIConstants.radiusL),
+                          color: AppTheme.primaryGreen.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
+                            color: AppTheme.primaryGreen.withOpacity(0.2),
                             width: 1,
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        child: Text(
+                          'Dairy Management System',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1,
+                            color: AppTheme.primaryGreen.withOpacity(0.9),
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const Spacer(),
+                    
+                    // Logo centered
+                    ScaleTransition(
+                      scale: _logoAnimation,
+                      child: Image.asset(
+                        'assets/images/fulllogo.png',
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 160,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: const Icon(
+                              Icons.agriculture_rounded,
+                              size: 80,
+                              color: AppTheme.primaryGreen,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    const Spacer(),
+                    
+                    // Loading section - minimal
+                    Column(
+                      children: [
+                        const FlowerSpinner(
+                          size: 40,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Initializing...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.5,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 60),
+                    
+                    // Footer - minimal
+                    Column(
+                      children: [
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.verified_rounded,
-                              size: 20,
-                              color: Colors.white.withOpacity(0.9),
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryGreen.withOpacity(0.5),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: UIConstants.spacingS),
+                            const SizedBox(width: 12),
                             Text(
-                              'Powered by Poornasree Equipments',
+                              'Poornasree Equipments',
                               style: TextStyle(
-                                fontSize: UIConstants.fontSizeM,
-                                color: Colors.white.withOpacity(0.95),
+                                fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                letterSpacing: 0.3,
+                                letterSpacing: 1,
+                                color: Colors.white.withOpacity(0.6),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: UIConstants.spacingM),
-                      Text(
-                        'Version 1.0.0',
-                        style: TextStyle(
-                          fontSize: UIConstants.fontSizeS,
-                          color: Colors.white.withOpacity(0.6),
-                          fontWeight: FontWeight.w500,
+                        const SizedBox(height: 8),
+                        Text(
+                          'v1.0.0',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withOpacity(0.3),
+                            letterSpacing: 1,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ),
-     ) );
+    );
   }
+}
+
+// Grid painter for subtle tech background
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.05)
+      ..strokeWidth = 0.5;
+
+    const gridSize = 40.0;
+
+    // Draw vertical lines
+    for (double i = 0; i < size.width; i += gridSize) {
+      canvas.drawLine(
+        Offset(i, 0),
+        Offset(i, size.height),
+        paint,
+      );
+    }
+
+    // Draw horizontal lines
+    for (double i = 0; i < size.height; i += gridSize) {
+      canvas.drawLine(
+        Offset(0, i),
+        Offset(size.width, i),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -24,6 +24,8 @@ class _OtpScreenState extends State<OtpScreen>
   bool _canResend = false;
   int _resendTimer = 60;
   Timer? _timer;
+  bool _isDisposed = false;
+  bool _isNavigating = false; // Add navigation lock
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -51,16 +53,31 @@ class _OtpScreenState extends State<OtpScreen>
 
   @override
   void dispose() {
-    _animationController.dispose();
+    // Set disposal flag first to stop all operations
+    _isDisposed = true;
+    _isNavigating = false;
+    
+    // Cancel timer
     _timer?.cancel();
-    _otpController.dispose();
+    _timer = null;
+    
+    // Dispose animation controller
+    _animationController.dispose();
+    
+    // Safely dispose text controller
+    try {
+      _otpController.dispose();
+    } catch (e) {
+      print('Controller disposal error: $e');
+    }
+    
     super.dispose();
   }
 
   void _startResendTimer() {
     _timer?.cancel();
 
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
 
     setState(() {
       _canResend = false;
@@ -68,18 +85,20 @@ class _OtpScreenState extends State<OtpScreen>
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
+      if (!mounted || _isDisposed) {
         timer.cancel();
         return;
       }
 
       if (_resendTimer > 0) {
-        setState(() {
-          _resendTimer--;
-        });
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _resendTimer--;
+          });
+        }
       } else {
         timer.cancel();
-        if (mounted) {
+        if (mounted && !_isDisposed) {
           setState(() {
             _canResend = true;
           });
@@ -89,10 +108,18 @@ class _OtpScreenState extends State<OtpScreen>
   }
 
   Future<void> _verifyOtp() async {
-    if (!mounted) return;
+    if (!mounted || _isDisposed || _isNavigating) return;
 
-    // Store OTP value before any async operations
-    final otpText = _otpController.text;
+    // Store OTP value before any async operations - check if controller is disposed
+    String otpText = '';
+    try {
+      if (!_isDisposed && _otpController.text.isNotEmpty) {
+        otpText = _otpController.text;
+      }
+    } catch (e) {
+      print('Controller access error: $e');
+      return;
+    }
 
     if (otpText.length != 6) {
       CustomSnackbar.showError(
@@ -102,7 +129,7 @@ class _OtpScreenState extends State<OtpScreen>
       return;
     }
 
-    if (!mounted) return;
+    if (!mounted || _isDisposed || _isNavigating) return;
     setState(() {
       _isLoading = true;
     });
@@ -110,28 +137,46 @@ class _OtpScreenState extends State<OtpScreen>
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.verifyOtp(widget.email, otpText);
 
-    if (!mounted) return;
+    if (!mounted || _isDisposed || _isNavigating) return;
     setState(() {
       _isLoading = false;
     });
 
-    if (success && mounted) {
+    if (success && mounted && !_isDisposed && !_isNavigating) {
+      // Set navigation lock to prevent multiple navigation attempts
+      _isNavigating = true;
+      
       // Navigate to appropriate dashboard based on role
       final user = authProvider.user;
-      Widget nextScreen;
-
-      if (user?.role == 'farmer') {
-        nextScreen = const FarmerDashboardScreen();
-      } else {
-        nextScreen = const DashboardScreen();
+      
+      // Cancel timer before navigation
+      _timer?.cancel();
+      
+      // Use immediate navigation instead of postFrameCallback
+      try {
+        if (user?.role == 'farmer') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const FarmerDashboardScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        print('Navigation error: $e');
+        // Reset navigation lock on error
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _isNavigating = false;
+          });
+        }
       }
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        PageTransition(child: nextScreen, type: TransitionType.slideAndFade),
-        (route) => false,
-      );
-    } else if (mounted) {
+    } else if (mounted && !_isDisposed) {
       // Show detailed error message
       final errorMsg = authProvider.errorMessage ?? 'Verification failed';
       String submessage = 'Please check your OTP and try again';
@@ -155,7 +200,7 @@ class _OtpScreenState extends State<OtpScreen>
   }
 
   Future<void> _resendOtp() async {
-    if (!_canResend || !mounted) return;
+    if (!_canResend || !mounted || _isDisposed) return;
 
     setState(() {
       _isLoading = true;
@@ -164,20 +209,27 @@ class _OtpScreenState extends State<OtpScreen>
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.sendOtp(widget.email);
 
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
     setState(() {
       _isLoading = false;
     });
 
-    if (success && mounted) {
-      if (mounted) _otpController.clear(); // Clear the OTP field
+    if (success && mounted && !_isDisposed) {
+      // Clear the OTP field safely
+      try {
+        if (!_isDisposed) {
+          _otpController.clear();
+        }
+      } catch (e) {
+        print('Controller clear error: $e');
+      }
       _startResendTimer();
       CustomSnackbar.showSuccess(
         context,
         message: 'OTP sent successfully',
         submessage: 'Check your email for the verification code',
       );
-    } else if (mounted) {
+    } else if (mounted && !_isDisposed) {
       final errorMsg = authProvider.errorMessage ?? 'Failed to resend OTP';
       String submessage = 'Please try again';
       
@@ -199,8 +251,8 @@ class _OtpScreenState extends State<OtpScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isLargeScreen = size.width > UIConstants.breakpointTablet;
+    final horizontalPadding = ResponsiveHelper.getHorizontalPadding(context);
+    final maxWidth = ResponsiveHelper.getMaxContentWidth(context);
 
     return Scaffold(
       body: PremiumGradientBackground(
@@ -209,7 +261,9 @@ class _OtpScreenState extends State<OtpScreen>
             children: [
               // Premium App Bar
               Padding(
-                padding: const EdgeInsets.all(UIConstants.spacingM),
+                padding: EdgeInsets.all(
+                  ResponsiveHelper.getSpacing(context, 16),
+                ),
                 child: Row(
                   children: [
                     TransparentBackButton(
@@ -225,10 +279,8 @@ class _OtpScreenState extends State<OtpScreen>
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     padding: EdgeInsets.symmetric(
-                      horizontal: isLargeScreen
-                          ? UIConstants.spacing3XL
-                          : UIConstants.spacingL,
-                      vertical: UIConstants.spacingL,
+                      horizontal: horizontalPadding,
+                      vertical: ResponsiveHelper.getSpacing(context, 24),
                     ),
                     child: FadeTransition(
                       opacity: _fadeAnimation,
@@ -236,79 +288,75 @@ class _OtpScreenState extends State<OtpScreen>
                         position: _slideAnimation,
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                            maxWidth: isLargeScreen
-                                ? UIConstants.maxWidthMobile
-                                : double.infinity,
+                            maxWidth: maxWidth,
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              // Premium Icon Container
-                              PremiumIconContainer(
-                                size: UIConstants.iconContainerMedium,
-                                borderRadius: UIConstants.radiusXXL,
-                                shadowColor: AppTheme.primaryTeal,
-                                heroTag: 'otp_icon',
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primaryGreen
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(
-                                          UIConstants.radiusXL,
-                                        ),
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.mark_email_read_rounded,
-                                      size: 45,
-                                      color: AppTheme.primaryGreen,
-                                    ),
-                                  ],
+                              // Icon
+                              Container(
+                                width: ResponsiveHelper.getIconSize(context, 100),
+                                height: ResponsiveHelper.getIconSize(context, 100),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.darkBg2,
+                                  borderRadius: BorderRadius.circular(
+                                    ResponsiveHelper.getSpacing(context, 20),
+                                  ),
+                                  border: Border.all(
+                                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.mark_email_read_rounded,
+                                  size: ResponsiveHelper.getIconSize(context, 50),
+                                  color: AppTheme.primaryGreen,
                                 ),
                               ),
-                              const SizedBox(height: UIConstants.spacingXXL),
+                              SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
 
                               // Title
-                              const GradientText(
-                                text: 'Verify OTP',
-                                fontSize: UIConstants.fontSize6XL,
+                              Text(
+                                'Verify OTP',
+                                style: TextStyle(
+                                  fontSize: ResponsiveHelper.getFontSize(context, 32),
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
-                              const SizedBox(height: UIConstants.spacingS),
+                              SizedBox(height: ResponsiveHelper.getSpacing(context, 8)),
                               Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: UIConstants.radiusXL,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: ResponsiveHelper.getSpacing(context, 20),
                                 ),
                                 child: RichText(
                                   textAlign: TextAlign.center,
                                   text: TextSpan(
                                     style: TextStyle(
-                                      fontSize: UIConstants.fontSizeL,
-                                      color: Colors.white.withOpacity(0.85),
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: ResponsiveHelper.getFontSize(context, 15),
+                                      color: AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w400,
                                       height: 1.4,
+                                      letterSpacing: 0.3,
                                     ),
                                     children: [
                                       const TextSpan(
-                                        text:
-                                            'We sent a verification code to\n',
+                                        text: 'We sent a verification code to\n',
                                       ),
                                       TextSpan(
                                         text: widget.email,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w700,
-                                          color: Colors.white,
+                                          color: AppTheme.primaryGreen,
+                                          letterSpacing: 0.3,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: UIConstants.spacing4XL),
+                              SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
 
                               // Premium OTP Card
                               PremiumCard(
@@ -321,36 +369,39 @@ class _OtpScreenState extends State<OtpScreen>
                                       controller: _otpController,
                                       keyboardType: TextInputType.number,
                                       animationType: AnimationType.scale,
+                                      enabled: !_isDisposed && !_isNavigating,
                                       animationDuration: const Duration(
                                         milliseconds: 200,
                                       ),
                                       enableActiveFill: true,
-                                      textStyle: const TextStyle(
-                                        fontSize: UIConstants.fontSize3XL,
+                                      textStyle: TextStyle(
+                                        fontSize: ResponsiveHelper.getFontSize(context, 24),
                                         fontWeight: FontWeight.w700,
                                         color: AppTheme.primaryGreen,
+                                        letterSpacing: 0.5,
                                       ),
                                       pinTheme: PinTheme(
                                         shape: PinCodeFieldShape.box,
                                         borderRadius: BorderRadius.circular(
-                                          UIConstants.radiusM,
+                                          ResponsiveHelper.getSpacing(context, 12),
                                         ),
-                                        fieldHeight: 60,
-                                        fieldWidth: 50,
-                                        borderWidth: 2,
+                                        fieldHeight: ResponsiveHelper.getIconSize(context, 60),
+                                        fieldWidth: ResponsiveHelper.getIconSize(context, 50),
+                                        borderWidth: 1.5,
                                         activeColor: AppTheme.primaryGreen,
-                                        selectedColor: AppTheme.primaryTeal,
-                                        inactiveColor: Colors.grey[300]!,
-                                        activeFillColor: AppTheme.primaryGreen
-                                            .withOpacity(0.05),
-                                        selectedFillColor: AppTheme.primaryTeal
-                                            .withOpacity(0.05),
-                                        inactiveFillColor: Colors.grey[50]!,
+                                        selectedColor: AppTheme.primaryGreen.withOpacity(0.6),
+                                        inactiveColor: AppTheme.primaryGreen.withOpacity(0.2),
+                                        activeFillColor: AppTheme.darkBg2,
+                                        selectedFillColor: AppTheme.darkBg2,
+                                        inactiveFillColor: AppTheme.darkBg2,
                                       ),
-                                      onChanged: (value) {},
+                                      onChanged: (value) {
+                                        // Prevent any state updates after disposal
+                                        if (!mounted || _isDisposed) return;
+                                      },
                                     ),
-                                    const SizedBox(
-                                      height: UIConstants.spacingXL,
+                                    SizedBox(
+                                      height: ResponsiveHelper.getSpacing(context, 24),
                                     ),
 
                                     // Verify Button
@@ -360,8 +411,8 @@ class _OtpScreenState extends State<OtpScreen>
                                       onPressed: _verifyOtp,
                                       isLoading: _isLoading,
                                     ),
-                                    const SizedBox(
-                                      height: UIConstants.spacingL,
+                                    SizedBox(
+                                      height: ResponsiveHelper.getSpacing(context, 20),
                                     ),
 
                                     // Resend OTP
@@ -372,64 +423,68 @@ class _OtpScreenState extends State<OtpScreen>
                                         Text(
                                           'Didn\'t receive code? ',
                                           style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: UIConstants.fontSizeM,
+                                            color: AppTheme.textSecondary,
+                                            fontSize: ResponsiveHelper.getFontSize(context, 14),
                                             fontWeight: FontWeight.w500,
+                                            letterSpacing: 0.2,
                                           ),
                                         ),
                                         if (_canResend)
                                           InkWell(
                                             onTap: _resendOtp,
-                                            borderRadius: BorderRadius.circular(
-                                              UIConstants.radiusS,
-                                            ),
+                                            borderRadius: BorderRadius.circular(8),
                                             child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal:
-                                                        UIConstants.radiusS,
-                                                    vertical: 4,
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.refresh_rounded,
+                                                    size: ResponsiveHelper.getIconSize(context, 16),
+                                                    color: AppTheme.primaryGreen,
                                                   ),
-                                              child: ShaderMask(
-                                                shaderCallback: (bounds) =>
-                                                    const LinearGradient(
-                                                      colors: [
-                                                        AppTheme.primaryGreen,
-                                                        AppTheme.primaryTeal,
-                                                      ],
-                                                    ).createShader(bounds),
-                                                child: const Text(
-                                                  'Resend',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize:
-                                                        UIConstants.fontSizeM,
-                                                    fontWeight: FontWeight.w700,
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Resend',
+                                                    style: TextStyle(
+                                                      color: AppTheme.primaryGreen,
+                                                      fontSize: ResponsiveHelper.getFontSize(context, 14),
+                                                      fontWeight: FontWeight.w700,
+                                                      letterSpacing: 0.3,
+                                                    ),
                                                   ),
-                                                ),
+                                                ],
                                               ),
                                             ),
                                           )
                                         else
-                                          Container(
+                                          Padding(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: UIConstants.spacingS,
-                                              vertical: 6,
+                                              horizontal: 8,
+                                              vertical: 4,
                                             ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey[100],
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                    UIConstants.radiusS,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.timer_outlined,
+                                                  size: ResponsiveHelper.getIconSize(context, 16),
+                                                  color: AppTheme.textSecondary,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${_resendTimer}s',
+                                                  style: TextStyle(
+                                                    color: AppTheme.textSecondary,
+                                                    fontSize: ResponsiveHelper.getFontSize(context, 14),
+                                                    fontWeight: FontWeight.w600,
+                                                    letterSpacing: 0.2,
                                                   ),
-                                            ),
-                                            child: Text(
-                                              'Resend in $_resendTimer s',
-                                              style: TextStyle(
-                                                color: Colors.grey[600],
-                                                fontSize: UIConstants.fontSizeS,
-                                                fontWeight: FontWeight.w600,
-                                              ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                       ],

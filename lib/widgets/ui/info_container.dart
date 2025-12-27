@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/utils.dart';
 
 class InfoContainer extends StatelessWidget {
   final String text;
@@ -20,35 +21,35 @@ class InfoContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? Colors.white.withOpacity(0.15);
-    final txtColor = textColor ?? Colors.white.withOpacity(0.9);
-    final icnColor = iconColor ?? Colors.white.withOpacity(0.9);
+    final bgColor = backgroundColor ?? AppTheme.darkBg2;
+    final txtColor = textColor ?? AppTheme.textSecondary;
+    final icnColor = iconColor ?? AppTheme.primaryGreen;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(borderRadius ?? 16),
+        borderRadius: BorderRadius.circular(borderRadius ?? 12),
         border: Border.all(
-          color: Colors.white.withOpacity(0.2),
+          color: AppTheme.primaryGreen.withOpacity(0.2),
           width: 1,
         ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: AppTheme.primaryGreen.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               icon,
               color: icnColor,
-              size: 20,
+              size: 18,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
@@ -57,6 +58,7 @@ class InfoContainer extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 height: 1.4,
+                letterSpacing: 0.2,
               ),
             ),
           ),

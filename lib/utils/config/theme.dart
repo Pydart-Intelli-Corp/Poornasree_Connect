@@ -1,82 +1,90 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Primary Colors - Emerald/Green theme matching web app
-  static const Color primaryGreen = Color(0xFF10b981);
-  static const Color primaryTeal = Color(0xFF14b8a6);
+  // Primary Colors - Tech theme with dark navy and green accents
+  static const Color primaryGreen = Color(0xFF10B981);
+  static const Color primaryTeal = Color(0xFF14B8A6);
   static const Color primaryBlue = Color(0xFF3b82f6);
   static const Color primaryPurple = Color(0xFF8b5cf6);
   static const Color primaryAmber = Color(0xFFf59e0b);
 
-  // Background Colors
+  // Dark Tech Background Colors
+  static const Color darkBg = Color(0xFF0A0E27);
+  static const Color darkBg2 = Color(0xFF1A1F3A);
+  static const Color darkBg3 = Color(0xFF0F172A);
+  static const Color cardDark = Color(0xFF1E293B);
+  static const Color cardDark2 = Color(0xFF334155);
+  
+  // Light fallback colors
   static const Color lightBg = Color(0xFFF9FAFB);
-  static const Color darkBg = Color(0xFF111827);
   static const Color cardLight = Colors.white;
-  static const Color cardDark = Color(0xFF1F2937);
 
-  // Text Colors
-  static const Color textPrimary = Color(0xFF111827);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textPrimaryDark = Color(0xFFF9FAFB);
-  static const Color textSecondaryDark = Color(0xFF9CA3AF);
+  // Text Colors for dark theme
+  static const Color textPrimary = Color(0xFFF9FAFB);
+  static const Color textSecondary = Color(0xFF9CA3AF);
+  static const Color textTertiary = Color(0xFF6B7280);
+  
+  // Light theme text
+  static const Color textPrimaryLight = Color(0xFF111827);
+  static const Color textSecondaryLight = Color(0xFF6B7280);
 
   // Border Colors
-  static const Color borderGray = Color(0xFFE5E7EB);
   static const Color borderDark = Color(0xFF374151);
+  static const Color borderLight = Color(0xFFE5E7EB);
 
-  // Error Color
+  // Error & Success
   static const Color errorColor = Color(0xFFEF4444);
-
-  // Success Color
-  static const Color successColor = Color(0xFF10b981);
+  static const Color successColor = Color(0xFF10B981);
 
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
-    brightness: Brightness.light,
+    brightness: Brightness.dark, // Changed to dark for tech theme
     primaryColor: primaryGreen,
-    scaffoldBackgroundColor: lightBg,
-    colorScheme: const ColorScheme.light(
+    scaffoldBackgroundColor: darkBg,
+    colorScheme: const ColorScheme.dark(
       primary: primaryGreen,
       secondary: primaryTeal,
-      surface: cardLight,
-      error: Color(0xFFEF4444),
+      surface: cardDark,
+      error: errorColor,
+      brightness: Brightness.dark,
     ),
     appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.white,
+      backgroundColor: cardDark,
       elevation: 0,
       iconTheme: IconThemeData(color: textPrimary),
       titleTextStyle: TextStyle(
         color: textPrimary,
         fontSize: 20,
         fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
       ),
     ),
     cardTheme: CardThemeData(
-      color: cardLight,
+      color: cardDark,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: borderDark.withOpacity(0.5)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: cardDark,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: borderDark),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: borderDark),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: primaryGreen, width: 2),
+        borderSide: BorderSide(color: primaryGreen.withOpacity(0.5), width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+        borderSide: const BorderSide(color: errorColor),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
@@ -92,6 +100,7 @@ class AppTheme {
         textStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
         ),
       ),
     ),
@@ -100,11 +109,13 @@ class AppTheme {
         fontSize: 32,
         fontWeight: FontWeight.bold,
         color: textPrimary,
+        letterSpacing: 0.5,
       ),
       headlineMedium: TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.w600,
         color: textPrimary,
+        letterSpacing: 0.5,
       ),
       bodyLarge: TextStyle(
         fontSize: 16,
@@ -126,16 +137,17 @@ class AppTheme {
       primary: primaryGreen,
       secondary: primaryTeal,
       surface: cardDark,
-      error: Color(0xFFEF4444),
+      error: errorColor,
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: cardDark,
       elevation: 0,
-      iconTheme: IconThemeData(color: textPrimaryDark),
+      iconTheme: IconThemeData(color: textPrimary),
       titleTextStyle: TextStyle(
-        color: textPrimaryDark,
+        color: textPrimary,
         fontSize: 20,
         fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
       ),
     ),
     cardTheme: CardThemeData(
@@ -143,7 +155,7 @@ class AppTheme {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade800),
+        side: BorderSide(color: borderDark.withOpacity(0.5)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -171,20 +183,22 @@ class AppTheme {
       displayLarge: TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.bold,
-        color: textPrimaryDark,
+        color: textPrimary,
+        letterSpacing: 0.5,
       ),
       headlineMedium: TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.w600,
-        color: textPrimaryDark,
+        color: textPrimary,
+        letterSpacing: 0.5,
       ),
       bodyLarge: TextStyle(
         fontSize: 16,
-        color: textPrimaryDark,
+        color: textPrimary,
       ),
       bodyMedium: TextStyle(
         fontSize: 14,
-        color: textSecondaryDark,
+        color: textSecondary,
       ),
     ),
   );

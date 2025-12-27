@@ -7,6 +7,8 @@ class AuthService {
   // Send OTP to email
   Future<Map<String, dynamic>> sendOtp(String email) async {
     try {
+      print('📡 Sending OTP request for email: $email');
+      
       final response = await http.post(
         Uri.parse(ApiConfig.sendOtp),
         headers: {
@@ -17,6 +19,9 @@ class AuthService {
         }),
       );
 
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
@@ -25,15 +30,30 @@ class AuthService {
           'message': data['message'] ?? 'OTP sent successfully',
         };
       } else {
+        // Handle error response - API returns error message in 'error' field
+        String errorMessage = 'Failed to send OTP';
+        
+        // Check 'error' field first (this is where backend sends actual error details)
+        if (data['error'] != null) {
+          errorMessage = data['error'];
+        } else if (data['message'] != null && data['message'] != 'Error occurred') {
+          errorMessage = data['message'];
+        } else if (data['data'] != null && data['data']['message'] != null) {
+          errorMessage = data['data']['message'];
+        }
+        
+        print('❌ API Error: $errorMessage');
+        
         return {
           'success': false,
-          'message': data['message'] ?? 'Failed to send OTP',
+          'message': errorMessage,
         };
       }
     } catch (e) {
+      print('❌ Network Error: $e');
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: Unable to connect to server',
       };
     }
   }
@@ -63,20 +83,24 @@ class AuthService {
 
       if (response.statusCode == 200 && data['success'] == true) {
         print('✅ API Success: Parsing user data...');
-        // Parse user data
-        final userData = data['data'];
+        // The API returns user data in data.user, not data directly
+        final responseData = data['data'];
+        final userData = responseData['user'];
+        print('✅ User data: $userData');
         print('✅ User data keys: ${userData.keys.toList()}');
         
+        // Create UserModel with all fields from the API response
         final user = UserModel.fromJson({
-          'id': userData['id'],
-          'email': userData['email'],
-          'role': userData['role'],
-          'name': userData['name'],
-          'token': userData['token'],
-          'refreshToken': userData['refreshToken'],
+          ...userData, // Spread all user data fields
+          'token': responseData['token'],
+          'refreshToken': responseData['refreshToken'],
         });
         
         print('✅ UserModel created successfully');
+        print('✅ User ID: ${user.id}');
+        print('✅ User Email: ${user.email}');
+        print('✅ User Name: ${user.name}');
+        print('✅ User Role: ${user.role}');
 
         return {
           'success': true,
