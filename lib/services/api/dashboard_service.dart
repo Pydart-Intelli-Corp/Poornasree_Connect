@@ -125,4 +125,51 @@ class DashboardService {
       };
     }
   }
+
+  // Fetch dashboard statistics (last 30 days)
+  Future<Map<String, dynamic>> getStatistics(String token) async {
+    try {
+      print('📊 ===== FETCHING DASHBOARD STATISTICS =====');
+      print('📊 API URL: ${ApiConfig.statistics}');
+      print('📊 Token length: ${token.length}');
+      print('📊 Token preview: ${token.substring(0, 20)}...');
+      
+      final response = await http.get(
+        Uri.parse(ApiConfig.statistics),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('📊 Statistics API response status: ${response.statusCode}');
+      print('📊 Statistics API response body: ${response.body}');
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ Statistics fetched successfully');
+        print('✅ Statistics data: ${data['data']}');
+        return {
+          'success': true,
+          'statistics': data['data'],
+        };
+      } else {
+        print('❌ Statistics API error: ${data['message']}');
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch statistics',
+          'statistics': null,
+        };
+      }
+    } catch (e, stackTrace) {
+      print('❌ Network/Parse error in getStatistics: $e');
+      print('❌ Stack trace: $stackTrace');
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+        'statistics': null,
+      };
+    }
+  }
 }

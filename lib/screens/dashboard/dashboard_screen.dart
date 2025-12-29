@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../providers/providers.dart';
 import '../../services/services.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
 import '../auth/login_screen.dart';
+import '../reports/reports_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,6 +19,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardService _dashboardService = DashboardService();
   List<dynamic> _machines = [];
+  Map<String, dynamic>? _statistics;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -23,6 +27,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _logUserData();
+  }
+
+  void _logUserData() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    print('🔍 Dashboard User Data:');
+    print('  BMC Name: ${user?.bmcName}');
+    print('  Dairy Name: ${user?.dairyName}');
+    print('  Dairy ID: ${user?.dairyId}');
   }
 
   Future<void> _loadData() async {
@@ -42,20 +56,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    // Load machines list
-    final machinesResult = await _dashboardService.getMachinesList(token);
+    // Load machines list and statistics in parallel
+    final results = await Future.wait([
+      _dashboardService.getMachinesList(token),
+      _dashboardService.getStatistics(token),
+    ]);
+
+    final machinesResult = results[0];
+    final statsResult = results[1];
 
     if (machinesResult['success']) {
       setState(() {
         _machines = machinesResult['machines'];
-        _isLoading = false;
       });
     } else {
       setState(() {
         _errorMessage = machinesResult['message'];
-        _isLoading = false;
       });
     }
+
+    if (statsResult['success']) {
+      setState(() {
+        _statistics = statsResult['statistics'];
+      });
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   Future<void> _logout() async {
@@ -74,6 +102,212 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _showEntityDetails(BuildContext context, String title, IconData icon, Map<String, dynamic> details) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final token = authProvider.user?.token;
+    
+    // Show loading dialog first
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: AppTheme.cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppTheme.primaryGreen),
+              const SizedBox(height: 16),
+              Text(
+                'Loading details...',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Fetch full details from API
+    Map<String, dynamic> fullDetails = details;
+    if (token != null) {
+      try {
+        final entityId = details['ID'];
+        final entityType = title.toLowerCase().contains('bmc') ? 'bmc' : 'dairy';
+        
+        if (entityId != null) {
+          final response = await http.get(
+            Uri.parse('${ApiConfig.baseUrl}/api/external/entity/$entityType/$entityId'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            if (data['success'] == true && data['data'] != null) {
+              final apiData = data['data'];
+              fullDetails = {
+                'Name': apiData['name'],
+                if (entityType == 'bmc') 'BMC ID': apiData['bmc_id'],
+                if (entityType == 'dairy') 'Dairy ID': apiData['dairy_id'],
+                'Email': apiData['email'],
+                'Location': apiData['location'],
+                if (apiData['contact_phone'] != null) 'Contact Phone': apiData['contact_phone'],
+                if (entityType == 'dairy' && apiData['president_name'] != null) 'President': apiData['president_name'],
+                'Status': apiData['status']?.toString().toUpperCase(),
+                if (entityType == 'bmc' && apiData['dairy_name'] != null) ...{
+                  'Dairy Name': apiData['dairy_name'],
+                  if (apiData['dairy_location'] != null) 'Dairy Location': apiData['dairy_location'],
+                  if (apiData['dairy_contact'] != null) 'Dairy Contact': apiData['dairy_contact'],
+                },
+              };
+            }
+          }
+        }
+      } catch (e) {
+        print('Error fetching entity details: $e');
+      }
+    }
+
+    // Close loading dialog
+    if (context.mounted) Navigator.pop(context);
+
+    // Show details dialog
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: AppTheme.cardDark,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 28,
+                        color: AppTheme.primaryGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: AppTheme.textSecondary),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.darkBg2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.primaryGreen.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: fullDetails.entries.where((e) => e.value != null && e.value.toString().isNotEmpty).map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                entry.key,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                entry.value.toString(),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -86,6 +320,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
+            tooltip: 'Refresh',
+          ),
+          IconButton(
+            icon: const Icon(Icons.assessment_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ReportsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Reports',
           ),
           PopupMenuButton(
             itemBuilder: (context) => [
@@ -224,6 +471,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ],
                           ),
+                          if (user?.presidentName != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.person_outline,
+                                  size: 14,
+                                  color: AppTheme.primaryGreen.withOpacity(0.7),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'President: ${user!.presidentName}',
+                                    style: TextStyle(
+                                      fontSize: ResponsiveHelper.getFontSize(context, 12),
+                                      color: AppTheme.textSecondary.withOpacity(0.9),
+                                      letterSpacing: 0.2,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              if (user?.location != null) ...[
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14,
+                                  color: AppTheme.primaryGreen.withOpacity(0.7),
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    user!.location!,
+                                    style: TextStyle(
+                                      fontSize: ResponsiveHelper.getFontSize(context, 12),
+                                      color: AppTheme.textSecondary.withOpacity(0.9),
+                                      letterSpacing: 0.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              if (user?.location != null && (user?.contactPhone != null || user?.phone != null)) ...[
+                                const SizedBox(width: 12),
+                                Container(
+                                  width: 3,
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.textSecondary.withOpacity(0.4),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              if (user?.contactPhone != null || user?.phone != null) ...[
+                                Icon(
+                                  Icons.phone_outlined,
+                                  size: 14,
+                                  color: AppTheme.primaryGreen.withOpacity(0.7),
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    user?.contactPhone ?? user!.phone!,
+                                    style: TextStyle(
+                                      fontSize: ResponsiveHelper.getFontSize(context, 12),
+                                      color: AppTheme.textSecondary.withOpacity(0.9),
+                                      letterSpacing: 0.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -245,167 +575,160 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ],
                 ),
-                // Additional Details Section
-                if (user?.societyName != null || 
-                    user?.bmcName != null || 
-                    user?.dairyName != null || 
-                    user?.location != null ||
-                    user?.contactPhone != null ||
-                    user?.phone != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.darkBg2,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: AppTheme.primaryGreen.withOpacity(0.15),
-                        width: 1,
+                // Organizational Hierarchy Section
+                const SizedBox(height: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (user?.societyName != null)
+                      _buildInfoCard(
+                        Icons.home_outlined,
+                        'Society',
+                        user!.societyName!,
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        // Society Info (for farmers)
-                        if (user?.societyName != null) 
-                          _buildInfoRow(
-                            Icons.home_outlined,
-                            'Society',
-                            user!.societyName!,
-                          ),
-                        
-                        // BMC Info
-                        if (user?.bmcName != null)
-                          _buildInfoRow(
-                            Icons.business_outlined,
-                            'BMC',
-                            user!.bmcName!,
-                            showDivider: user.societyName != null,
-                          ),
-                        
-                        // Dairy Info
-                        if (user?.dairyName != null)
-                          _buildInfoRow(
-                            Icons.factory_outlined,
-                            'Dairy',
-                            user!.dairyName!,
-                            showDivider: user.bmcName != null || user.societyName != null,
-                          ),
-                        
-                        // Location
-                        if (user?.location != null)
-                          _buildInfoRow(
-                            Icons.location_on_outlined,
-                            'Location',
-                            user!.location!,
-                            showDivider: user.dairyName != null || user.bmcName != null || user.societyName != null,
-                          ),
-                        
-                        // Contact Phone
-                        if (user?.contactPhone != null || user?.phone != null)
-                          _buildInfoRow(
-                            Icons.phone_outlined,
-                            'Phone',
-                            user?.contactPhone ?? user!.phone!,
-                            showDivider: user?.location != null || user?.dairyName != null || user?.bmcName != null || user?.societyName != null,
-                          ),
-                        
-                        // President Name (for societies/dairies)
-                        if (user?.presidentName != null)
-                          _buildInfoRow(
-                            Icons.person_outline,
-                            'President',
-                            user!.presidentName!,
-                            showDivider: true,
-                          ),
-                      ],
+                    if (user?.bmcName != null || user?.dairyName != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          if (user?.bmcName != null)
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  // Extract numeric ID from bmcId (assumes format like "2")
+                                  final id = user.bmcId ?? user.id;
+                                  _showEntityDetails(
+                                    context,
+                                    'BMC Details',
+                                    Icons.business_outlined,
+                                    {
+                                      'ID': id,
+                                      'Name': user.bmcName,
+                                    },
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: _buildSmallHierarchyCard(
+                                  Icons.business_outlined,
+                                  'BMC',
+                                  user!.bmcName!,
+                                ),
+                              ),
+                            ),
+                          if (user?.bmcName != null && user?.dairyName != null)
+                            const SizedBox(width: 8),
+                          if (user?.dairyName != null)
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  // Extract numeric ID from dairyId
+                                  final id = user.dairyId ?? user.id;
+                                  _showEntityDetails(
+                                    context,
+                                    'Dairy Details',
+                                    Icons.factory_outlined,
+                                    {
+                                      'ID': id,
+                                      'Name': user.dairyName,
+                                    },
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: _buildSmallHierarchyCard(
+                                  Icons.factory_outlined,
+                                  'Dairy',
+                                  user!.dairyName!,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                // Statistics Section (Last 30 Days) - Always show
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.darkBg2,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppTheme.primaryGreen.withOpacity(0.15),
+                      width: 1,
                     ),
                   ),
-                ],
-                // Statistics Section (Last 30 Days)
-                if (user?.totalRevenue30Days != null ||
-                    user?.totalCollection30Days != null ||
-                    user?.avgFat != null ||
-                    user?.avgSnf != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.darkBg2,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: AppTheme.primaryGreen.withOpacity(0.15),
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.analytics_outlined,
-                              size: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.analytics_outlined,
+                            size: 16,
+                            color: AppTheme.primaryGreen,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Last 30 Days Statistics',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getFontSize(context, 13),
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryGreen,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: Icon(
+                              Icons.refresh,
+                              size: 18,
                               color: AppTheme.primaryGreen,
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Last 30 Days Statistics',
-                              style: TextStyle(
-                                fontSize: ResponsiveHelper.getFontSize(context, 13),
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.primaryGreen,
-                                letterSpacing: 0.3,
-                              ),
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
+                            onPressed: _loadData,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatChip(
+                              'Revenue',
+                              '₹${(_statistics?['totalRevenue30Days'] ?? 0).toStringAsFixed(2)}',
+                              Icons.currency_rupee,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            if (user?.totalRevenue30Days != null)
-                              Expanded(
-                                child: _buildStatChip(
-                                  'Revenue',
-                                  '₹${user!.totalRevenue30Days!.toStringAsFixed(2)}',
-                                  Icons.currency_rupee,
-                                ),
-                              ),
-                            if (user?.totalRevenue30Days != null && user?.totalCollection30Days != null)
-                              const SizedBox(width: 8),
-                            if (user?.totalCollection30Days != null)
-                              Expanded(
-                                child: _buildStatChip(
-                                  'Collection',
-                                  '${user!.totalCollection30Days!.toStringAsFixed(2)} L',
-                                  Icons.water_drop_outlined,
-                                ),
-                              ),
-                            if (user?.totalCollection30Days != null && user?.avgFat != null)
-                              const SizedBox(width: 8),
-                            if (user?.avgFat != null)
-                              Expanded(
-                                child: _buildStatChip(
-                                  'Avg Fat',
-                                  '${user!.avgFat!.toStringAsFixed(2)}%',
-                                  Icons.opacity,
-                                ),
-                              ),
-                            if (user?.avgFat != null && user?.avgSnf != null)
-                              const SizedBox(width: 8),
-                            if (user?.avgSnf != null)
-                              Expanded(
-                                child: _buildStatChip(
-                                  'Avg SNF',
-                                  '${user!.avgSnf!.toStringAsFixed(2)}%',
-                                  Icons.water,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatChip(
+                              'Collection',
+                              '${(_statistics?['totalCollection30Days'] ?? 0).toStringAsFixed(2)} L',
+                              Icons.water_drop_outlined,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatChip(
+                              'Avg Fat',
+                              '${(_statistics?['avgFat'] ?? 0).toStringAsFixed(2)}%',
+                              Icons.opacity,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatChip(
+                              'Avg SNF',
+                              '${(_statistics?['avgSnf'] ?? 0).toStringAsFixed(2)}%',
+                              Icons.water,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -531,6 +854,139 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildSmallHierarchyCard(IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.darkBg2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppTheme.primaryGreen.withOpacity(0.25),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              icon,
+              size: 14,
+              color: AppTheme.primaryGreen,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: ResponsiveHelper.getFontSize(context, 11),
+              color: AppTheme.textSecondary.withOpacity(0.8),
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: ResponsiveHelper.getFontSize(context, 12),
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primaryGreen,
+                letterSpacing: 0.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryGreen.withOpacity(0.08),
+            AppTheme.primaryGreen.withOpacity(0.03),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.primaryGreen.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: AppTheme.primaryGreen,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: ResponsiveHelper.getFontSize(context, 11),
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.3,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 30),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: ResponsiveHelper.getFontSize(context, 13),
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+                letterSpacing: 0.2,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoRow(IconData icon, String label, String value, {bool showDivider = false}) {
     return Column(
       children: [
@@ -589,7 +1045,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
   Widget _buildStatChip(String label, String value, IconData icon) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.primaryGreen.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
@@ -606,29 +1062,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
             size: 14,
             color: AppTheme.primaryGreen,
           ),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: ResponsiveHelper.getFontSize(context, 10),
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 0.2,
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: ResponsiveHelper.getFontSize(context, 9),
+                    color: AppTheme.textSecondary,
+                    letterSpacing: 0.2,
+                  ),
                 ),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: ResponsiveHelper.getFontSize(context, 13),
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.primaryGreen,
-                  letterSpacing: 0.3,
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: ResponsiveHelper.getFontSize(context, 11),
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryGreen,
+                    letterSpacing: 0.1,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

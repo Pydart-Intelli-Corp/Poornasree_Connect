@@ -11,6 +11,7 @@
   static const String profileEndpoint = '/api/external/auth/profile';
   static const String refreshEndpoint = '/api/external/auth/refresh';
   static const String logoutEndpoint = '/api/external/auth/logout';
+  static const String statisticsEndpoint = '/api/external/dashboard/statistics';
   
   // Full URL getters
   static String get sendOtp => '$baseUrl$sendOtpEndpoint';
@@ -20,4 +21,5 @@
   static String get profile => '$baseUrl$profileEndpoint';
   static String get refresh => '$baseUrl$refreshEndpoint';
   static String get logout => '$baseUrl$logoutEndpoint';
+  static String get statistics => '$baseUrl$statisticsEndpoint';
 }
