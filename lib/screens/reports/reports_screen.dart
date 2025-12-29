@@ -22,7 +22,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String? _errorMessage;
   
   // Filter states
-  bool _showFilters = false;
   DateTime? _fromDate;
   DateTime? _toDate;
   String _shiftFilter = 'all';
@@ -195,28 +194,32 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(width: 12),
             // Filter button with badge
-            Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.filter_list, size: 20),
-                  onPressed: _showFiltersModal,
-                  tooltip: 'Filters',
-                  color: Colors.white,
-                ),
-                if (_fromDate != null || _toDate != null || _shiftFilter != 'all' || _channelFilter != 'all' || _machineFilter != null || _farmerFilter != null)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen,
-                        shape: BoxShape.circle,
-                      ),
+            Builder(
+              builder: (BuildContext context) {
+                return Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.filter_list, size: 20),
+                      onPressed: () => _showFiltersDropdown(context),
+                      tooltip: 'Filters',
+                      color: Colors.white,
                     ),
-                  ),
-              ],
+                    if (_fromDate != null || _toDate != null || _shiftFilter != 'all' || _channelFilter != 'all' || _machineFilter != null || _farmerFilter != null)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryGreen,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              }
             ),
             const SizedBox(width: 8),
           ],
@@ -405,7 +408,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     // Channel filter
     if (_channelFilter != 'all') {
-      filtered = filtered.where((r) => _formatChannel(r['channel']).toUpperCase() == _channelFilter).toList();
+      filtered = filtered.where((r) => _formatChannel(r['channel']) == _channelFilter).toList();
     }
     
     // Machine filter
@@ -435,256 +438,297 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
   }
   
-  void _showFiltersModal() {
-    showModalBottomSheet(
+  void _showFiltersDropdown(BuildContext context) {
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: BoxDecoration(
-          color: AppTheme.cardDark,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
+      position: position,
+      color: AppTheme.cardDark,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: AppTheme.primaryGreen.withOpacity(0.3),
+          width: 1,
         ),
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppTheme.primaryGreen.withOpacity(0.2),
-                    width: 1,
-                  ),
+      ),
+      items: [
+        // Header
+        PopupMenuItem(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: AppTheme.primaryGreen.withOpacity(0.2),
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.filter_list, color: AppTheme.primaryGreen, size: 24),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Filters',
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.filter_list, color: AppTheme.primaryGreen, size: 18),
+                const SizedBox(width: 8),
+                const Text(
+                  'Filters',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const Spacer(),
+                InkWell(
+                  onTap: () {
+                    Navigator.pop(context);
+                    _clearFilters();
+                  },
+                  child: Text(
+                    'Clear',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 12,
+                      color: AppTheme.primaryGreen,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
                     ),
                   ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      _clearFilters();
-                      Navigator.pop(context);
-                    },
-                    child: const Text('Clear All'),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                    color: Colors.white70,
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Date Range
+        PopupMenuItem(
+          enabled: false,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 14, color: AppTheme.primaryGreen),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Date Range',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryGreen,
+                    ),
                   ),
                 ],
               ),
-            ),
-            // Filter Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Date Range Section
-                    _buildFilterSection(
-                      'Date Range',
-                      Icons.calendar_today,
-                      [
-                        _buildDateFilterTile('From Date', _fromDate, (date) {
-                          setState(() {
-                            _fromDate = date;
-                            _applyFilters();
-                          });
-                          Navigator.pop(context);
-                          _showFiltersModal();
-                        }),
-                        _buildDateFilterTile('To Date', _toDate, (date) {
-                          setState(() {
-                            _toDate = date;
-                            _applyFilters();
-                          });
-                          Navigator.pop(context);
-                          _showFiltersModal();
-                        }),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Shift Filter
-                    _buildFilterSection(
-                      'Shift',
-                      Icons.wb_sunny_outlined,
-                      [
-                        _buildDropdownTile(
-                          'Shift Type',
-                          _shiftFilter,
-                          ['all', 'morning', 'evening'],
-                          (value) {
-                            setState(() {
-                              _shiftFilter = value!;
-                              _applyFilters();
-                            });
-                          },
-                          (value) => value == 'all' ? 'All Shifts' : value == 'morning' ? 'Morning' : 'Evening',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Channel Filter
-                    _buildFilterSection(
-                      'Channel',
-                      Icons.waves,
-                      [
-                        _buildDropdownTile(
-                          'Channel Type',
-                          _channelFilter,
-                          ['all', 'COW', 'BUFFALO', 'MIXED'],
-                          (value) {
-                            setState(() {
-                              _channelFilter = value!;
-                              _applyFilters();
-                            });
-                          },
-                          (value) => value == 'all' ? 'All Channels' : value,
-                        ),
-                      ],
-                    ),
-                    // Collections-specific filters
-                    if (_selectedReport == 'collections') ...[
-                      const SizedBox(height: 16),
-                      _buildFilterSection(
-                        'Machine',
-                        Icons.precision_manufacturing,
-                        [
-                          _buildDropdownTile(
-                            'Select Machine',
-                            _machineFilter ?? 'all',
-                            ['all', ..._machines.map((m) => m['machine_id']?.toString() ?? '')],
-                            (value) {
-                              setState(() {
-                                _machineFilter = value == 'all' ? null : value;
-                                _applyFilters();
-                              });
-                            },
-                            (value) => value == 'all' ? 'All Machines' : 'Machine $value',
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () async {
+                  Navigator.pop(context);
+                  final DateTimeRange? picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                    initialDateRange: _fromDate != null && _toDate != null
+                        ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                        : null,
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: ColorScheme.dark(
+                            primary: AppTheme.primaryGreen,
+                            onPrimary: Colors.white,
+                            surface: AppTheme.cardDark,
+                            onSurface: Colors.white,
                           ),
-                        ],
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _fromDate = picked.start;
+                      _toDate = picked.end;
+                      _applyFilters();
+                    });
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.darkBg2,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: _fromDate != null || _toDate != null
+                          ? AppTheme.primaryGreen
+                          : Colors.white24,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _fromDate != null && _toDate != null
+                              ? '${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year} - ${_toDate!.day}/${_toDate!.month}/${_toDate!.year}'
+                              : 'Select date range',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _fromDate != null ? AppTheme.primaryGreen : Colors.white54,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      _buildFilterSection(
-                        'Farmer',
-                        Icons.person_outline,
-                        [
-                          _buildDropdownTile(
-                            'Select Farmer',
-                            _farmerFilter ?? 'all',
-                            ['all', ..._farmers.map((f) => f['id']?.toString() ?? '')],
-                            (value) {
-                              setState(() {
-                                _farmerFilter = value == 'all' ? null : value;
-                                _applyFilters();
-                              });
-                            },
-                            (value) {
-                              if (value == 'all') return 'All Farmers';
-                              final farmer = _farmers.firstWhere((f) => f['id']?.toString() == value, orElse: () => {});
-                              return farmer['name']?.toString() ?? value;
-                            },
-                          ),
-                        ],
+                      Icon(
+                        Icons.date_range,
+                        size: 16,
+                        color: _fromDate != null ? AppTheme.primaryGreen : Colors.white54,
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    // Results count
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 16, color: AppTheme.primaryGreen),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Showing ${_records.length} of ${_allRecords.length} records',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.primaryGreen,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Apply Button
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: AppTheme.primaryGreen.withOpacity(0.2),
-                    width: 1,
                   ),
                 ),
               ),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Apply Filters',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+        // Shift Filter
+        PopupMenuItem(
+          enabled: false,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: _buildDropdownFilter(
+            'Shift',
+            Icons.wb_sunny_outlined,
+            _shiftFilter,
+            ['all', 'morning', 'evening'],
+            (value) {
+              Navigator.pop(context);
+              setState(() {
+                _shiftFilter = value!;
+                _applyFilters();
+              });
+            },
+            (value) => value == 'all' ? 'All Shifts' : value == 'morning' ? 'Morning' : 'Evening',
+          ),
+        ),
+        // Channel Filter
+        PopupMenuItem(
+          enabled: false,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: _buildDropdownFilter(
+            'Channel',
+            Icons.waves,
+            _channelFilter,
+            ['all', 'COW', 'BUFFALO', 'MIXED'],
+            (value) {
+              Navigator.pop(context);
+              setState(() {
+                _channelFilter = value!;
+                _applyFilters();
+              });
+            },
+            (value) => value == 'all' ? 'All Channels' : value,
+          ),
+        ),
+        // Machine Filter (Collections only)
+        if (_selectedReport == 'collections')
+          PopupMenuItem(
+            enabled: false,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: _buildDropdownFilter(
+              'Machine',
+              Icons.precision_manufacturing,
+              _machineFilter ?? 'all',
+              ['all', ..._machines.map((m) => m['machine_id']?.toString() ?? '')],
+              (value) {
+                Navigator.pop(context);
+                setState(() {
+                  _machineFilter = value == 'all' ? null : value;
+                  _applyFilters();
+                });
+              },
+              (value) => value == 'all' ? 'All Machines' : 'Machine $value',
+            ),
+          ),
+        // Farmer Filter (Collections only)
+        if (_selectedReport == 'collections')
+          PopupMenuItem(
+            enabled: false,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: _buildDropdownFilter(
+              'Farmer',
+              Icons.person_outline,
+              _farmerFilter ?? 'all',
+              ['all', ..._farmers.map((f) => f['id']?.toString() ?? '')],
+              (value) {
+                Navigator.pop(context);
+                setState(() {
+                  _farmerFilter = value == 'all' ? null : value;
+                  _applyFilters();
+                });
+              },
+              (value) {
+                if (value == 'all') return 'All Farmers';
+                final farmer = _farmers.firstWhere((f) => f['id']?.toString() == value, orElse: () => {});
+                return farmer['name']?.toString() ?? value;
+              },
+            ),
+          ),
+        // Results Info
+        PopupMenuItem(
+          enabled: false,
+          padding: const EdgeInsets.all(12),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: AppTheme.primaryGreen.withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: AppTheme.primaryGreen),
+                const SizedBox(width: 6),
+                Text(
+                  'Showing ${_records.length} of ${_allRecords.length} records',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.primaryGreen,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
-  
-  Widget _buildFilterSection(String title, IconData icon, List<Widget> children) {
+
+  Widget _buildDropdownFilter(
+    String label,
+    IconData icon,
+    String value,
+    List<String> options,
+    Function(String?) onChanged,
+    String Function(String) displayText,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, size: 18, color: AppTheme.primaryGreen),
-            const SizedBox(width: 8),
+            Icon(icon, size: 14, color: AppTheme.primaryGreen),
+            const SizedBox(width: 6),
             Text(
-              title,
+              label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.primaryGreen,
               ),
@@ -693,120 +737,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
         const SizedBox(height: 8),
         Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             color: AppTheme.darkBg2,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: AppTheme.primaryGreen.withOpacity(0.2),
+              color: value != 'all' ? AppTheme.primaryGreen : Colors.white24,
             ),
           ),
-          child: Column(
-            children: children,
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildDateFilterTile(String label, DateTime? date, Function(DateTime?) onChanged) {
-    return InkWell(
-      onTap: () async {
-        final DateTime? picked = await showDatePicker(
-          context: context,
-          initialDate: date ?? DateTime.now(),
-          firstDate: DateTime(2020),
-          lastDate: DateTime.now(),
-          builder: (context, child) {
-            return Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: ColorScheme.dark(
-                  primary: AppTheme.primaryGreen,
-                  onPrimary: Colors.white,
-                  surface: AppTheme.cardDark,
-                  onSurface: Colors.white,
-                ),
-              ),
-              child: child!,
-            );
-          },
-        );
-        if (picked != null) {
-          onChanged(picked);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: AppTheme.primaryGreen.withOpacity(0.1),
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Colors.white70,
-                ),
-              ),
-            ),
-            Text(
-              date != null ? '${date.day}/${date.month}/${date.year}' : 'Select date',
-              style: TextStyle(
-                fontSize: 13,
-                color: date != null ? AppTheme.primaryGreen : Colors.white54,
-                fontWeight: date != null ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.calendar_today,
-              size: 16,
-              color: date != null ? AppTheme.primaryGreen : Colors.white54,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildDropdownTile(
-    String label,
-    String value,
-    List<String> options,
-    Function(String?) onChanged,
-    String Function(String) displayText,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.white70,
-              ),
-            ),
-          ),
-          DropdownButton<String>(
+          child: DropdownButton<String>(
             value: value,
             onChanged: onChanged,
             underline: Container(),
             isDense: true,
+            isExpanded: true,
             icon: Icon(
               Icons.arrow_drop_down,
-              color: AppTheme.primaryGreen,
+              color: value != 'all' ? AppTheme.primaryGreen : Colors.white54,
             ),
             style: TextStyle(
-              fontSize: 13,
-              color: AppTheme.primaryGreen,
-              fontWeight: FontWeight.w600,
+              fontSize: 11,
+              color: value != 'all' ? AppTheme.primaryGreen : Colors.white70,
             ),
             dropdownColor: AppTheme.cardDark,
             items: options.map((String item) {
@@ -816,8 +767,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
               );
             }).toList(),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
     String _getReportTitle(String reportType) {
@@ -1200,37 +1151,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-        return Colors.green;
-      case 'in_transit':
-        return Colors.orange;
-      case 'pending':
-        return Colors.blue;
-      default:
-        return AppTheme.textSecondary;
-    }
-  }
-
-  String _formatStatus(String? status) {
-    if (status == null) return '-';
-    return status.replaceAll('_', ' ').toUpperCase();
-  }
-
-  Color _getPaymentStatusColor(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'paid':
-        return Colors.green;
-      case 'pending':
-        return Colors.orange;
-      case 'cancelled':
-        return Colors.red;
-      default:
-        return AppTheme.textSecondary;
-    }
-  }
-
   Color _getShiftColor(String? shift) {
     final shiftStr = shift?.toUpperCase() ?? '';
     if (['MR', 'MX', 'MORNING'].contains(shiftStr)) {
@@ -1268,22 +1188,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   String _formatChannel(String? channel) {
     if (channel == null) return '-';
-    final channelMap = {
-      'ch1': 'COW',
-      'ch2': 'BUFFALO',
-      'ch3': 'MIXED',
-      'CH1': 'COW',
-      'CH2': 'BUFFALO',
-      'CH3': 'MIXED',
-      'COW': 'COW',
-      'BUFFALO': 'BUFFALO',
-      'MIXED': 'MIXED',
-      'cow': 'COW',
-      'buffalo': 'BUFFALO',
-      'mixed': 'MIXED',
-      'BUF': 'BUFFALO',
-      'MIX': 'MIXED',
-    };
-    return channelMap[channel] ?? channel.toUpperCase();
+    final channelStr = channel.trim().toUpperCase();
+    
+    // Handle all possible channel variations
+    if (['COW', 'CH1'].contains(channelStr)) {
+      return 'COW';
+    } else if (['BUFFALO', 'BUF', 'CH2'].contains(channelStr)) {
+      return 'BUFFALO';
+    } else if (['MIXED', 'MIX', 'CH3'].contains(channelStr)) {
+      return 'MIXED';
+    }
+    
+    // Return uppercase version if no match found
+    return channelStr;
   }
 }
