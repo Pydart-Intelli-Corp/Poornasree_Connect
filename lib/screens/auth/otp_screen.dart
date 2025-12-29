@@ -129,6 +129,9 @@ class _OtpScreenState extends State<OtpScreen>
       return;
     }
 
+    // Print OTP for debugging
+    print('🔐 OTP Entered: $otpText');
+
     if (!mounted || _isDisposed || _isNavigating) return;
     setState(() {
       _isLoading = true;
@@ -370,7 +373,9 @@ class _OtpScreenState extends State<OtpScreen>
                                       LayoutBuilder(
                                         builder: (context, constraints) {
                                           final availableWidth = constraints.maxWidth;
-                                          final fieldWidth = (availableWidth - 60) / 6; // 60 for spacing
+                                          final spacing = 8.0; // Space between boxes
+                                          final totalSpacing = spacing * 5; // 5 gaps for 6 fields
+                                          final fieldWidth = (availableWidth - totalSpacing) / 6;
                                           final fieldHeight = fieldWidth * 1.2;
                                           
                                           return PinCodeTextField(
@@ -384,6 +389,7 @@ class _OtpScreenState extends State<OtpScreen>
                                               milliseconds: 200,
                                             ),
                                             enableActiveFill: true,
+                                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                             textStyle: TextStyle(
                                               fontSize: fieldWidth * 0.4,
                                               fontWeight: FontWeight.w700,
