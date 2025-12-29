@@ -130,7 +130,9 @@ class _OtpScreenState extends State<OtpScreen>
     }
 
     // Print OTP for debugging
-    print('🔐 OTP Entered: $otpText');
+    print('🔐 DEBUG - User entered OTP: $otpText');
+    print('📧 DEBUG - Email being verified: ${widget.email}');
+    print('⏰ DEBUG - Current time: ${DateTime.now()}');
 
     if (!mounted || _isDisposed || _isNavigating) return;
     setState(() {
@@ -204,6 +206,9 @@ class _OtpScreenState extends State<OtpScreen>
 
   Future<void> _resendOtp() async {
     if (!_canResend || !mounted || _isDisposed) return;
+
+    print('🔄 DEBUG - Resending OTP to: ${widget.email}');
+    print('⏰ DEBUG - Resend requested at: ${DateTime.now()}');
 
     setState(() {
       _isLoading = true;

@@ -7,7 +7,8 @@ class AuthService {
   // Send OTP to email
   Future<Map<String, dynamic>> sendOtp(String email) async {
     try {
-      print('📡 Sending OTP request for email: $email');
+      print('📡 DEBUG - Sending OTP request for email: $email');
+      print('📡 DEBUG - API URL: ${ApiConfig.sendOtp}');
       
       final response = await http.post(
         Uri.parse(ApiConfig.sendOtp),
@@ -19,12 +20,20 @@ class AuthService {
         }),
       );
 
-      print('📡 Response status: ${response.statusCode}');
-      print('📡 Response body: ${response.body}');
+      print('📡 DEBUG - Response status: ${response.statusCode}');
+      print('📡 DEBUG - Response headers: ${response.headers}');
+      print('📡 DEBUG - Response body: ${response.body}');
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ DEBUG - OTP request successful');
+        if (data['data'] != null) {
+          print('📧 DEBUG - Email: ${data['data']['email']}');
+          print('👤 DEBUG - Entity Type: ${data['data']['entityType']}');
+          print('🏢 DEBUG - Entity Name: ${data['data']['entityName']}');
+          print('👔 DEBUG - Admin Name: ${data['data']['adminName']}');
+        }
         return {
           'success': true,
           'message': data['message'] ?? 'OTP sent successfully',
@@ -61,9 +70,10 @@ class AuthService {
   // Verify OTP and login
   Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
     try {
-      print('📡 Sending OTP verification request...');
-      print('📡 URL: ${ApiConfig.verifyOtp}');
-      print('📡 Email: $email');
+      print('📡 DEBUG - Sending OTP verification request...');
+      print('📡 DEBUG - URL: ${ApiConfig.verifyOtp}');
+      print('📡 DEBUG - Email: $email');
+      print('🔐 DEBUG - OTP being verified: $otp');
       
       final response = await http.post(
         Uri.parse(ApiConfig.verifyOtp),
@@ -76,8 +86,9 @@ class AuthService {
         }),
       );
 
-      print('📡 Response status: ${response.statusCode}');
-      print('📡 Response body: ${response.body}');
+      print('📡 DEBUG - Response status: ${response.statusCode}');
+      print('📡 DEBUG - Response headers: ${response.headers}');
+      print('📡 DEBUG - Response body: ${response.body}');
 
       final data = jsonDecode(response.body);
 

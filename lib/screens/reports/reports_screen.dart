@@ -65,8 +65,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     await Future.wait([
       _fetchRecords(),
       _fetchMachines(),
-      _fetchFarmers(),
     ]);
+    
+    // Extract farmers from records after fetching
+    _extractFarmersFromRecords();
   }
   
   Future<void> _fetchMachines() async {
@@ -94,29 +96,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
   
-  Future<void> _fetchFarmers() async {
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.user?.token;
-      if (token == null) return;
-      
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/external/farmers'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() {
-          _farmers = List<Map<String, dynamic>>.from(data['data'] ?? []);
-        });
-      }
-    } catch (e) {
-      print('Error fetching farmers: $e');
+  void _extractFarmersFromRecords() {
+    if (_selectedReport != 'collections' || _allRecords.isEmpty) {
+      setState(() {
+        _farmers = [];
+      });
+      return;
     }
+
+    // Extract unique farmers from records
+    final Map<String, Map<String, dynamic>> uniqueFarmers = {};
+    
+    for (var record in _allRecords) {
+      final farmerId = record['farmer_id']?.toString();
+      final farmerName = record['farmer_name']?.toString();
+      
+      if (farmerId != null && farmerName != null && !uniqueFarmers.containsKey(farmerId)) {
+        uniqueFarmers[farmerId] = {
+          'id': farmerId,
+          'name': farmerName,
+        };
+      }
+    }
+    
+    setState(() {
+      _farmers = uniqueFarmers.values.toList()..sort((a, b) => a['name'].compareTo(b['name']));
+      print('Extracted ${_farmers.length} unique farmers from records');
+    });
   }
 
   Future<void> _fetchRecords() async {
@@ -148,6 +154,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
           _applyFilters();
           _isLoading = false;
         });
+        
+        // Extract farmers from records after loading
+        _extractFarmersFromRecords();
       } else {
         throw Exception('Failed to load $_selectedReport');
       }
@@ -193,6 +202,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
               Icons.sell_outlined,
             ),
             const SizedBox(width: 12),
+            // Download button with dropdown
+            Builder(
+              builder: (BuildContext context) {
+                return IconButton(
+                  icon: const Icon(Icons.email_outlined, size: 20),
+                  onPressed: _records.isEmpty ? null : () => _showEmailDialog(),
+                  tooltip: 'Email Report',
+                  color: Colors.white,
+                );
+              }
+            ),
             // Filter button with badge
             Builder(
               builder: (BuildContext context) {
@@ -437,6 +457,322 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _applyFilters();
     });
   }
+
+  void _showEmailDialog() {
+    final emailController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: AppTheme.cardDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Icon(Icons.email_outlined, color: AppTheme.primaryGreen, size: 24),
+              const SizedBox(width: 8),
+              Text(
+                'Email Report',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 18),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter email address to receive CSV and PDF reports:',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                enabled: !isLoading,
+                style: TextStyle(color: AppTheme.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'example@company.com',
+                  hintStyle: TextStyle(color: AppTheme.textSecondary),
+                  filled: true,
+                  fillColor: AppTheme.darkBg2,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.white24),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.white24),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppTheme.primaryGreen),
+                  ),
+                  prefixIcon: Icon(Icons.email_outlined, color: AppTheme.primaryGreen),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+            ),
+            ElevatedButton.icon(
+              onPressed: isLoading || emailController.text.isEmpty 
+                  ? null 
+                  : () async {
+                      setState(() => isLoading = true);
+                      try {
+                        await _sendEmailReport(emailController.text.trim());
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Report sent successfully to ${emailController.text}'),
+                            backgroundColor: AppTheme.primaryGreen,
+                          ),
+                        );
+                      } catch (e) {
+                        setState(() => isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to send report: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+              icon: isLoading 
+                  ? SizedBox(
+                      width: 16, 
+                      height: 16, 
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2, 
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.send, size: 16),
+              label: Text(isLoading ? 'Sending...' : 'Send Report'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendEmailReport(String email) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.user?.token;
+      
+      if (token == null) {
+        throw Exception('No authentication token');
+      }
+
+      // Generate report stats (same calculation as web version)
+      Map<String, dynamic> stats = _calculateReportStats();
+      
+      // Generate date range string
+      final dateRange = _fromDate != null && _toDate != null
+          ? '${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year} To ${_toDate!.day}/${_toDate!.month}/${_toDate!.year}'
+          : 'All Dates';
+
+      // Generate CSV content (matching web version exactly)
+      String csvContent = _generateCSVContent(stats, dateRange);
+      
+      // Generate PDF content (we'll send the data to server to create PDF)
+      String pdfContent = await _generatePDFContent(stats, dateRange);
+
+      // Call the email API
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/user/reports/send-email'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'email': email,
+          'csvContent': csvContent,
+          'pdfContent': pdfContent,
+          'reportType': _getReportTitle(_selectedReport),
+          'dateRange': dateRange,
+          'stats': stats,
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to send email');
+      }
+
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  Map<String, dynamic> _calculateReportStats() {
+    if (_records.isEmpty) {
+      return {
+        'totalCollections': 0,
+        'totalDispatches': 0,
+        'totalSales': 0,
+        'totalQuantity': 0.0,
+        'totalAmount': 0.0,
+        'averageRate': 0.0,
+        'weightedFat': 0.0,
+        'weightedSnf': 0.0,
+        'weightedClr': 0.0,
+      };
+    }
+
+    double totalQuantity = 0.0;
+    double totalAmount = 0.0;
+    double weightedFat = 0.0;
+    double weightedSnf = 0.0;
+    double weightedClr = 0.0;
+
+    for (var record in _records) {
+      double quantity = double.tryParse(record['quantity']?.toString() ?? '0') ?? 0;
+      double amount = double.tryParse(record['total_amount']?.toString() ?? '0') ?? 0;
+      
+      totalQuantity += quantity;
+      totalAmount += amount;
+      
+      if (_selectedReport != 'sales') {
+        double fat = double.tryParse(record['fat_percentage']?.toString() ?? '0') ?? 0;
+        double snf = double.tryParse(record['snf_percentage']?.toString() ?? '0') ?? 0;
+        double clr = double.tryParse(record['clr_value']?.toString() ?? '0') ?? 0;
+        
+        weightedFat += fat * quantity;
+        weightedSnf += snf * quantity;
+        weightedClr += clr * quantity;
+      }
+    }
+
+    if (totalQuantity > 0) {
+      weightedFat /= totalQuantity;
+      weightedSnf /= totalQuantity;
+      weightedClr /= totalQuantity;
+    }
+
+    return {
+      'totalCollections': _selectedReport == 'collections' ? _records.length : 0,
+      'totalDispatches': _selectedReport == 'dispatches' ? _records.length : 0,
+      'totalSales': _selectedReport == 'sales' ? _records.length : 0,
+      'totalQuantity': totalQuantity,
+      'totalAmount': totalAmount,
+      'averageRate': totalQuantity > 0 ? totalAmount / totalQuantity : 0.0,
+      'weightedFat': weightedFat,
+      'weightedSnf': weightedSnf,
+      'weightedClr': weightedClr,
+    };
+  }
+
+  String _generateCSVContent(Map<String, dynamic> stats, String dateRange) {
+    List<List<String>> csvData = [];
+    
+    // Header information (matching web version)
+    csvData.add(['POORNASREE EQUIPMENTS MILK ${_selectedReport.toUpperCase()} REPORT']);
+    csvData.add(['Admin Report with Weighted Averages']);
+    csvData.add([]);
+    csvData.add(['Report Generated:', DateTime.now().toString().substring(0, 19)]);
+    csvData.add(['Date Range:', dateRange]);
+    
+    if (_selectedReport == 'collections') {
+      csvData.add(['Total Collections:', stats['totalCollections'].toString()]);
+    } else if (_selectedReport == 'dispatches') {
+      csvData.add(['Total Dispatches:', stats['totalDispatches'].toString()]);
+    } else {
+      csvData.add(['Total Sales:', stats['totalSales'].toString()]);
+    }
+    
+    csvData.add(['Total Quantity (L):', stats['totalQuantity'].toStringAsFixed(2)]);
+    csvData.add(['Total Amount (₹):', stats['totalAmount'].toStringAsFixed(2)]);
+    csvData.add(['Average Rate (₹/L):', stats['averageRate'].toStringAsFixed(2)]);
+    
+    if (_selectedReport != 'sales') {
+      csvData.add(['Weighted FAT (%):', stats['weightedFat'].toStringAsFixed(2)]);
+      csvData.add(['Weighted SNF (%):', stats['weightedSnf'].toStringAsFixed(2)]);
+      csvData.add(['Weighted CLR:', stats['weightedClr'].toStringAsFixed(2)]);
+    }
+    
+    csvData.add([]);
+    
+    // Table headers
+    if (_selectedReport == 'collections') {
+      csvData.add(['Date', 'Time', 'Channel', 'Shift', 'Machine', 'Society', 'Farmer ID', 'Farmer Name', 'Fat (%)', 'SNF (%)', 'CLR', 'Water (%)', 'Rate (₹/L)', 'Quantity (L)', 'Total Amount (₹)', 'Incentive']);
+      for (var record in _records) {
+        csvData.add([
+          record['collection_date']?.toString() ?? '',
+          record['collection_time']?.toString() ?? '',
+          _formatChannel(record['channel']),
+          _formatShift(record['shift_type']),
+          '${record['machine_id']} (${record['machine_type']})',
+          record['society_name']?.toString() ?? '',
+          record['farmer_id']?.toString() ?? '',
+          record['farmer_name']?.toString() ?? '',
+          record['fat_percentage']?.toString() ?? '',
+          record['snf_percentage']?.toString() ?? '',
+          record['clr_value']?.toString() ?? '',
+          record['water_percentage']?.toString() ?? '',
+          record['rate_per_liter']?.toString() ?? '',
+          record['quantity']?.toString() ?? '',
+          record['total_amount']?.toString() ?? '',
+          record['bonus']?.toString() ?? '',
+        ]);
+      }
+    } else if (_selectedReport == 'dispatches') {
+      csvData.add(['Date', 'Time', 'Dispatch ID', 'Shift', 'Channel', 'Society', 'Machine', 'Quantity (L)', 'Fat (%)', 'SNF (%)', 'CLR', 'Rate (₹/L)', 'Total Amount (₹)']);
+      for (var record in _records) {
+        csvData.add([
+          record['dispatch_date']?.toString() ?? '',
+          record['dispatch_time']?.toString() ?? '',
+          record['dispatch_id']?.toString() ?? '',
+          _formatShift(record['shift_type']),
+          _formatChannel(record['channel']),
+          record['society_name']?.toString() ?? '',
+          record['machine_type']?.toString() ?? '',
+          record['quantity']?.toString() ?? '',
+          record['fat_percentage']?.toString() ?? '',
+          record['snf_percentage']?.toString() ?? '',
+          record['clr_value']?.toString() ?? '',
+          record['rate_per_liter']?.toString() ?? '',
+          record['total_amount']?.toString() ?? '',
+        ]);
+      }
+    } else {
+      csvData.add(['Date', 'Time', 'Count', 'Shift', 'Channel', 'Society', 'Machine', 'Quantity (L)', 'Rate (₹/L)', 'Total Amount (₹)']);
+      for (var record in _records) {
+        csvData.add([
+          record['sales_date']?.toString() ?? '',
+          record['sales_time']?.toString() ?? '',
+          record['count']?.toString() ?? '',
+          _formatShift(record['shift_type']),
+          _formatChannel(record['channel']),
+          record['society_name']?.toString() ?? '',
+          record['machine_type']?.toString() ?? '',
+          record['quantity']?.toString() ?? '',
+          record['rate_per_liter']?.toString() ?? '',
+          record['total_amount']?.toString() ?? '',
+        ]);
+      }
+    }
+
+    return csvData.map((row) => row.join(',')).join('\n');
+  }
+
+  Future<String> _generatePDFContent(Map<String, dynamic> stats, String dateRange) async {
+    // For now, we'll send the data to the server to generate PDF
+    // In the actual email API on the server, we'll generate the PDF with jsPDF
+    // This is a placeholder - the actual PDF generation will happen on the server
+    return 'PDF_PLACEHOLDER';
+  }
+
   
   void _showFiltersDropdown(BuildContext context) {
     final RenderBox button = context.findRenderObject() as RenderBox;
@@ -681,8 +1017,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
               },
               (value) {
                 if (value == 'all') return 'All Farmers';
-                final farmer = _farmers.firstWhere((f) => f['id']?.toString() == value, orElse: () => {});
-                return farmer['name']?.toString() ?? value;
+                final farmer = _farmers.firstWhere(
+                  (f) => f['id']?.toString() == value,
+                  orElse: () => {},
+                );
+                final name = farmer['name']?.toString() ?? 'Farmer';
+                return '$name - ID: $value';
               },
             ),
           ),
