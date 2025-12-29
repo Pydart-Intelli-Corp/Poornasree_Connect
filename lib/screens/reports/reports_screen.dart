@@ -642,7 +642,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               'Machine',
               Icons.precision_manufacturing,
               _machineFilter ?? 'all',
-              ['all', ..._machines.map((m) => m['machine_id']?.toString() ?? '')],
+              ['all', ..._machines.map((m) => m['id']?.toString() ?? '')],
               (value) {
                 Navigator.pop(context);
                 setState(() {
@@ -650,7 +650,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   _applyFilters();
                 });
               },
-              (value) => value == 'all' ? 'All Machines' : 'Machine $value',
+              (value) {
+                if (value == 'all') return 'All Machines';
+                final machine = _machines.firstWhere(
+                  (m) => m['id']?.toString() == value,
+                  orElse: () => {},
+                );
+                final type = machine['machine_type']?.toString() ?? 'Machine';
+                final machineId = machine['machine_id']?.toString() ?? value;
+                return '$type - $machineId';
+              },
             ),
           ),
         // Farmer Filter (Collections only)
