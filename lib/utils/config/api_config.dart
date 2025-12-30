@@ -12,6 +12,7 @@
   static const String refreshEndpoint = '/api/external/auth/refresh';
   static const String logoutEndpoint = '/api/external/auth/logout';
   static const String statisticsEndpoint = '/api/external/dashboard/statistics';
+  static const String sendReportEmailEndpoint = '/api/user/reports/send-email';
   
   // Full URL getters
   static String get sendOtp => '$baseUrl$sendOtpEndpoint';
@@ -22,4 +23,5 @@
   static String get refresh => '$baseUrl$refreshEndpoint';
   static String get logout => '$baseUrl$logoutEndpoint';
   static String get statistics => '$baseUrl$statisticsEndpoint';
+  static String get sendReportEmail => '$baseUrl$sendReportEmailEndpoint';
 }

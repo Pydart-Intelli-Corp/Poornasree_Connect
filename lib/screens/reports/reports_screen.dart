@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../providers/providers.dart';
+import '../../services/services.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
 
@@ -32,6 +34,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
   // Filter data
   List<Map<String, dynamic>> _machines = [];
   List<Map<String, dynamic>> _farmers = [];
+  
+  // Column selection for reports
+  static const List<Map<String, String>> availableColumns = [
+    {'key': 'sl_no', 'label': 'Sl.No'},
+    {'key': 'date_time', 'label': 'Date & Time'},
+    {'key': 'farmer', 'label': 'Farmer'},
+    {'key': 'society', 'label': 'Society'},
+    {'key': 'machine', 'label': 'Machine'},
+    {'key': 'shift', 'label': 'Shift'},
+    {'key': 'channel', 'label': 'Channel'},
+    {'key': 'fat', 'label': 'Fat %'},
+    {'key': 'snf', 'label': 'SNF %'},
+    {'key': 'clr', 'label': 'CLR'},
+    {'key': 'protein', 'label': 'Protein %'},
+    {'key': 'lactose', 'label': 'Lactose %'},
+    {'key': 'salt', 'label': 'Salt %'},
+    {'key': 'water', 'label': 'Water %'},
+    {'key': 'temperature', 'label': 'Temp (°C)'},
+    {'key': 'rate', 'label': 'Rate/L'},
+    {'key': 'bonus', 'label': 'Bonus'},
+    {'key': 'qty', 'label': 'Qty (L)'},
+    {'key': 'amount', 'label': 'Amount'},
+    // Report-specific columns
+    {'key': 'dispatch_id', 'label': 'Dispatch ID'},
+    {'key': 'count', 'label': 'Count'},
+  ];
+  
+  // Default columns for email reports
+  static const List<String> defaultColumns = [
+    'sl_no', 'date_time', 'farmer', 'society', 'channel', 
+    'fat', 'snf', 'clr', 'water', 'rate', 'bonus', 'qty', 'amount'
+  ];
+  
+  List<String> _selectedColumns = List.from(defaultColumns);
 
   @override
   void initState() {
@@ -41,6 +77,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    _loadColumnPreferences();
     _fetchData();
   }
 
@@ -54,6 +91,35 @@ class _ReportsScreenState extends State<ReportsScreen> {
       DeviceOrientation.landscapeRight,
     ]);
     super.dispose();
+  }
+  
+  Future<void> _loadColumnPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedColumns = prefs.getStringList('report_columns');
+      if (savedColumns != null && savedColumns.isNotEmpty) {
+        setState(() {
+          _selectedColumns = savedColumns;
+          // Ensure default columns are always included
+          for (String defaultCol in defaultColumns) {
+            if (!_selectedColumns.contains(defaultCol)) {
+              _selectedColumns.add(defaultCol);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error loading column preferences: $e');
+    }
+  }
+  
+  Future<void> _saveColumnPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('report_columns', _selectedColumns);
+    } catch (e) {
+      print('Error saving column preferences: $e');
+    }
   }
 
   Future<void> _fetchData() async {
@@ -151,6 +217,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
         final data = json.decode(response.body);
         setState(() {
           _allRecords = data['data']['records'] ?? [];
+          
+          // Debug: Print first record to check available fields
+          if (_allRecords.isNotEmpty) {
+            print('DEBUG: First $_selectedReport record fields:');
+            final firstRecord = _allRecords[0];
+            firstRecord.forEach((key, value) {
+              if (key.toLowerCase().contains('machine')) {
+                print('  $key: $value');
+              }
+            });
+          }
+          
           _applyFilters();
           _isLoading = false;
         });
@@ -202,7 +280,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               Icons.sell_outlined,
             ),
             const SizedBox(width: 12),
-            // Download button with dropdown
+            // Email button
             Builder(
               builder: (BuildContext context) {
                 return IconButton(
@@ -459,8 +537,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   void _showEmailDialog() {
-    final emailController = TextEditingController();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userEmail = authProvider.user?.email ?? '';
+    
     bool isLoading = false;
+    bool showColumnSelection = false;
+    // Ensure default columns are always included
+    List<String> tempSelectedColumns = List.from(_selectedColumns);
+    for (String defaultCol in defaultColumns) {
+      if (!tempSelectedColumns.contains(defaultCol)) {
+        tempSelectedColumns.add(defaultCol);
+      }
+    }
 
     showDialog(
       context: context,
@@ -478,41 +566,274 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enter email address to receive CSV and PDF reports:',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+          content: SizedBox(
+            width: 500,
+            height: MediaQuery.of(context).size.height * 0.7, // Constrain height
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Send CSV and PDF reports to your email:',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.darkBg2,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.email_outlined, color: AppTheme.primaryGreen, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            userEmail,
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Compact Column Display Section
+                  Row(
+                    children: [
+                      Text(
+                        'Report Columns:',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            showColumnSelection = !showColumnSelection;
+                          });
+                        },
+                        icon: Icon(
+                          showColumnSelection ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          size: 16,
+                          color: AppTheme.primaryGreen,
+                        ),
+                        label: Text(
+                          showColumnSelection ? 'Less' : 'More',
+                          style: TextStyle(
+                            color: AppTheme.primaryGreen,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  
+                  // Compact display of selected columns
+                  if (!showColumnSelection) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.darkBg2,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+                      ),
+                      child: Wrap(
+                        spacing: 3,
+                        runSpacing: 3,
+                        children: tempSelectedColumns.take(12).map((columnKey) {
+                          final column = availableColumns.firstWhere(
+                            (col) => col['key'] == columnKey,
+                            orElse: () => {'key': columnKey, 'label': columnKey},
+                          );
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3), width: 0.5),
+                            ),
+                            child: Text(
+                              column['label']!,
+                              style: TextStyle(
+                                color: AppTheme.primaryGreen,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }).toList()..addAll(
+                          tempSelectedColumns.length > 12 ? [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.textSecondary.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '+${tempSelectedColumns.length - 12}',
+                                style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ),
+                          ] : [],
+                        ),
+                      ),
+                    ),
+                  ],
+                  
+                  // Full Column Selection Section (expandable)
+                  if (showColumnSelection) ...[
+                    Container(
+                      height: 200,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.darkBg2,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          // Select All / Deselect All buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      tempSelectedColumns = availableColumns.map((col) => col['key']!).toList();
+                                    });
+                                  },
+                                  icon: Icon(Icons.select_all, size: 14, color: AppTheme.primaryGreen),
+                                  label: Text(
+                                    'All',
+                                    style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      tempSelectedColumns = List.from(defaultColumns);
+                                    });
+                                  },
+                                  icon: Icon(Icons.deselect, size: 14, color: AppTheme.textSecondary),
+                                  label: Text(
+                                    'Clear Optional',
+                                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      tempSelectedColumns = List.from(defaultColumns);
+                                    });
+                                  },
+                                  icon: Icon(Icons.restore, size: 14, color: AppTheme.primaryGreen),
+                                  label: Text(
+                                    'Default',
+                                    style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          
+                          // Column checkboxes
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: availableColumns.map((column) {
+                                  final isSelected = tempSelectedColumns.contains(column['key']);
+                                  final isDefaultColumn = defaultColumns.contains(column['key']);
+                                  
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    visualDensity: VisualDensity.compact,
+                                    contentPadding: EdgeInsets.zero,
+                                    value: isSelected,
+                                    onChanged: isDefaultColumn ? null : (bool? value) {
+                                      setState(() {
+                                        if (value == true) {
+                                          if (!tempSelectedColumns.contains(column['key'])) {
+                                            // Insert column in correct position based on availableColumns order
+                                            final columnIndex = availableColumns.indexWhere((col) => col['key'] == column['key']);
+                                            int insertIndex = tempSelectedColumns.length;
+                                            
+                                            // Find the correct position to maintain order
+                                            for (int i = 0; i < tempSelectedColumns.length; i++) {
+                                              final currentColumnIndex = availableColumns.indexWhere((col) => col['key'] == tempSelectedColumns[i]);
+                                              if (currentColumnIndex > columnIndex) {
+                                                insertIndex = i;
+                                                break;
+                                              }
+                                            }
+                                            
+                                            tempSelectedColumns.insert(insertIndex, column['key']!);
+                                          }
+                                        } else {
+                                          tempSelectedColumns.remove(column['key']);
+                                        }
+                                      });
+                                    },
+                                    title: Text(
+                                      column['label']!,
+                                      style: TextStyle(
+                                        color: isDefaultColumn 
+                                            ? AppTheme.textSecondary.withOpacity(0.7)
+                                            : AppTheme.textPrimary,
+                                        fontSize: 12,
+                                        fontWeight: isDefaultColumn ? FontWeight.w600 : FontWeight.normal,
+                                      ),
+                                    ),
+                                    subtitle: isDefaultColumn 
+                                        ? Text(
+                                            'Required column',
+                                            style: TextStyle(
+                                              color: AppTheme.textSecondary.withOpacity(0.5),
+                                              fontSize: 10,
+                                            ),
+                                          )
+                                        : null,
+                                    activeColor: AppTheme.primaryGreen,
+                                    checkColor: Colors.white,
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 8),
+                  Text(
+                    'Report: ${_records.length} ${_selectedReport} records, ${tempSelectedColumns.length} columns',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                enabled: !isLoading,
-                style: TextStyle(color: AppTheme.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'example@company.com',
-                  hintStyle: TextStyle(color: AppTheme.textSecondary),
-                  filled: true,
-                  fillColor: AppTheme.darkBg2,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.white24),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.white24),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: AppTheme.primaryGreen),
-                  ),
-                  prefixIcon: Icon(Icons.email_outlined, color: AppTheme.primaryGreen),
-                ),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -520,16 +841,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
               child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
             ),
             ElevatedButton.icon(
-              onPressed: isLoading || emailController.text.isEmpty 
+              onPressed: isLoading || userEmail.isEmpty || tempSelectedColumns.isEmpty
                   ? null 
                   : () async {
                       setState(() => isLoading = true);
                       try {
-                        await _sendEmailReport(emailController.text.trim());
+                        // Save column preferences
+                        this.setState(() {
+                          _selectedColumns = List.from(tempSelectedColumns);
+                        });
+                        await _saveColumnPreferences();
+                        
+                        // Send email with selected columns
+                        await _sendEmailReport(userEmail, tempSelectedColumns);
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Report sent successfully to ${emailController.text}'),
+                            content: Text('Report sent successfully to $userEmail'),
                             backgroundColor: AppTheme.primaryGreen,
                           ),
                         );
@@ -565,7 +893,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Future<void> _sendEmailReport(String email) async {
+  Future<void> _sendEmailReport(String email, List<String> selectedColumns) async {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.user?.token;
@@ -583,10 +911,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
           : 'All Dates';
 
       // Generate CSV content (matching web version exactly)
-      String csvContent = _generateCSVContent(stats, dateRange);
+      String csvContent = _generateCSVContent(stats, dateRange, selectedColumns);
       
       // Generate PDF content (we'll send the data to server to create PDF)
-      String pdfContent = await _generatePDFContent(stats, dateRange);
+      String pdfContent = await _generatePDFContent(stats, dateRange, selectedColumns);
 
       // Call the email API
       final response = await http.post(
@@ -673,7 +1001,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     };
   }
 
-  String _generateCSVContent(Map<String, dynamic> stats, String dateRange) {
+  String _generateCSVContent(Map<String, dynamic> stats, String dateRange, List<String> selectedColumns) {
     List<List<String>> csvData = [];
     
     // Header information (matching web version)
@@ -703,74 +1031,256 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     csvData.add([]);
     
-    // Table headers
+    // Generate dynamic headers based on selected columns
+    List<String> headers = [];
+    List<List<String>> dataRows = [];
+    
+    for (String columnKey in selectedColumns) {
+      final column = availableColumns.firstWhere((col) => col['key'] == columnKey, orElse: () => {'key': columnKey, 'label': columnKey});
+      headers.add(column['label']!);
+    }
+    csvData.add(headers);
+    
+    // Generate data rows with selected columns
+    for (int i = 0; i < _records.length; i++) {
+      var record = _records[i];
+      List<String> row = [];
+      
+      for (String columnKey in selectedColumns) {
+        String value = '';
+        
+        switch (columnKey) {
+          case 'sl_no':
+            value = (i + 1).toString();
+            break;
+          case 'date_time':
+            if (_selectedReport == 'collections') {
+              value = '${record['collection_date']?.toString() ?? ''} ${record['collection_time']?.toString() ?? ''}';
+            } else if (_selectedReport == 'dispatches') {
+              value = '${record['dispatch_date']?.toString() ?? ''} ${record['dispatch_time']?.toString() ?? ''}';
+            } else {
+              value = '${record['sales_date']?.toString() ?? ''} ${record['sales_time']?.toString() ?? ''}';
+            }
+            break;
+          case 'farmer':
+            value = '${record['farmer_id']?.toString() ?? ''} - ${record['farmer_name']?.toString() ?? ''}';
+            break;
+          case 'society':
+            value = record['society_name']?.toString() ?? '';
+            break;
+          case 'machine':
+            // Handle different field names across report types and potential missing data
+            String machineId = '';
+            String machineType = '';
+            
+            // Try different field names for machine ID
+            machineId = record['machine_id']?.toString() ?? 
+                       record['machine_number']?.toString() ?? 
+                       record['machine']?.toString() ?? '';
+            
+            // Try different field names for machine type, including direct field from dispatches table
+            machineType = record['machine_type']?.toString() ?? 
+                         record['machine_name']?.toString() ?? 
+                         record['machine_version']?.toString() ?? '';
+            
+            if (machineId.isNotEmpty && machineType.isNotEmpty) {
+              value = '$machineId ($machineType)';
+            } else if (machineId.isNotEmpty) {
+              value = '$machineId (${_selectedReport == 'collections' ? 'Milking Machine' : 'Machine'})';
+            } else if (machineType.isNotEmpty) {
+              value = machineType;
+            } else {
+              value = 'N/A';
+            }
+            break;
+          case 'shift':
+            value = _formatShift(record['shift_type']);
+            break;
+          case 'channel':
+            value = _formatChannel(record['channel']);
+            break;
+          case 'fat':
+            value = record['fat_percentage']?.toString() ?? '';
+            break;
+          case 'snf':
+            value = record['snf_percentage']?.toString() ?? '';
+            break;
+          case 'clr':
+            value = record['clr_value']?.toString() ?? '';
+            break;
+          case 'protein':
+            value = record['protein_percentage']?.toString() ?? '';
+            break;
+          case 'lactose':
+            value = record['lactose_percentage']?.toString() ?? '';
+            break;
+          case 'salt':
+            value = record['salt_percentage']?.toString() ?? '';
+            break;
+          case 'water':
+            value = record['water_percentage']?.toString() ?? '';
+            break;
+          case 'temperature':
+            value = record['temperature']?.toString() ?? '';
+            break;
+          case 'rate':
+            value = record['rate_per_liter']?.toString() ?? '';
+            break;
+          case 'bonus':
+            value = record['bonus']?.toString() ?? '';
+            break;
+          case 'qty':
+            value = record['quantity']?.toString() ?? '';
+            break;
+          case 'amount':
+            value = record['total_amount']?.toString() ?? '';
+            break;
+          case 'dispatch_id':
+            value = record['dispatch_id']?.toString() ?? '';
+            break;
+          case 'count':
+            value = record['count']?.toString() ?? '';
+            break;
+        }
+        
+        row.add(value);
+      }
+      
+      csvData.add(row);
+    }
+
+    // Add bottom summary details (like web app)
+    csvData.add([]);
+    csvData.add(['=== REPORT SUMMARY ===']);
+    csvData.add([]);
+    
+    // Column summaries for applicable columns
+    if (selectedColumns.contains('qty')) {
+      double totalQty = _records.fold(0.0, (sum, record) => sum + (double.tryParse(record['quantity']?.toString() ?? '0') ?? 0));
+      csvData.add(['Total Quantity (Liters):', totalQty.toStringAsFixed(2)]);
+    }
+    
+    if (selectedColumns.contains('amount')) {
+      double totalAmt = _records.fold(0.0, (sum, record) => sum + (double.tryParse(record['total_amount']?.toString() ?? '0') ?? 0));
+      csvData.add(['Total Amount (₹):', totalAmt.toStringAsFixed(2)]);
+    }
+    
+    if (selectedColumns.contains('fat') && _selectedReport != 'sales') {
+      csvData.add(['Weighted Average FAT (%):', stats['weightedFat'].toStringAsFixed(2)]);
+    }
+    
+    if (selectedColumns.contains('snf') && _selectedReport != 'sales') {
+      csvData.add(['Weighted Average SNF (%):', stats['weightedSnf'].toStringAsFixed(2)]);
+    }
+    
+    if (selectedColumns.contains('clr') && _selectedReport != 'sales') {
+      csvData.add(['Weighted Average CLR:', stats['weightedClr'].toStringAsFixed(2)]);
+    }
+    
+    if (selectedColumns.contains('rate')) {
+      csvData.add(['Average Rate per Liter (₹):', stats['averageRate'].toStringAsFixed(2)]);
+    }
+    
+    // Record counts by category
+    csvData.add([]);
+    csvData.add(['=== RECORD BREAKDOWN ===']);
+    
     if (_selectedReport == 'collections') {
-      csvData.add(['Date', 'Time', 'Channel', 'Shift', 'Machine', 'Society', 'Farmer ID', 'Farmer Name', 'Fat (%)', 'SNF (%)', 'CLR', 'Water (%)', 'Rate (₹/L)', 'Quantity (L)', 'Total Amount (₹)', 'Incentive']);
-      for (var record in _records) {
-        csvData.add([
-          record['collection_date']?.toString() ?? '',
-          record['collection_time']?.toString() ?? '',
-          _formatChannel(record['channel']),
-          _formatShift(record['shift_type']),
-          '${record['machine_id']} (${record['machine_type']})',
-          record['society_name']?.toString() ?? '',
-          record['farmer_id']?.toString() ?? '',
-          record['farmer_name']?.toString() ?? '',
-          record['fat_percentage']?.toString() ?? '',
-          record['snf_percentage']?.toString() ?? '',
-          record['clr_value']?.toString() ?? '',
-          record['water_percentage']?.toString() ?? '',
-          record['rate_per_liter']?.toString() ?? '',
-          record['quantity']?.toString() ?? '',
-          record['total_amount']?.toString() ?? '',
-          record['bonus']?.toString() ?? '',
-        ]);
+      // Morning vs Evening breakdown
+      int morningCount = _records.where((r) => _formatShift(r['shift_type']).contains('Morning')).length;
+      int eveningCount = _records.where((r) => _formatShift(r['shift_type']).contains('Evening')).length;
+      csvData.add(['Morning Collections:', morningCount.toString()]);
+      csvData.add(['Evening Collections:', eveningCount.toString()]);
+      
+      // Channel breakdown
+      int cowCount = _records.where((r) => _formatChannel(r['channel']) == 'COW').length;
+      int buffaloCount = _records.where((r) => _formatChannel(r['channel']) == 'BUFFALO').length;
+      int mixedCount = _records.where((r) => _formatChannel(r['channel']) == 'MIXED').length;
+      csvData.add(['COW Milk Collections:', cowCount.toString()]);
+      csvData.add(['BUFFALO Milk Collections:', buffaloCount.toString()]);
+      csvData.add(['MIXED Milk Collections:', mixedCount.toString()]);
+      
+      // Unique farmers count
+      Set<String> uniqueFarmers = _records.map((r) => r['farmer_id']?.toString() ?? '').where((id) => id.isNotEmpty).toSet();
+      csvData.add(['Unique Farmers:', uniqueFarmers.length.toString()]);
+      
+      // Unique societies count
+      Set<String> uniqueSocieties = _records.map((r) => r['society_name']?.toString() ?? '').where((name) => name.isNotEmpty).toSet();
+      csvData.add(['Unique Societies:', uniqueSocieties.length.toString()]);
+    }
+    
+    // Quality metrics (for collections and dispatches)
+    if (_selectedReport != 'sales' && _records.isNotEmpty) {
+      csvData.add([]);
+      csvData.add(['=== QUALITY METRICS ===']);
+      
+      List<double> fatValues = _records.map((r) => double.tryParse(r['fat_percentage']?.toString() ?? '0') ?? 0).where((v) => v > 0).toList();
+      List<double> snfValues = _records.map((r) => double.tryParse(r['snf_percentage']?.toString() ?? '0') ?? 0).where((v) => v > 0).toList();
+      
+      if (fatValues.isNotEmpty) {
+        fatValues.sort();
+        csvData.add(['Minimum FAT (%):', fatValues.first.toStringAsFixed(2)]);
+        csvData.add(['Maximum FAT (%):', fatValues.last.toStringAsFixed(2)]);
+        csvData.add(['Median FAT (%):', fatValues[fatValues.length ~/ 2].toStringAsFixed(2)]);
       }
-    } else if (_selectedReport == 'dispatches') {
-      csvData.add(['Date', 'Time', 'Dispatch ID', 'Shift', 'Channel', 'Society', 'Machine', 'Quantity (L)', 'Fat (%)', 'SNF (%)', 'CLR', 'Rate (₹/L)', 'Total Amount (₹)']);
-      for (var record in _records) {
-        csvData.add([
-          record['dispatch_date']?.toString() ?? '',
-          record['dispatch_time']?.toString() ?? '',
-          record['dispatch_id']?.toString() ?? '',
-          _formatShift(record['shift_type']),
-          _formatChannel(record['channel']),
-          record['society_name']?.toString() ?? '',
-          record['machine_type']?.toString() ?? '',
-          record['quantity']?.toString() ?? '',
-          record['fat_percentage']?.toString() ?? '',
-          record['snf_percentage']?.toString() ?? '',
-          record['clr_value']?.toString() ?? '',
-          record['rate_per_liter']?.toString() ?? '',
-          record['total_amount']?.toString() ?? '',
-        ]);
-      }
-    } else {
-      csvData.add(['Date', 'Time', 'Count', 'Shift', 'Channel', 'Society', 'Machine', 'Quantity (L)', 'Rate (₹/L)', 'Total Amount (₹)']);
-      for (var record in _records) {
-        csvData.add([
-          record['sales_date']?.toString() ?? '',
-          record['sales_time']?.toString() ?? '',
-          record['count']?.toString() ?? '',
-          _formatShift(record['shift_type']),
-          _formatChannel(record['channel']),
-          record['society_name']?.toString() ?? '',
-          record['machine_type']?.toString() ?? '',
-          record['quantity']?.toString() ?? '',
-          record['rate_per_liter']?.toString() ?? '',
-          record['total_amount']?.toString() ?? '',
-        ]);
+      
+      if (snfValues.isNotEmpty) {
+        snfValues.sort();
+        csvData.add(['Minimum SNF (%):', snfValues.first.toStringAsFixed(2)]);
+        csvData.add(['Maximum SNF (%):', snfValues.last.toStringAsFixed(2)]);
+        csvData.add(['Median SNF (%):', snfValues[snfValues.length ~/ 2].toStringAsFixed(2)]);
       }
     }
+    
+    // Footer information
+    csvData.add([]);
+    csvData.add(['=== REPORT FOOTER ===']);
+    csvData.add(['Report Generated By:', 'Poornasree Equipments Cloud System']);
+    csvData.add(['Export Date:', DateTime.now().toString().substring(0, 19)]);
+    csvData.add(['Data Columns:', selectedColumns.length.toString()]);
+    csvData.add(['Records Exported:', _records.length.toString()]);
+    csvData.add(['Filters Applied:', _getAppliedFiltersString()]);
+    csvData.add([]);
+    csvData.add(['© 2025 Poornasree Equipments - All Rights Reserved']);
 
     return csvData.map((row) => row.join(',')).join('\n');
   }
 
-  Future<String> _generatePDFContent(Map<String, dynamic> stats, String dateRange) async {
-    // For now, we'll send the data to the server to generate PDF
-    // In the actual email API on the server, we'll generate the PDF with jsPDF
-    // This is a placeholder - the actual PDF generation will happen on the server
-    return 'PDF_PLACEHOLDER';
+  Future<String> _generatePDFContent(Map<String, dynamic> stats, String dateRange, List<String> selectedColumns) async {
+    try {
+      print('🔧 Generating PDF content for ${_selectedReport} report...');
+      
+      // Convert records to the format expected by PdfService
+      final List<Map<String, dynamic>> pdfRecords = _records.map((record) {
+        return Map<String, dynamic>.from(record);
+      }).toList();
+
+      print('🔧 PDF Records count: ${pdfRecords.length}');
+      print('🔧 PDF Stats: $stats');
+      print('🔧 PDF Date Range: $dateRange');
+      print('🔧 Selected Columns: $selectedColumns');
+
+      // Generate PDF using our PdfService (similar to web app's jsPDF)
+      final Uint8List pdfBytes = await PdfService.generateCollectionReportPDF(
+        records: pdfRecords,
+        stats: stats,
+        dateRange: dateRange,
+        selectedColumns: selectedColumns,
+        logoPath: 'assets/images/fulllogo.png', // Logo path in assets
+      );
+
+      // Convert PDF bytes to base64 string (same format as web app)
+      final String pdfBase64 = base64Encode(pdfBytes);
+      
+      print('✅ PDF generated successfully, size: ${pdfBytes.length} bytes');
+      return pdfBase64;
+      return pdfBase64;
+    } catch (e, stackTrace) {
+      print('❌ Error generating PDF: $e');
+      print('❌ Stack trace: $stackTrace');
+      // Return empty base64 as fallback
+      return '';
+    }
   }
 
   
@@ -1120,18 +1630,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ],
     );
   }
-    String _getReportTitle(String reportType) {
-    switch (reportType) {
-      case 'collections':
-        return 'Milk Collections Report';
-      case 'dispatches':
-        return 'Dispatches Report';
-      case 'sales':
-        return 'Sales Report';
-      default:
-        return 'Report';
-    }
-  }
 
   Widget _buildDataTable() {
     return Container(
@@ -1293,8 +1791,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(record['machine_id']?.toString() ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text(record['machine_type']?.toString() ?? '-', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                Text('ID: ${record['machine_id']?.toString() ?? '-'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                Text('${record['machine_type']?.toString() ?? (record['machine_version']?.toString() ?? 'Milking Machine')}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           ),
@@ -1372,8 +1870,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(record['machine_number']?.toString() ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text(record['machine_type'] ?? '-', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                Text('ID: ${record['machine_number']?.toString() ?? record['machine_id']?.toString() ?? '-'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                Text('${record['machine_type']?.toString() ?? 'Unknown'}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           ),
@@ -1445,8 +1943,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(record['machine_number']?.toString() ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text(record['machine_type'] ?? '-', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                Text('ID: ${record['machine_number']?.toString() ?? record['machine_id']?.toString() ?? '-'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                Text('${record['machine_type']?.toString() ?? 'Unknown'}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           ),
@@ -1550,5 +2048,60 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     // Return uppercase version if no match found
     return channelStr;
+  }
+  
+  String _getAppliedFiltersString() {
+    List<String> filters = [];
+    
+    if (_fromDate != null || _toDate != null) {
+      if (_fromDate != null && _toDate != null) {
+        filters.add('Date: ${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year} to ${_toDate!.day}/${_toDate!.month}/${_toDate!.year}');
+      } else if (_fromDate != null) {
+        filters.add('From: ${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year}');
+      } else {
+        filters.add('Until: ${_toDate!.day}/${_toDate!.month}/${_toDate!.year}');
+      }
+    }
+    
+    if (_shiftFilter != 'all') {
+      filters.add('Shift: ${_shiftFilter == 'morning' ? 'Morning' : 'Evening'}');
+    }
+    
+    if (_channelFilter != 'all') {
+      filters.add('Channel: $_channelFilter');
+    }
+    
+    if (_machineFilter != null) {
+      final machine = _machines.firstWhere(
+        (m) => m['id']?.toString() == _machineFilter,
+        orElse: () => {},
+      );
+      final machineName = machine['machine_type']?.toString() ?? 'Machine';
+      filters.add('Machine: $machineName ($_machineFilter)');
+    }
+    
+    if (_farmerFilter != null) {
+      final farmer = _farmers.firstWhere(
+        (f) => f['id']?.toString() == _farmerFilter,
+        orElse: () => {},
+      );
+      final farmerName = farmer['name']?.toString() ?? 'Farmer';
+      filters.add('Farmer: $farmerName ($_farmerFilter)');
+    }
+    
+    return filters.isEmpty ? 'No filters applied' : filters.join('; ');
+  }
+  
+  String _getReportTitle(String reportType) {
+    switch (reportType) {
+      case 'collections':
+        return 'Collection Report';
+      case 'dispatches':
+        return 'Dispatch Report';
+      case 'sales':
+        return 'Sales Report';
+      default:
+        return 'Report';
+    }
   }
 }
