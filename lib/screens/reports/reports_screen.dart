@@ -600,7 +600,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final userEmail = authProvider.user?.email ?? '';
     
     bool isLoading = false;
-    bool showColumnSelection = false;
     // Use current report's default columns
     List<String> tempSelectedColumns = List.from(currentReportDefaultColumns);
     // Add any additional selected columns that are not in defaults
@@ -665,7 +664,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                   const SizedBox(height: 12),
                   
-                  // Compact Column Display Section
+                  // Column Selection Section
                   Row(
                     children: [
                       Text(
@@ -677,19 +676,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ),
                       ),
                       const Spacer(),
+                      Text(
+                        '${tempSelectedColumns.length} selected',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       TextButton.icon(
                         onPressed: () {
-                          setState(() {
-                            showColumnSelection = !showColumnSelection;
+                          _showColumnSelectionDialog(context, tempSelectedColumns, (newColumns) {
+                            setState(() {
+                              tempSelectedColumns = newColumns;
+                            });
                           });
                         },
                         icon: Icon(
-                          showColumnSelection ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          Icons.tune,
                           size: 16,
                           color: AppTheme.primaryGreen,
                         ),
                         label: Text(
-                          showColumnSelection ? 'Less' : 'More',
+                          'Select Columns',
                           style: TextStyle(
                             color: AppTheme.primaryGreen,
                             fontSize: 11,
@@ -698,193 +707,61 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   
-                  // Compact display of selected columns
-                  if (!showColumnSelection) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.darkBg2,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
-                      ),
-                      child: Wrap(
-                        spacing: 3,
-                        runSpacing: 3,
-                        children: tempSelectedColumns.take(12).map((columnKey) {
-                          final column = currentReportAvailableColumns.firstWhere(
-                            (col) => col['key'] == columnKey,
-                            orElse: () => {'key': columnKey, 'label': columnKey},
-                          );
-                          return Container(
+                  // Selected columns preview
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.darkBg2,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+                    ),
+                    child: Wrap(
+                      spacing: 3,
+                      runSpacing: 3,
+                      children: tempSelectedColumns.take(15).map((columnKey) {
+                        final column = currentReportAvailableColumns.firstWhere(
+                          (col) => col['key'] == columnKey,
+                          orElse: () => {'key': columnKey, 'label': columnKey},
+                        );
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryGreen.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3), width: 0.5),
+                          ),
+                          child: Text(
+                            column['label']!,
+                            style: TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList()..addAll(
+                        tempSelectedColumns.length > 15 ? [
+                          Container(
                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryGreen.withOpacity(0.15),
+                              color: AppTheme.textSecondary.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3), width: 0.5),
                             ),
                             child: Text(
-                              column['label']!,
+                              '+${tempSelectedColumns.length - 15} more',
                               style: TextStyle(
-                                color: AppTheme.primaryGreen,
+                                color: AppTheme.textSecondary,
                                 fontSize: 9,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          );
-                        }).toList()..addAll(
-                          tempSelectedColumns.length > 12 ? [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.textSecondary.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '+${tempSelectedColumns.length - 12}',
-                                style: TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ),
-                          ] : [],
-                        ),
-                      ),
-                    ),
-                  ],
-                  
-                  // Full Column Selection Section (expandable)
-                  if (showColumnSelection) ...[
-                    Container(
-                      height: 200,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.darkBg2,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        children: [
-                          // Select All / Deselect All buttons
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    setState(() {
-                                      tempSelectedColumns = currentReportAvailableColumns.map((col) => col['key']!).toList();
-                                    });
-                                  },
-                                  icon: Icon(Icons.select_all, size: 14, color: AppTheme.primaryGreen),
-                                  label: Text(
-                                    'All',
-                                    style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    setState(() {
-                                      tempSelectedColumns = List.from(currentReportDefaultColumns);
-                                    });
-                                  },
-                                  icon: Icon(Icons.deselect, size: 14, color: AppTheme.textSecondary),
-                                  label: Text(
-                                    'Clear Optional',
-                                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 10),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    setState(() {
-                                      tempSelectedColumns = List.from(currentReportDefaultColumns);
-                                    });
-                                  },
-                                  icon: Icon(Icons.restore, size: 14, color: AppTheme.primaryGreen),
-                                  label: Text(
-                                    'Default',
-                                    style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          
-                          // Column checkboxes
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: Column(
-                                children: currentReportAvailableColumns.map((column) {
-                                  final isSelected = tempSelectedColumns.contains(column['key']);
-                                  final isDefaultColumn = currentReportDefaultColumns.contains(column['key']);
-                                  
-                                  return CheckboxListTile(
-                                    dense: true,
-                                    visualDensity: VisualDensity.compact,
-                                    contentPadding: EdgeInsets.zero,
-                                    value: isSelected,
-                                    onChanged: isDefaultColumn ? null : (bool? value) {
-                                      setState(() {
-                                        if (value == true) {
-                                          if (!tempSelectedColumns.contains(column['key'])) {
-                                            // Insert column in correct position based on currentReportAvailableColumns order
-                                            final columnIndex = currentReportAvailableColumns.indexWhere((col) => col['key'] == column['key']);
-                                            int insertIndex = tempSelectedColumns.length;
-                                            
-                                            // Find the correct position to maintain order
-                                            for (int i = 0; i < tempSelectedColumns.length; i++) {
-                                              final currentColumnIndex = currentReportAvailableColumns.indexWhere((col) => col['key'] == tempSelectedColumns[i]);
-                                              if (currentColumnIndex > columnIndex) {
-                                                insertIndex = i;
-                                                break;
-                                              }
-                                            }
-                                            
-                                            tempSelectedColumns.insert(insertIndex, column['key']!);
-                                          }
-                                        } else {
-                                          tempSelectedColumns.remove(column['key']);
-                                        }
-                                      });
-                                    },
-                                    title: Text(
-                                      column['label']!,
-                                      style: TextStyle(
-                                        color: isDefaultColumn 
-                                            ? AppTheme.textSecondary.withOpacity(0.7)
-                                            : AppTheme.textPrimary,
-                                        fontSize: 12,
-                                        fontWeight: isDefaultColumn ? FontWeight.w600 : FontWeight.normal,
-                                      ),
-                                    ),
-                                    subtitle: isDefaultColumn 
-                                        ? Text(
-                                            'Required column',
-                                            style: TextStyle(
-                                              color: AppTheme.textSecondary.withOpacity(0.5),
-                                              fontSize: 10,
-                                            ),
-                                          )
-                                        : null,
-                                    activeColor: AppTheme.primaryGreen,
-                                    checkColor: Colors.white,
-                                    controlAffinity: ListTileControlAffinity.leading,
-                                  );
-                                }).toList(),
                               ),
                             ),
                           ),
-                        ],
+                        ] : [],
                       ),
                     ),
-                  ],
+                  ),
                   
                   const SizedBox(height: 8),
                   Text(
@@ -2294,5 +2171,209 @@ class _ReportsScreenState extends State<ReportsScreen> {
       default:
         return 'Report';
     }
+  }
+
+  void _showColumnSelectionDialog(BuildContext context, List<String> currentSelection, Function(List<String>) onSelectionChanged) {
+    List<String> tempSelection = List.from(currentSelection);
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: AppTheme.cardDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          titlePadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+          contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          title: Row(
+            children: [
+              Icon(Icons.view_column, color: AppTheme.primaryGreen, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Select Columns',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 15),
+              ),
+              const Spacer(),
+              Text(
+                '${tempSelection.length} selected',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8,
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              children: [
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            tempSelection = currentReportAvailableColumns.map((col) => col['key']!).toList();
+                          });
+                        },
+                        icon: Icon(Icons.select_all, size: 12, color: AppTheme.primaryGreen),
+                        label: Text(
+                          'All',
+                          style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            tempSelection = List.from(currentReportDefaultColumns);
+                          });
+                        },
+                        icon: Icon(Icons.restore, size: 12, color: AppTheme.primaryGreen),
+                        label: Text(
+                          'Default',
+                          style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                
+                // Column grid for landscape mode
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Calculate number of columns based on screen width
+                        int crossAxisCount = constraints.maxWidth > 800 ? 3 : 
+                                           constraints.maxWidth > 500 ? 2 : 1;
+                        
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            childAspectRatio: 5.5,
+                            crossAxisSpacing: 6,
+                            mainAxisSpacing: 3,
+                          ),
+                          itemCount: currentReportAvailableColumns.length,
+                          itemBuilder: (context, index) {
+                            final column = currentReportAvailableColumns[index];
+                            final isSelected = tempSelection.contains(column['key']);
+                            final isDefaultColumn = currentReportDefaultColumns.contains(column['key']);
+                            
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: isSelected 
+                                    ? AppTheme.primaryGreen.withOpacity(0.1)
+                                    : AppTheme.darkBg2,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isSelected 
+                                      ? AppTheme.primaryGreen.withOpacity(0.5)
+                                      : AppTheme.textSecondary.withOpacity(0.2),
+                                ),
+                              ),
+                              child: CheckboxListTile(
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                                value: isSelected,
+                                onChanged: isDefaultColumn ? null : (bool? value) {
+                                  setState(() {
+                                    if (value == true) {
+                                      if (!tempSelection.contains(column['key'])) {
+                                        // Insert column in correct position to maintain order
+                                        final columnIndex = currentReportAvailableColumns.indexWhere((col) => col['key'] == column['key']);
+                                        int insertIndex = tempSelection.length;
+                                        
+                                        for (int i = 0; i < tempSelection.length; i++) {
+                                          final currentColumnIndex = currentReportAvailableColumns.indexWhere((col) => col['key'] == tempSelection[i]);
+                                          if (currentColumnIndex > columnIndex) {
+                                            insertIndex = i;
+                                            break;
+                                          }
+                                        }
+                                        
+                                        tempSelection.insert(insertIndex, column['key']!);
+                                      }
+                                    } else {
+                                      tempSelection.remove(column['key']);
+                                    }
+                                  });
+                                },
+                                title: Text(
+                                  column['label']!,
+                                  style: TextStyle(
+                                    color: isDefaultColumn 
+                                        ? AppTheme.textSecondary.withOpacity(0.8)
+                                        : AppTheme.textPrimary,
+                                    fontSize: 11,
+                                    fontWeight: isDefaultColumn ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                                subtitle: isDefaultColumn 
+                                    ? Text(
+                                        'Required',
+                                        style: TextStyle(
+                                          color: AppTheme.textSecondary.withOpacity(0.6),
+                                          fontSize: 9,
+                                        ),
+                                      )
+                                    : null,
+                                activeColor: AppTheme.primaryGreen,
+                                checkColor: Colors.white,
+                                controlAffinity: ListTileControlAffinity.leading,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                onSelectionChanged(tempSelection);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Apply', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
