@@ -64,7 +64,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   // Default columns for email reports - report specific
   static const Map<String, List<String>> reportDefaultColumns = {
     'collections': ['sl_no', 'date_time', 'farmer', 'society', 'channel', 'fat', 'snf', 'clr', 'water', 'rate', 'bonus', 'qty', 'amount'],
-    'dispatches': ['sl_no', 'date_time', 'dispatch_id', 'society', 'machine', 'shift', 'channel', 'qty', 'fat', 'snf', 'clr', 'rate', 'amount'],
+    'dispatches': ['sl_no', 'date_time', 'dispatch_id', 'society', 'channel', 'fat', 'snf', 'clr', 'qty', 'rate', 'amount'],
     'sales': ['sl_no', 'date_time', 'society', 'channel', 'qty', 'rate', 'amount'],
   };
   
@@ -314,6 +314,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 );
               }
             ),
+            // Refresh button
+            IconButton(
+              icon: _isLoading 
+                  ? const FlowerSpinner(size: 16) 
+                  : const Icon(Icons.refresh_outlined, size: 20),
+              onPressed: _isLoading ? null : () {
+                HapticFeedback.lightImpact();
+                _fetchData();
+              },
+              tooltip: 'Refresh Data',
+              color: Colors.white,
+            ),
             // Filter button with badge
             Builder(
               builder: (BuildContext context) {
@@ -387,9 +399,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ),
                               const SizedBox(height: 24),
                               ElevatedButton.icon(
-                                onPressed: _fetchData,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Retry'),
+                                onPressed: _isLoading ? null : () {
+                                  HapticFeedback.lightImpact();
+                                  _fetchData();
+                                },
+                                icon: _isLoading 
+                                    ? const FlowerSpinner(size: 16)
+                                    : const Icon(Icons.refresh),
+                                label: Text(_isLoading ? 'Loading...' : 'Retry'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppTheme.primaryGreen,
                                   foregroundColor: Colors.white,
