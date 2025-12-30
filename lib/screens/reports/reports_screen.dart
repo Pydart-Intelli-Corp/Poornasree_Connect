@@ -191,6 +191,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         setState(() {
           _machines = List<Map<String, dynamic>>.from(data['data'] ?? []);
         });
+        print('Fetched machines: ${_machines.map((m) => {'id': m['id'], 'machine_id': m['machine_id'], 'machine_type': m['machine_type']}).toList()}');
       }
     } catch (e) {
       print('Error fetching machines: $e');
@@ -250,8 +251,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final records = data['data']['records'] ?? [];
+        print('DEBUG: Loaded ${records.length} records');
+        if (records.isNotEmpty) {
+          print('DEBUG: First record keys: ${(records[0] as Map).keys.toList()}');
+          print('DEBUG: First record machine_id: ${records[0]['machine_id']}');
+          print('DEBUG: Sample machine_ids in records: ${records.take(5).map((r) => r['machine_id']).toList()}');
+        }
         setState(() {
-          _allRecords = data['data']['records'] ?? [];
+          _allRecords = records;
           _applyFilters();
           _isLoading = false;
         });
@@ -568,9 +576,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       filtered = filtered.where((r) => _formatChannel(r['channel']) == _channelFilter).toList();
     }
     
-    // Machine filter
-    if (_machineFilter != null && _selectedReport == 'collections') {
-      filtered = filtered.where((r) => r['machine_id']?.toString() == _machineFilter).toList();
+    // Machine filter (works for collections, dispatches, and sales)
+    if (_machineFilter != null) {
+      filtered = filtered.where((r) {
+        String recordMachineId = r['machine_id']?.toString() ?? '';
+        return recordMachineId == _machineFilter;
+      }).toList();
     }
     
     // Farmer filter
@@ -1529,35 +1540,34 @@ class _ReportsScreenState extends State<ReportsScreen> {
             (value) => value == 'all' ? 'All Channels' : value,
           ),
         ),
-        // Machine Filter (Collections only)
-        if (_selectedReport == 'collections')
-          PopupMenuItem(
-            enabled: false,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: _buildDropdownFilter(
-              'Machine',
-              Icons.precision_manufacturing,
-              _machineFilter ?? 'all',
-              ['all', ..._machines.map((m) => m['id']?.toString() ?? '')],
-              (value) {
-                Navigator.pop(context);
-                setState(() {
-                  _machineFilter = value == 'all' ? null : value;
-                  _applyFilters();
-                });
-              },
-              (value) {
-                if (value == 'all') return 'All Machines';
-                final machine = _machines.firstWhere(
-                  (m) => m['id']?.toString() == value,
-                  orElse: () => {},
-                );
-                final type = machine['machine_type']?.toString() ?? 'Machine';
-                final machineId = machine['machine_id']?.toString() ?? value;
-                return '$type - $machineId';
-              },
-            ),
+        // Machine Filter (All report types)
+        PopupMenuItem(
+          enabled: false,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: _buildDropdownFilter(
+            'Machine',
+            Icons.precision_manufacturing,
+            _machineFilter ?? 'all',
+            ['all', ..._machines.where((m) => m['machine_id'] != null && m['machine_id'].toString().isNotEmpty).map((m) => m['machine_id'].toString())],
+            (value) {
+              Navigator.pop(context);
+              setState(() {
+                _machineFilter = value == 'all' ? null : value;
+                _applyFilters();
+              });
+            },
+            (value) {
+              if (value == 'all') return 'All Machines';
+              final machine = _machines.firstWhere(
+                (m) => m['machine_id']?.toString() == value,
+                orElse: () => {},
+              );
+              final type = machine['machine_type']?.toString() ?? 'Machine';
+              final machineId = machine['machine_id']?.toString() ?? value;
+              return '$type - $machineId';
+            },
           ),
+        ),
         // Farmer Filter (Collections only)
         if (_selectedReport == 'collections')
           PopupMenuItem(
@@ -2141,7 +2151,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     if (_machineFilter != null) {
       final machine = _machines.firstWhere(
-        (m) => m['id']?.toString() == _machineFilter,
+        (m) => m['machine_id']?.toString() == _machineFilter,
         orElse: () => {},
       );
       final machineName = machine['machine_type']?.toString() ?? 'Machine';
