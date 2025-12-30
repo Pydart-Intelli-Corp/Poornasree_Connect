@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/utils.dart';
+import 'custom_snackbar.dart';
 
 class MachineCard extends StatelessWidget {
   final Map<String, dynamic> machine;
@@ -48,11 +49,11 @@ class MachineCard extends StatelessWidget {
       child: InkWell(
         onTap: () {
           // TODO: Navigate to machine detail screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Viewing details for $machineName'),
-              duration: const Duration(seconds: 1),
-            ),
+          CustomSnackbar.show(
+            context,
+            message: 'Machine Details',
+            submessage: 'Viewing details for $machineName',
+            duration: const Duration(seconds: 2),
           );
         },
         borderRadius: BorderRadius.circular(12),

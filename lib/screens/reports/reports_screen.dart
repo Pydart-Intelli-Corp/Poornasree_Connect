@@ -61,17 +61,47 @@ class _ReportsScreenState extends State<ReportsScreen> {
     {'key': 'count', 'label': 'Count'},
   ];
   
-  // Default columns for email reports
-  static const List<String> defaultColumns = [
-    'sl_no', 'date_time', 'farmer', 'society', 'channel', 
-    'fat', 'snf', 'clr', 'water', 'rate', 'bonus', 'qty', 'amount'
-  ];
+  // Default columns for email reports - report specific
+  static const Map<String, List<String>> reportDefaultColumns = {
+    'collections': ['sl_no', 'date_time', 'farmer', 'society', 'channel', 'fat', 'snf', 'clr', 'water', 'rate', 'bonus', 'qty', 'amount'],
+    'dispatches': ['sl_no', 'date_time', 'dispatch_id', 'society', 'machine', 'shift', 'channel', 'qty', 'fat', 'snf', 'clr', 'rate', 'amount'],
+    'sales': ['sl_no', 'date_time', 'society', 'channel', 'qty', 'rate', 'amount'],
+  };
   
-  List<String> _selectedColumns = List.from(defaultColumns);
+  // Get default columns for current report type
+  List<String> get currentReportDefaultColumns => reportDefaultColumns[_selectedReport] ?? reportDefaultColumns['collections']!;
+  
+  // Get available columns for current report type
+  List<Map<String, String>> get currentReportAvailableColumns {
+    switch (_selectedReport) {
+      case 'collections':
+        return availableColumns.where((col) => [
+          'sl_no', 'date_time', 'farmer', 'society', 'machine', 'shift', 'channel',
+          'fat', 'snf', 'clr', 'protein', 'lactose', 'salt', 'water', 'temperature',
+          'rate', 'bonus', 'qty', 'amount'
+        ].contains(col['key'])).toList();
+      case 'dispatches':
+        return availableColumns.where((col) => [
+          'sl_no', 'date_time', 'dispatch_id', 'society', 'machine', 'shift', 'channel',
+          'fat', 'snf', 'clr', 'qty', 'rate', 'amount'
+        ].contains(col['key'])).toList();
+      case 'sales':
+        return availableColumns.where((col) => [
+          'sl_no', 'date_time', 'count', 'society', 'machine', 'shift', 'channel',
+          'qty', 'rate', 'amount'
+        ].contains(col['key'])).toList();
+      default:
+        return availableColumns;
+    }
+  }
+  
+  List<String> _selectedColumns = [];
 
   @override
   void initState() {
     super.initState();
+    // Initialize with current report defaults
+    _selectedColumns = List.from(currentReportDefaultColumns);
     // Lock to landscape orientation
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -100,12 +130,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (savedColumns != null && savedColumns.isNotEmpty) {
         setState(() {
           _selectedColumns = savedColumns;
-          // Ensure default columns are always included
-          for (String defaultCol in defaultColumns) {
+          // Ensure current report's default columns are always included
+          for (String defaultCol in currentReportDefaultColumns) {
             if (!_selectedColumns.contains(defaultCol)) {
               _selectedColumns.add(defaultCol);
             }
           }
+        });
+      } else {
+        // Use current report's default columns
+        setState(() {
+          _selectedColumns = List.from(currentReportDefaultColumns);
         });
       }
     } catch (e) {
@@ -217,18 +252,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         final data = json.decode(response.body);
         setState(() {
           _allRecords = data['data']['records'] ?? [];
-          
-          // Debug: Print first record to check available fields
-          if (_allRecords.isNotEmpty) {
-            print('DEBUG: First $_selectedReport record fields:');
-            final firstRecord = _allRecords[0];
-            firstRecord.forEach((key, value) {
-              if (key.toLowerCase().contains('machine')) {
-                print('  $key: $value');
-              }
-            });
-          }
-          
           _applyFilters();
           _isLoading = false;
         });
@@ -418,7 +441,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final isSelected = _selectedReport == value;
     return InkWell(
       onTap: () {
-        setState(() => _selectedReport = value);
+        setState(() {
+          _selectedReport = value;
+          // Reset column selection to new report's defaults when switching report types
+          _selectedColumns = List.from(currentReportDefaultColumns);
+        });
+        // Save the new column preferences
+        _saveColumnPreferences();
         _fetchData();
       },
       borderRadius: BorderRadius.circular(8),
@@ -501,7 +530,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     // Shift filter
     if (_shiftFilter != 'all') {
-      filtered = filtered.where((r) => (r['shift_type'] ?? '').toString().toLowerCase() == _shiftFilter).toList();
+      if (_selectedReport == 'sales') {
+        // For sales report, check multiple possible shift field names
+        filtered = filtered.where((r) {
+          final shiftValue = r['shift_type'] ?? r['shift'] ?? r['shift_name'] ?? '';
+          final formattedShift = _formatShift(shiftValue.toString()).toLowerCase();
+          return formattedShift.contains(_shiftFilter);
+        }).toList();
+      } else {
+        // For collections and dispatches
+        filtered = filtered.where((r) {
+          final formattedShift = _formatShift(r['shift_type']).toLowerCase();
+          return formattedShift.contains(_shiftFilter);
+        }).toList();
+      }
     }
     
     // Channel filter
@@ -542,11 +584,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     bool isLoading = false;
     bool showColumnSelection = false;
-    // Ensure default columns are always included
-    List<String> tempSelectedColumns = List.from(_selectedColumns);
-    for (String defaultCol in defaultColumns) {
-      if (!tempSelectedColumns.contains(defaultCol)) {
-        tempSelectedColumns.add(defaultCol);
+    // Use current report's default columns
+    List<String> tempSelectedColumns = List.from(currentReportDefaultColumns);
+    // Add any additional selected columns that are not in defaults
+    for (String col in _selectedColumns) {
+      if (!tempSelectedColumns.contains(col)) {
+        tempSelectedColumns.add(col);
       }
     }
 
@@ -654,7 +697,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         spacing: 3,
                         runSpacing: 3,
                         children: tempSelectedColumns.take(12).map((columnKey) {
-                          final column = availableColumns.firstWhere(
+                          final column = currentReportAvailableColumns.firstWhere(
                             (col) => col['key'] == columnKey,
                             orElse: () => {'key': columnKey, 'label': columnKey},
                           );
@@ -715,7 +758,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 child: TextButton.icon(
                                   onPressed: () {
                                     setState(() {
-                                      tempSelectedColumns = availableColumns.map((col) => col['key']!).toList();
+                                      tempSelectedColumns = currentReportAvailableColumns.map((col) => col['key']!).toList();
                                     });
                                   },
                                   icon: Icon(Icons.select_all, size: 14, color: AppTheme.primaryGreen),
@@ -729,7 +772,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 child: TextButton.icon(
                                   onPressed: () {
                                     setState(() {
-                                      tempSelectedColumns = List.from(defaultColumns);
+                                      tempSelectedColumns = List.from(currentReportDefaultColumns);
                                     });
                                   },
                                   icon: Icon(Icons.deselect, size: 14, color: AppTheme.textSecondary),
@@ -743,7 +786,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 child: TextButton.icon(
                                   onPressed: () {
                                     setState(() {
-                                      tempSelectedColumns = List.from(defaultColumns);
+                                      tempSelectedColumns = List.from(currentReportDefaultColumns);
                                     });
                                   },
                                   icon: Icon(Icons.restore, size: 14, color: AppTheme.primaryGreen),
@@ -761,9 +804,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           Expanded(
                             child: SingleChildScrollView(
                               child: Column(
-                                children: availableColumns.map((column) {
+                                children: currentReportAvailableColumns.map((column) {
                                   final isSelected = tempSelectedColumns.contains(column['key']);
-                                  final isDefaultColumn = defaultColumns.contains(column['key']);
+                                  final isDefaultColumn = currentReportDefaultColumns.contains(column['key']);
                                   
                                   return CheckboxListTile(
                                     dense: true,
@@ -774,13 +817,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       setState(() {
                                         if (value == true) {
                                           if (!tempSelectedColumns.contains(column['key'])) {
-                                            // Insert column in correct position based on availableColumns order
-                                            final columnIndex = availableColumns.indexWhere((col) => col['key'] == column['key']);
+                                            // Insert column in correct position based on currentReportAvailableColumns order
+                                            final columnIndex = currentReportAvailableColumns.indexWhere((col) => col['key'] == column['key']);
                                             int insertIndex = tempSelectedColumns.length;
                                             
                                             // Find the correct position to maintain order
                                             for (int i = 0; i < tempSelectedColumns.length; i++) {
-                                              final currentColumnIndex = availableColumns.indexWhere((col) => col['key'] == tempSelectedColumns[i]);
+                                              final currentColumnIndex = currentReportAvailableColumns.indexWhere((col) => col['key'] == tempSelectedColumns[i]);
                                               if (currentColumnIndex > columnIndex) {
                                                 insertIndex = i;
                                                 break;
@@ -855,30 +898,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         // Send email with selected columns
                         await _sendEmailReport(userEmail, tempSelectedColumns);
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Report sent successfully to $userEmail'),
-                            backgroundColor: AppTheme.primaryGreen,
-                          ),
+                        CustomSnackbar.showSuccess(
+                          context,
+                          message: 'Report sent successfully',
+                          submessage: 'Report has been sent to $userEmail',
                         );
                       } catch (e) {
                         setState(() => isLoading = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to send report: $e'),
-                            backgroundColor: Colors.red,
-                          ),
+                        CustomSnackbar.showError(
+                          context,
+                          message: 'Failed to send report',
+                          submessage: e.toString(),
                         );
                       }
                     },
               icon: isLoading 
-                  ? SizedBox(
-                      width: 16, 
-                      height: 16, 
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2, 
-                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                      ),
+                  ? const FlowerSpinner(
+                      size: 16,
                     )
                   : const Icon(Icons.send, size: 16),
               label: Text(isLoading ? 'Sending...' : 'Send Report'),
@@ -1033,7 +1069,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     
     // Generate dynamic headers based on selected columns
     List<String> headers = [];
-    List<List<String>> dataRows = [];
     
     for (String columnKey in selectedColumns) {
       final column = availableColumns.firstWhere((col) => col['key'] == columnKey, orElse: () => {'key': columnKey, 'label': columnKey});
@@ -1054,50 +1089,84 @@ class _ReportsScreenState extends State<ReportsScreen> {
             value = (i + 1).toString();
             break;
           case 'date_time':
+            String date = '';
+            String time = '';
+            
             if (_selectedReport == 'collections') {
-              value = '${record['collection_date']?.toString() ?? ''} ${record['collection_time']?.toString() ?? ''}';
+              date = record['collection_date']?.toString() ?? '';
+              time = record['collection_time']?.toString() ?? '';
             } else if (_selectedReport == 'dispatches') {
-              value = '${record['dispatch_date']?.toString() ?? ''} ${record['dispatch_time']?.toString() ?? ''}';
+              date = record['dispatch_date']?.toString() ?? '';
+              time = record['dispatch_time']?.toString() ?? '';
             } else {
-              value = '${record['sales_date']?.toString() ?? ''} ${record['sales_time']?.toString() ?? ''}';
+              date = record['sales_date']?.toString() ?? '';
+              time = record['sales_time']?.toString() ?? '';
+            }
+            
+            if (date.isNotEmpty && time.isNotEmpty) {
+              value = '$date $time';
+            } else if (date.isNotEmpty) {
+              value = date;
+            } else if (time.isNotEmpty) {
+              value = time;
+            } else {
+              value = '';
             }
             break;
           case 'farmer':
-            value = '${record['farmer_id']?.toString() ?? ''} - ${record['farmer_name']?.toString() ?? ''}';
+            String farmerId = record['farmer_id']?.toString() ?? '';
+            String farmerName = record['farmer_name']?.toString() ?? '';
+            if (farmerId.isNotEmpty && farmerName.isNotEmpty) {
+              value = '$farmerId - $farmerName';
+            } else if (farmerId.isNotEmpty) {
+              value = farmerId;
+            } else if (farmerName.isNotEmpty) {
+              value = farmerName;
+            } else {
+              value = '';
+            }
             break;
           case 'society':
-            value = record['society_name']?.toString() ?? '';
+            String societyId = record['society_id']?.toString() ?? '';
+            String societyName = record['society_name']?.toString() ?? '';
+            if (societyId.isNotEmpty && societyName.isNotEmpty) {
+              value = '$societyId - $societyName';
+            } else if (societyId.isNotEmpty) {
+              value = societyId;
+            } else if (societyName.isNotEmpty) {
+              value = societyName;
+            } else {
+              value = '';
+            }
             break;
           case 'machine':
-            // Handle different field names across report types and potential missing data
-            String machineId = '';
-            String machineType = '';
-            
-            // Try different field names for machine ID
-            machineId = record['machine_id']?.toString() ?? 
-                       record['machine_number']?.toString() ?? 
-                       record['machine']?.toString() ?? '';
-            
-            // Try different field names for machine type, including direct field from dispatches table
-            machineType = record['machine_type']?.toString() ?? 
-                         record['machine_name']?.toString() ?? 
-                         record['machine_version']?.toString() ?? '';
-            
+            // Handle different field names across report types
+            String machineId = record['machine_id']?.toString() ?? record['machine']?.toString() ?? '';
+            String machineType = record['machine_type']?.toString() ?? record['machine_name']?.toString() ?? '';
             if (machineId.isNotEmpty && machineType.isNotEmpty) {
               value = '$machineId ($machineType)';
             } else if (machineId.isNotEmpty) {
-              value = '$machineId (${_selectedReport == 'collections' ? 'Milking Machine' : 'Machine'})';
+              value = machineId;
             } else if (machineType.isNotEmpty) {
               value = machineType;
             } else {
-              value = 'N/A';
+              value = '';
             }
             break;
           case 'shift':
-            value = _formatShift(record['shift_type']);
+            if (_selectedReport == 'sales') {
+              // For sales report, check multiple possible shift field names
+              final shiftValue = record['shift_type'] ?? record['shift'] ?? record['shift_name'] ?? '';
+              value = _formatShift(shiftValue.toString());
+            } else {
+              // For collections and dispatches
+              final shiftValue = record['shift_type'] ?? '';
+              value = _formatShift(shiftValue.toString());
+            }
             break;
           case 'channel':
-            value = _formatChannel(record['channel']);
+            final channelValue = record['channel'] ?? '';
+            value = _formatChannel(channelValue.toString());
             break;
           case 'fat':
             value = record['fat_percentage']?.toString() ?? '';
@@ -1207,6 +1276,48 @@ class _ReportsScreenState extends State<ReportsScreen> {
       // Unique societies count
       Set<String> uniqueSocieties = _records.map((r) => r['society_name']?.toString() ?? '').where((name) => name.isNotEmpty).toSet();
       csvData.add(['Unique Societies:', uniqueSocieties.length.toString()]);
+    } else if (_selectedReport == 'sales') {
+      // Morning vs Evening breakdown for sales
+      int morningCount = _records.where((r) {
+        final shiftValue = r['shift_type'] ?? r['shift'] ?? r['shift_name'] ?? '';
+        return _formatShift(shiftValue.toString()).contains('Morning');
+      }).length;
+      int eveningCount = _records.where((r) {
+        final shiftValue = r['shift_type'] ?? r['shift'] ?? r['shift_name'] ?? '';
+        return _formatShift(shiftValue.toString()).contains('Evening');
+      }).length;
+      csvData.add(['Morning Sales:', morningCount.toString()]);
+      csvData.add(['Evening Sales:', eveningCount.toString()]);
+      
+      // Channel breakdown
+      int cowCount = _records.where((r) => _formatChannel(r['channel']) == 'COW').length;
+      int buffaloCount = _records.where((r) => _formatChannel(r['channel']) == 'BUFFALO').length;
+      int mixedCount = _records.where((r) => _formatChannel(r['channel']) == 'MIXED').length;
+      csvData.add(['COW Milk Sales:', cowCount.toString()]);
+      csvData.add(['BUFFALO Milk Sales:', buffaloCount.toString()]);
+      csvData.add(['MIXED Milk Sales:', mixedCount.toString()]);
+      
+      // Unique societies count
+      Set<String> uniqueSocieties = _records.map((r) => r['society_name']?.toString() ?? '').where((name) => name.isNotEmpty).toSet();
+      csvData.add(['Unique Societies:', uniqueSocieties.length.toString()]);
+    } else if (_selectedReport == 'dispatches') {
+      // Morning vs Evening breakdown for dispatches
+      int morningCount = _records.where((r) => _formatShift(r['shift_type']).contains('Morning')).length;
+      int eveningCount = _records.where((r) => _formatShift(r['shift_type']).contains('Evening')).length;
+      csvData.add(['Morning Dispatches:', morningCount.toString()]);
+      csvData.add(['Evening Dispatches:', eveningCount.toString()]);
+      
+      // Channel breakdown
+      int cowCount = _records.where((r) => _formatChannel(r['channel']) == 'COW').length;
+      int buffaloCount = _records.where((r) => _formatChannel(r['channel']) == 'BUFFALO').length;
+      int mixedCount = _records.where((r) => _formatChannel(r['channel']) == 'MIXED').length;
+      csvData.add(['COW Milk Dispatches:', cowCount.toString()]);
+      csvData.add(['BUFFALO Milk Dispatches:', buffaloCount.toString()]);
+      csvData.add(['MIXED Milk Dispatches:', mixedCount.toString()]);
+      
+      // Unique societies count
+      Set<String> uniqueSocieties = _records.map((r) => r['society_name']?.toString() ?? '').where((name) => name.isNotEmpty).toSet();
+      csvData.add(['Unique Societies:', uniqueSocieties.length.toString()]);
     }
     
     // Quality metrics (for collections and dispatches)
@@ -1243,16 +1354,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
     csvData.add([]);
     csvData.add(['© 2025 Poornasree Equipments - All Rights Reserved']);
 
-    return csvData.map((row) => row.join(',')).join('\n');
+    return csvData.map((row) => row.map((cell) => _escapeCsvValue(cell)).join(',')).join('\n');
+  }
+
+  // Helper method to escape CSV values and handle edge cases
+  String _escapeCsvValue(String value) {
+    if (value.isEmpty) return '';
+    
+    // Remove any existing quotes and escape internal quotes
+    String cleanValue = value.replaceAll('"', '""');
+    
+    // Wrap in quotes if contains comma, quote, newline, or other special chars
+    if (cleanValue.contains(',') || cleanValue.contains('"') || cleanValue.contains('\n') || cleanValue.contains('\r')) {
+      return '"$cleanValue"';
+    }
+    
+    return cleanValue;
   }
 
   Future<String> _generatePDFContent(Map<String, dynamic> stats, String dateRange, List<String> selectedColumns) async {
     try {
       print('🔧 Generating PDF content for ${_selectedReport} report...');
       
-      // Convert records to the format expected by PdfService
+      // Convert records to the format expected by PdfService with normalized field names
       final List<Map<String, dynamic>> pdfRecords = _records.map((record) {
-        return Map<String, dynamic>.from(record);
+        final normalizedRecord = Map<String, dynamic>.from(record);
+        
+        // Normalize date/time field names based on report type
+        if (_selectedReport == 'dispatches') {
+          // Rename dispatch fields to standard names for PDF service
+          if (record.containsKey('dispatch_date')) {
+            normalizedRecord['collection_date'] = record['dispatch_date'];
+          }
+          if (record.containsKey('dispatch_time')) {
+            normalizedRecord['collection_time'] = record['dispatch_time'];
+          }
+        } else if (_selectedReport == 'sales') {
+          // Rename sales fields to standard names for PDF service
+          if (record.containsKey('sales_date')) {
+            normalizedRecord['collection_date'] = record['sales_date'];
+          }
+          if (record.containsKey('sales_time')) {
+            normalizedRecord['collection_time'] = record['sales_time'];
+          }
+        }
+        
+        // Format society field to include ID and name (matching CSV format)
+        if (record.containsKey('society_id') && record.containsKey('society_name')) {
+          normalizedRecord['society_name'] = '${record['society_id']?.toString() ?? ''} - ${record['society_name']?.toString() ?? ''}';
+        }
+        
+        // Format farmer field to include ID and name (matching CSV format)
+        if (record.containsKey('farmer_id') && record.containsKey('farmer_name')) {
+          normalizedRecord['farmer_name'] = '${record['farmer_id']?.toString() ?? ''} - ${record['farmer_name']?.toString() ?? ''}';
+        }
+        
+        return normalizedRecord;
       }).toList();
 
       print('🔧 PDF Records count: ${pdfRecords.length}');
@@ -1273,7 +1430,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final String pdfBase64 = base64Encode(pdfBytes);
       
       print('✅ PDF generated successfully, size: ${pdfBytes.length} bytes');
-      return pdfBase64;
       return pdfBase64;
     } catch (e, stackTrace) {
       print('❌ Error generating PDF: $e');
@@ -1792,7 +1948,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('ID: ${record['machine_id']?.toString() ?? '-'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text('${record['machine_type']?.toString() ?? (record['machine_version']?.toString() ?? 'Milking Machine')}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                Text('${record['machine_type']?.toString() ?? 'Unknown'}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           ),
@@ -1864,7 +2020,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           DataCell(Text(record['dispatch_id']?.toString() ?? '-', style: const TextStyle(fontSize: 10))),
-          DataCell(Text(record['society_name'] ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600))),
+          DataCell(
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(record['society_name'] ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                Text('ID: ${record['society_id']?.toString() ?? "-"}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+              ],
+            ),
+          ),
           DataCell(
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -1937,7 +2102,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           DataCell(Text(record['count']?.toString() ?? '-', style: const TextStyle(fontSize: 10))),
-          DataCell(Text(record['society_name'] ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600))),
+          DataCell(
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(record['society_name'] ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                Text('ID: ${record['society_id']?.toString() ?? "-"}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+              ],
+            ),
+          ),
           DataCell(
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -2009,14 +2183,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   String _formatShift(String? shift) {
-    if (shift == null) return '-';
-    final shiftStr = shift.toUpperCase();
+    if (shift == null || shift.isEmpty) return '-';
+    final shiftStr = shift.trim().toUpperCase();
     if (['MR', 'MX', 'MORNING'].contains(shiftStr)) {
       return 'Morning';
     } else if (['EV', 'EX', 'EVENING'].contains(shiftStr)) {
       return 'Evening';
     }
-    return shift;
+    return shift.trim().isNotEmpty ? shift.trim() : '-';
   }
 
   Color _getChannelColor(String? channel) {
@@ -2034,7 +2208,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   String _formatChannel(String? channel) {
-    if (channel == null) return '-';
+    if (channel == null || channel.isEmpty) return '-';
     final channelStr = channel.trim().toUpperCase();
     
     // Handle all possible channel variations
@@ -2046,8 +2220,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return 'MIXED';
     }
     
-    // Return uppercase version if no match found
-    return channelStr;
+    // Return trimmed version if no match found, or '-' if empty
+    return channel.trim().isNotEmpty ? channel.trim().toUpperCase() : '-';
   }
   
   String _getAppliedFiltersString() {
