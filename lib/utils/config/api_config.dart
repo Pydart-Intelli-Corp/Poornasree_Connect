@@ -9,6 +9,7 @@
   static const String dashboardEndpoint = '/api/external/auth/dashboard';
   static const String machinesEndpoint = '/api/external/auth/machines';
   static const String profileEndpoint = '/api/external/auth/profile';
+  static const String updateProfileEndpoint = '/api/external/auth/profile/update';
   static const String refreshEndpoint = '/api/external/auth/refresh';
   static const String logoutEndpoint = '/api/external/auth/logout';
   static const String statisticsEndpoint = '/api/external/dashboard/statistics';
@@ -20,6 +21,7 @@
   static String get dashboard => '$baseUrl$dashboardEndpoint';
   static String get machines => '$baseUrl$machinesEndpoint';
   static String get profile => '$baseUrl$profileEndpoint';
+  static String get updateProfile => '$baseUrl$updateProfileEndpoint';
   static String get refresh => '$baseUrl$refreshEndpoint';
   static String get logout => '$baseUrl$logoutEndpoint';
   static String get statistics => '$baseUrl$statisticsEndpoint';

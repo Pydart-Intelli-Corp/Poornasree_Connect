@@ -222,4 +222,53 @@ class AuthProvider with ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
+
+  // Update profile
+  Future<bool> updateProfile(Map<String, dynamic> profileData) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      if (_user?.token == null) {
+        _errorMessage = 'Authentication token not found';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final result = await _authService.updateProfile(_user!.token!, profileData);
+      
+      if (result['success']) {
+        print('✅ Profile updated successfully');
+        
+        // Update local user data with new values
+        _user = _user!.copyWith(
+          name: profileData['name'] ?? _user!.name,
+          location: profileData['location'] ?? _user!.location,
+          presidentName: profileData['president_name'] ?? _user!.presidentName,
+          contactPhone: profileData['contact_phone'] ?? _user!.contactPhone,
+          phone: profileData['phone'] ?? _user!.phone,
+        );
+        
+        // Persist updated user data
+        await _storage.write(key: _userKey, value: jsonEncode(_user!.toJson()));
+        
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['message'];
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error updating profile: $e');
+      _errorMessage = 'An error occurred: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

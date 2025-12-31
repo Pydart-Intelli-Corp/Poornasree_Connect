@@ -201,4 +201,48 @@ class AuthService {
       };
     }
   }
+
+  // Update profile details
+  Future<Map<String, dynamic>> updateProfile(String token, Map<String, dynamic> profileData) async {
+    try {
+      print('📡 DEBUG - Updating profile...');
+      print('📡 DEBUG - URL: ${ApiConfig.updateProfile}');
+      print('📡 DEBUG - Data: $profileData');
+      
+      final response = await http.put(
+        Uri.parse(ApiConfig.updateProfile),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(profileData),
+      );
+
+      print('📡 DEBUG - Response status: ${response.statusCode}');
+      print('📡 DEBUG - Response body: ${response.body}');
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ Profile updated successfully');
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Profile updated successfully',
+          'data': data['data'],
+        };
+      } else {
+        print('❌ Update failed: ${data['message'] ?? data['error']}');
+        return {
+          'success': false,
+          'message': data['message'] ?? data['error'] ?? 'Failed to update profile',
+        };
+      }
+    } catch (e) {
+      print('❌ Network Error updating profile: $e');
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
 }
