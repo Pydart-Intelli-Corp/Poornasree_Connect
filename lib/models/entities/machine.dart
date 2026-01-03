@@ -10,8 +10,10 @@ class Machine {
   final String? contactPhone;
   final String? installationDate;
   final String? notes;
-  final int statusU; // User password status (0=disabled, 1=enabled)
-  final int statusS; // Supervisor password status (0=disabled, 1=enabled)
+  final int statusU; // User password status (0=downloaded, 1=pending)
+  final int statusS; // Supervisor password status (0=downloaded, 1=pending)
+  final String? userPassword; // User password value
+  final String? supervisorPassword; // Supervisor password value
   final String? createdAt;
   final String? updatedAt;
 
@@ -47,6 +49,17 @@ class Machine {
   // Machine image
   final String? imageUrl;
 
+  // ESP32 Machine Statistics (from machine_statistics table)
+  final int totalTests;
+  final int dailyCleaning;
+  final int weeklyCleaning;
+  final int cleaningSkip;
+  final int gain;
+  final String? autoChannel;
+  final String? machineVersion;
+  final String? statisticsDate;
+  final String? statisticsTime;
+
   Machine({
     required this.id,
     required this.machineId,
@@ -60,6 +73,8 @@ class Machine {
     this.notes,
     this.statusU = 0,
     this.statusS = 0,
+    this.userPassword,
+    this.supervisorPassword,
     this.createdAt,
     this.updatedAt,
     this.societyName,
@@ -80,6 +95,15 @@ class Machine {
     this.correctionDetails,
     this.activeCorrectionsCount = 0,
     this.imageUrl,
+    this.totalTests = 0,
+    this.dailyCleaning = 0,
+    this.weeklyCleaning = 0,
+    this.cleaningSkip = 0,
+    this.gain = 0,
+    this.autoChannel,
+    this.machineVersion,
+    this.statisticsDate,
+    this.statisticsTime,
   });
 
   /// Create Machine from API JSON response
@@ -98,6 +122,9 @@ class Machine {
       notes: json['notes'],
       statusU: _parseIntSafe(json['statusU'] ?? json['statusu']),
       statusS: _parseIntSafe(json['statusS'] ?? json['statuss']),
+      userPassword: json['userPassword'] ?? json['user_password'],
+      supervisorPassword:
+          json['supervisorPassword'] ?? json['supervisor_password'],
       createdAt: json['createdAt'] ?? json['created_at'],
       updatedAt: json['updatedAt'] ?? json['updated_at'],
       societyName: json['societyName'] ?? json['society_name'],
@@ -127,6 +154,21 @@ class Machine {
         json['activeCorrectionsCount'] ?? json['active_corrections_count'],
       ),
       imageUrl: json['imageUrl'] ?? json['image_url'],
+      totalTests: _parseIntSafe(json['totalTests'] ?? json['total_test']),
+      dailyCleaning: _parseIntSafe(
+        json['dailyCleaning'] ?? json['daily_cleaning'],
+      ),
+      weeklyCleaning: _parseIntSafe(
+        json['weeklyCleaning'] ?? json['weekly_cleaning'],
+      ),
+      cleaningSkip: _parseIntSafe(
+        json['cleaningSkip'] ?? json['cleaning_skip'],
+      ),
+      gain: _parseIntSafe(json['gain']),
+      autoChannel: json['autoChannel'] ?? json['auto_channel'],
+      machineVersion: json['machineVersion'] ?? json['version'],
+      statisticsDate: json['statisticsDate'] ?? json['statistics_date'],
+      statisticsTime: json['statisticsTime'] ?? json['statistics_time'],
     );
   }
 
@@ -145,6 +187,8 @@ class Machine {
       'notes': notes,
       'statusU': statusU,
       'statusS': statusS,
+      'userPassword': userPassword,
+      'supervisorPassword': supervisorPassword,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'societyName': societyName,
@@ -165,6 +209,15 @@ class Machine {
       'correctionDetails': correctionDetails,
       'activeCorrectionsCount': activeCorrectionsCount,
       'imageUrl': imageUrl,
+      'totalTests': totalTests,
+      'dailyCleaning': dailyCleaning,
+      'weeklyCleaning': weeklyCleaning,
+      'cleaningSkip': cleaningSkip,
+      'gain': gain,
+      'autoChannel': autoChannel,
+      'machineVersion': machineVersion,
+      'statisticsDate': statisticsDate,
+      'statisticsTime': statisticsTime,
     };
   }
 
@@ -198,40 +251,148 @@ class Machine {
     return RateChartInfo(pending: pending, downloaded: downloaded);
   }
 
-  /// Parse correction details to get count
+  /// Parse correction details to get channels (Cow, Buffalo, Mix) with pending/downloaded status
+  /// New format: "1,2:pending|||1,3:downloaded" where 1=Cow, 2=Buffalo, 3=Mix
   CorrectionInfo parseCorrectionDetails() {
-    int pendingCount = 0;
+    final Set<String> channels = {};
+    final List<CorrectionItem> pending = [];
+    final List<CorrectionItem> downloaded = [];
 
     if (correctionDetails != null && correctionDetails!.isNotEmpty) {
-      // Format: "pending:X corrections"
-      final parts = correctionDetails!.split(':');
-      if (parts.length >= 2) {
-        final countPart = parts[1].trim().split(' ')[0];
-        pendingCount = int.tryParse(countPart) ?? 0;
+      // New format: "1,2,3:pending|||1,2:downloaded"
+      // Each record has channels and status separated by ':'
+      final records = correctionDetails!.split('|||');
+      for (final record in records) {
+        if (record.isEmpty) continue;
+
+        final parts = record.split(':');
+        if (parts.length >= 2) {
+          // New format with status
+          final channelPart = parts[0].trim();
+          final status = parts[1].trim().toLowerCase();
+
+          // Skip if channel part is empty
+          if (channelPart.isEmpty) continue;
+
+          final channelList = channelPart.split(',');
+
+          for (final ch in channelList) {
+            final trimmed = ch.trim();
+            if (trimmed.isEmpty) continue;
+
+            String? channelName;
+            if (trimmed == '1') {
+              channelName = 'Cow';
+            } else if (trimmed == '2') {
+              channelName = 'Buf';
+            } else if (trimmed == '3') {
+              channelName = 'Mix';
+            }
+
+            if (channelName != null) {
+              channels.add(channelName);
+              final item = CorrectionItem(channel: channelName, status: status);
+              if (status == 'pending') {
+                // Remove from downloaded if exists (pending takes priority)
+                downloaded.removeWhere((d) => d.channel == channelName);
+                // Only add if not already in pending
+                if (!pending.any((p) => p.channel == channelName)) {
+                  pending.add(item);
+                }
+              } else {
+                // Only add to downloaded if NOT in pending list
+                if (!pending.any((p) => p.channel == channelName)) {
+                  // Also check if not already in downloaded
+                  if (!downloaded.any((d) => d.channel == channelName)) {
+                    downloaded.add(item);
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Legacy format without status (assume pending)
+          final channelList = parts[0].split(',');
+          for (final ch in channelList) {
+            final trimmed = ch.trim();
+            if (trimmed.isEmpty) continue;
+
+            if (trimmed == '1') {
+              channels.add('Cow');
+              pending.add(CorrectionItem(channel: 'Cow', status: 'pending'));
+            } else if (trimmed == '2') {
+              channels.add('Buf');
+              pending.add(CorrectionItem(channel: 'Buf', status: 'pending'));
+            } else if (trimmed == '3') {
+              channels.add('Mix');
+              pending.add(CorrectionItem(channel: 'Mix', status: 'pending'));
+            }
+          }
+        }
       }
     }
 
-    return CorrectionInfo(pendingCount: pendingCount);
+    return CorrectionInfo(
+      pendingCount: activeCorrectionsCount,
+      channels: channels.toList(),
+      pending: pending,
+      downloaded: downloaded,
+    );
   }
 
   /// Get password status display info
-  PasswordStatusInfo getPasswordStatusInfo() {
-    bool hasUserPassword = statusU == 1;
-    bool hasSupervisorPassword = statusS == 1;
-
-    if (hasUserPassword && hasSupervisorPassword) {
+  /// Logic based on statusU/statusS flags (password values may not be returned by API):
+  /// - statusU/statusS = 1: Pending (password changed, waiting for ESP32 download) -> Yellow
+  /// - statusU/statusS = 0: Downloaded/Synced (ESP32 has latest or no password set) -> Green
+  PasswordStatusInfo getUserPasswordStatus() {
+    if (statusU == 1) {
       return PasswordStatusInfo(
-        text: 'Both passwords enabled',
+        text: 'User: Pending',
+        statusType: PasswordStatusType.pending,
+      );
+    } else {
+      // statusU = 0 means either downloaded or never set - show as OK
+      return PasswordStatusInfo(
+        text: 'User ✓',
+        statusType: PasswordStatusType.downloaded,
+      );
+    }
+  }
+
+  PasswordStatusInfo getSupervisorPasswordStatus() {
+    if (statusS == 1) {
+      return PasswordStatusInfo(
+        text: 'Supervisor: Pending',
+        statusType: PasswordStatusType.pending,
+      );
+    } else {
+      // statusS = 0 means either downloaded or never set - show as OK
+      return PasswordStatusInfo(
+        text: 'Supervisor ✓',
+        statusType: PasswordStatusType.downloaded,
+      );
+    }
+  }
+
+  /// Legacy method for backward compatibility
+  PasswordStatusInfo getPasswordStatusInfo() {
+    final userStatus = getUserPasswordStatus();
+    final supervisorStatus = getSupervisorPasswordStatus();
+
+    if (userStatus.statusType == PasswordStatusType.downloaded &&
+        supervisorStatus.statusType == PasswordStatusType.downloaded) {
+      return PasswordStatusInfo(
+        text: 'Both passwords downloaded',
         statusType: PasswordStatusType.both,
       );
-    } else if (hasUserPassword) {
+    } else if (userStatus.statusType == PasswordStatusType.downloaded) {
       return PasswordStatusInfo(
-        text: 'User password enabled',
+        text: 'User password downloaded',
         statusType: PasswordStatusType.userOnly,
       );
-    } else if (hasSupervisorPassword) {
+    } else if (supervisorStatus.statusType == PasswordStatusType.downloaded) {
       return PasswordStatusInfo(
-        text: 'Supervisor password enabled',
+        text: 'Supervisor password downloaded',
         statusType: PasswordStatusType.supervisorOnly,
       );
     } else {
@@ -288,8 +449,23 @@ class ChartItem {
   ChartItem({required this.channel, required this.fileName});
 }
 
+/// Single correction item with status
+class CorrectionItem {
+  final String channel;
+  final String status; // 'pending' or 'downloaded'
+
+  CorrectionItem({required this.channel, required this.status});
+}
+
 /// Password status types
-enum PasswordStatusType { both, userOnly, supervisorOnly, none }
+enum PasswordStatusType {
+  downloaded, // Status = 0, password exists -> Green
+  pending, // Status = 1, password changed but not downloaded by ESP32 -> Yellow/Amber
+  none, // No password set -> Red/Gray
+  both, // Legacy: both downloaded
+  userOnly, // Legacy: only user downloaded
+  supervisorOnly, // Legacy: only supervisor downloaded
+}
 
 /// Password status info container
 class PasswordStatusInfo {
@@ -299,9 +475,17 @@ class PasswordStatusInfo {
   PasswordStatusInfo({required this.text, required this.statusType});
 }
 
-/// Correction info container
+/// Correction info container - now supports pending and downloaded lists like charts
 class CorrectionInfo {
   final int pendingCount;
+  final List<String> channels;
+  final List<CorrectionItem> pending;
+  final List<CorrectionItem> downloaded;
 
-  CorrectionInfo({required this.pendingCount});
+  CorrectionInfo({
+    required this.pendingCount,
+    this.channels = const [],
+    this.pending = const [],
+    this.downloaded = const [],
+  });
 }

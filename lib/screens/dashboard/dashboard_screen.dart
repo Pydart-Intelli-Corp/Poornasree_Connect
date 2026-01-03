@@ -258,24 +258,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _handleMachineView(Map<String, dynamic> machine) {
     // TODO: Navigate to machine detail screen
-    CustomSnackbar.show(
-      context,
-      message: 'Machine Details',
-      submessage:
-          'Viewing ${machine['machineId'] ?? machine['machine_id'] ?? 'Machine'}',
-      duration: const Duration(seconds: 2),
-    );
   }
 
   void _handleMachineEdit(Map<String, dynamic> machine) {
     // TODO: Navigate to machine edit screen
-    CustomSnackbar.show(
-      context,
-      message: 'Edit Machine',
-      submessage:
-          'Editing ${machine['machineId'] ?? machine['machine_id'] ?? 'Machine'}',
-      duration: const Duration(seconds: 2),
-    );
   }
 
   Widget _buildEmptyState() {
