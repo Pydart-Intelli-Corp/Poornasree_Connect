@@ -10,8 +10,10 @@ class ProfileMenuScreen extends StatefulWidget {
   final UserModel? user;
   final bool isDarkMode;
   final String selectedLanguage;
+  final bool isAutoConnectEnabled;
   final ValueChanged<bool> onThemeChanged;
   final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<bool> onAutoConnectChanged;
   final VoidCallback onLogout;
   final VoidCallback? onProfileUpdated;
 
@@ -20,8 +22,10 @@ class ProfileMenuScreen extends StatefulWidget {
     this.user,
     required this.isDarkMode,
     required this.selectedLanguage,
+    required this.isAutoConnectEnabled,
     required this.onThemeChanged,
     required this.onLanguageChanged,
+    required this.onAutoConnectChanged,
     required this.onLogout,
     this.onProfileUpdated,
   });
@@ -32,8 +36,10 @@ class ProfileMenuScreen extends StatefulWidget {
     UserModel? user,
     required bool isDarkMode,
     required String selectedLanguage,
+    required bool isAutoConnectEnabled,
     required ValueChanged<bool> onThemeChanged,
     required ValueChanged<String> onLanguageChanged,
+    required ValueChanged<bool> onAutoConnectChanged,
     required VoidCallback onLogout,
     VoidCallback? onProfileUpdated,
   }) {
@@ -49,8 +55,10 @@ class ProfileMenuScreen extends StatefulWidget {
             user: user,
             isDarkMode: isDarkMode,
             selectedLanguage: selectedLanguage,
+            isAutoConnectEnabled: isAutoConnectEnabled,
             onThemeChanged: onThemeChanged,
             onLanguageChanged: onLanguageChanged,
+            onAutoConnectChanged: onAutoConnectChanged,
             onLogout: onLogout,
             onProfileUpdated: onProfileUpdated,
           );
@@ -81,12 +89,14 @@ class ProfileMenuScreen extends StatefulWidget {
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   late bool _isDarkMode;
   late String _selectedLanguage;
+  late bool _isAutoConnectEnabled;
 
   @override
   void initState() {
     super.initState();
     _isDarkMode = widget.isDarkMode;
     _selectedLanguage = widget.selectedLanguage;
+    _isAutoConnectEnabled = widget.isAutoConnectEnabled;
   }
 
   void _handleEditProfile() {
@@ -209,6 +219,14 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
             onChanged: (value) {
               setState(() => _isDarkMode = value);
               widget.onThemeChanged(value);
+            },
+          ),
+          const SizedBox(height: 12),
+          AutoConnectToggle(
+            isAutoConnectEnabled: _isAutoConnectEnabled,
+            onChanged: (value) {
+              setState(() => _isAutoConnectEnabled = value);
+              widget.onAutoConnectChanged(value);
             },
           ),
         ],

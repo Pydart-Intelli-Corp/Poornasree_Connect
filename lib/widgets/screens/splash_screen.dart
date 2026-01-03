@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../screens/screens.dart';
 import '../../utils/utils.dart';
 import '../../providers/providers.dart';
+import '../../services/services.dart';
 import '../widgets.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -93,6 +94,12 @@ class _SplashScreenState extends State<SplashScreen>
         print('🔍 SplashScreen: User Name = ${authProvider.user!.name}');
         print('🔍 SplashScreen: User Role = ${authProvider.user!.role}');
       }
+
+      // Request Bluetooth and Location permissions
+      print('📍 SplashScreen: Requesting Bluetooth & Location permissions...');
+      final bluetoothService = BluetoothService();
+      await bluetoothService.requestPermissions();
+      print('✅ SplashScreen: Permissions requested');
 
       // Navigate based on authentication status
       if (authProvider.isAuthenticated && authProvider.user != null) {

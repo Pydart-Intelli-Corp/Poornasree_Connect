@@ -16,19 +16,52 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardService _dashboardService = DashboardService();
+  final BluetoothService _bluetoothService = BluetoothService();
   List<dynamic> _machines = [];
   Map<String, dynamic>? _statistics;
   bool _isLoading = true;
   String? _errorMessage;
+  bool _hasBluetoothDevices = false;
 
   // Settings state
   bool _isDarkMode = true;
   String _selectedLanguage = 'English';
+  bool _isAutoConnectEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _initializeBluetooth();
+  }
+
+  void _initializeBluetooth() async {
+    // Load auto-connect preference
+    await _bluetoothService.loadAutoConnectPreference();
+    setState(() {
+      _isAutoConnectEnabled = _bluetoothService.isAutoConnectEnabled;
+    });
+
+    // Start background scanning for Lactosure-BLE devices
+    _bluetoothService.startScan();
+
+    // Listen to device updates
+    _bluetoothService.devicesStream.listen((devices) {
+      setState(() {
+        _hasBluetoothDevices = devices.isNotEmpty;
+      });
+    });
+
+    // If auto-connect is enabled, trigger it after scan
+    if (_isAutoConnectEnabled) {
+      await _bluetoothService.triggerAutoConnect();
+    }
+  }
+
+  @override
+  void dispose() {
+    _bluetoothService.stopScan();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -92,6 +125,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       user: user,
       isDarkMode: _isDarkMode,
       selectedLanguage: _selectedLanguage,
+      isAutoConnectEnabled: _isAutoConnectEnabled,
       onThemeChanged: (value) {
         setState(() => _isDarkMode = value);
         // TODO: Implement actual theme switching
@@ -99,6 +133,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onLanguageChanged: (value) {
         setState(() => _selectedLanguage = value);
         // TODO: Implement actual language switching
+      },
+      onAutoConnectChanged: (value) async {
+        setState(() => _isAutoConnectEnabled = value);
+        await _bluetoothService.setAutoConnect(value);
       },
       onLogout: _logout,
       onProfileUpdated: () => setState(() {}),
@@ -114,6 +152,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
+          // Bluetooth dropdown menu
+          _BluetoothDropdownButton(bluetoothService: _bluetoothService),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
@@ -280,6 +320,339 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bluetooth dropdown button for app bar
+class _BluetoothDropdownButton extends StatefulWidget {
+  final BluetoothService bluetoothService;
+
+  const _BluetoothDropdownButton({required this.bluetoothService});
+
+  @override
+  State<_BluetoothDropdownButton> createState() =>
+      _BluetoothDropdownButtonState();
+}
+
+class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
+  BluetoothStatus _status = BluetoothStatus.offline;
+  int _connectedCount = 0;
+  int _availableCount = 0;
+  bool _isConnectingAll = false;
+  bool _isDisconnectingAll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _status = widget.bluetoothService.status;
+    _availableCount = widget.bluetoothService.availableMachineIds.length;
+    _connectedCount = widget.bluetoothService.connectedMachines.length;
+
+    // Listen to status changes
+    widget.bluetoothService.statusStream.listen((status) {
+      if (mounted) setState(() => _status = status);
+    });
+
+    // Listen to available machine IDs
+    widget.bluetoothService.availableMachineIdsStream.listen((ids) {
+      if (mounted) setState(() => _availableCount = ids.length);
+    });
+
+    // Listen to connected machines
+    widget.bluetoothService.connectedMachinesStream.listen((machines) {
+      if (mounted)
+        setState(
+          () => _connectedCount = machines.values.where((v) => v).length,
+        );
+    });
+  }
+
+  Color _getStatusColor() {
+    if (_connectedCount > 0) return Colors.green;
+    if (_status == BluetoothStatus.scanning) return Colors.amber;
+    if (_availableCount > 0) return Colors.blue;
+    return Colors.grey;
+  }
+
+  IconData _getStatusIcon() {
+    if (_connectedCount > 0) return Icons.bluetooth_connected;
+    if (_status == BluetoothStatus.scanning) return Icons.bluetooth_searching;
+    if (_availableCount > 0) return Icons.bluetooth;
+    return Icons.bluetooth_disabled;
+  }
+
+  Future<void> _handleScan() async {
+    await widget.bluetoothService.requestPermissions();
+    widget.bluetoothService.startScan();
+  }
+
+  Future<void> _handleConnectAll() async {
+    setState(() => _isConnectingAll = true);
+
+    final results = await widget.bluetoothService.connectAll();
+
+    if (mounted) {
+      setState(() => _isConnectingAll = false);
+
+      final successCount = results.values.where((v) => v).length;
+      if (successCount > 0) {
+        CustomSnackbar.showSuccess(
+          context,
+          message: 'Connected to $successCount/${results.length} devices',
+          submessage: successCount == results.length
+              ? 'All devices connected successfully'
+              : 'Some devices failed to connect',
+        );
+      } else {
+        CustomSnackbar.showError(
+          context,
+          message: 'Connection failed',
+          submessage: 'Could not connect to any device',
+        );
+      }
+    }
+  }
+
+  Future<void> _handleDisconnectAll() async {
+    setState(() => _isDisconnectingAll = true);
+
+    await widget.bluetoothService.disconnectAll();
+
+    if (mounted) {
+      setState(() => _isDisconnectingAll = false);
+
+      CustomSnackbar.showSuccess(
+        context,
+        message: 'Disconnected from all devices',
+        submessage: 'All BLE connections closed',
+      );
+    }
+  }
+
+  void _handleStopScan() {
+    widget.bluetoothService.stopScan();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Bluetooth Options',
+      icon: Stack(
+        children: [
+          Icon(_getStatusIcon(), color: _getStatusColor()),
+          // Available count badge (bottom-left, blue)
+          if (_availableCount > 0 && _connectedCount == 0)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                child: Text(
+                  '$_availableCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          // Connected count badge (top-right, green)
+          if (_connectedCount > 0)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                child: Text(
+                  '$_connectedCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+      onSelected: (value) async {
+        switch (value) {
+          case 'scan':
+            _handleScan();
+            break;
+          case 'stop_scan':
+            _handleStopScan();
+            break;
+          case 'connect_all':
+            _handleConnectAll();
+            break;
+          case 'disconnect_all':
+            _handleDisconnectAll();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        // Status header
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(_getStatusIcon(), color: _getStatusColor(), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    _status == BluetoothStatus.scanning
+                        ? 'Scanning...'
+                        : _connectedCount > 0
+                        ? '$_connectedCount Connected'
+                        : _availableCount > 0
+                        ? '$_availableCount Available'
+                        : 'Offline',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _getStatusColor(),
+                    ),
+                  ),
+                ],
+              ),
+              if (_availableCount > 0 && _connectedCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 28),
+                  child: Text(
+                    '$_availableCount device(s) found',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+
+        // Scan option
+        if (_status == BluetoothStatus.scanning)
+          const PopupMenuItem<String>(
+            value: 'stop_scan',
+            child: Row(
+              children: [
+                Icon(Icons.stop, color: Colors.orange),
+                SizedBox(width: 12),
+                Text('Stop Scan'),
+              ],
+            ),
+          )
+        else
+          const PopupMenuItem<String>(
+            value: 'scan',
+            child: Row(
+              children: [
+                Icon(Icons.bluetooth_searching, color: Colors.blue),
+                SizedBox(width: 12),
+                Text('Scan for Devices'),
+              ],
+            ),
+          ),
+
+        // Connect All option
+        PopupMenuItem<String>(
+          value: 'connect_all',
+          enabled:
+              _availableCount > 0 &&
+              !_isConnectingAll &&
+              _status != BluetoothStatus.scanning,
+          child: Row(
+            children: [
+              _isConnectingAll
+                  ? _FlowerSpinner(size: 24)
+                  : Icon(
+                      Icons.bluetooth_connected,
+                      color: _availableCount > 0 ? Colors.green : Colors.grey,
+                    ),
+              const SizedBox(width: 12),
+              Text(_isConnectingAll ? 'Connecting...' : 'Connect All'),
+            ],
+          ),
+        ),
+
+        // Disconnect All option
+        PopupMenuItem<String>(
+          value: 'disconnect_all',
+          enabled: _connectedCount > 0 && !_isDisconnectingAll,
+          child: Row(
+            children: [
+              _isDisconnectingAll
+                  ? _FlowerSpinner(size: 24)
+                  : Icon(
+                      Icons.bluetooth_disabled,
+                      color: _connectedCount > 0 ? Colors.red : Colors.grey,
+                    ),
+              const SizedBox(width: 12),
+              Text(_isDisconnectingAll ? 'Disconnecting...' : 'Disconnect All'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Rotating flower spinner for loading
+class _FlowerSpinner extends StatefulWidget {
+  final double size;
+
+  const _FlowerSpinner({required this.size});
+
+  @override
+  State<_FlowerSpinner> createState() => _FlowerSpinnerState();
+}
+
+class _FlowerSpinnerState extends State<_FlowerSpinner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: RotationTransition(
+        turns: _controller,
+        child: Image.asset(
+          'assets/images/flower.png',
+          width: widget.size,
+          height: widget.size,
+        ),
       ),
     );
   }

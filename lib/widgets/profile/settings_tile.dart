@@ -147,3 +147,34 @@ class ThemeToggle extends StatelessWidget {
     );
   }
 }
+
+/// Auto-connect toggle widget for Bluetooth
+class AutoConnectToggle extends StatelessWidget {
+  final bool isAutoConnectEnabled;
+  final ValueChanged<bool> onChanged;
+
+  const AutoConnectToggle({
+    super.key,
+    required this.isAutoConnectEnabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      icon: Icons.bluetooth_connected,
+      title: 'Auto Connect',
+      subtitle: isAutoConnectEnabled
+          ? 'Automatically connect to devices'
+          : 'Manual connection required',
+      iconBackgroundColor: AppTheme.primaryBlue.withOpacity(0.15),
+      iconColor: AppTheme.primaryBlue,
+      trailing: Switch(
+        value: isAutoConnectEnabled,
+        onChanged: onChanged,
+        activeColor: AppTheme.primaryGreen,
+        activeTrackColor: AppTheme.primaryGreen.withOpacity(0.3),
+      ),
+    );
+  }
+}

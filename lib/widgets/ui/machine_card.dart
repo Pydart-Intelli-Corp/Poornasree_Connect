@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import '../../utils/utils.dart';
 import '../../models/models.dart';
 import '../../utils/config/theme.dart';
-import '../machine/bluetooth_status_indicator.dart';
-import '../machine/bluetooth_dropdown.dart';
+import '../machine/bluetooth_status_button.dart';
 import 'flower_spinner.dart';
 
 /// MachineCard - Google Material Design 3 Style
@@ -163,13 +162,12 @@ class _MachineCardState extends State<MachineCard> {
             ),
           ),
 
-          const SizedBox(width: 12),
-
-          // Bluetooth connection status - Right side
-          BluetoothStatusIndicator(
+          // Bluetooth status button - Right side (machine-specific)
+          BluetoothStatusButton(
+            machineId: machine.machineId,
             showLabel: true,
-            iconSize: 20,
-            fontSize: 13,
+            iconSize: 18,
+            fontSize: 12,
           ),
         ],
       ),
