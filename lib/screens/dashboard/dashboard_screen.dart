@@ -6,6 +6,7 @@ import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
 import '../auth/login_screen.dart';
 import '../reports/reports_screen.dart';
+import 'machine_control_panel_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,7 +22,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _statistics;
   bool _isLoading = true;
   String? _errorMessage;
-  bool _hasBluetoothDevices = false;
 
   // Settings state
   bool _isDarkMode = true;
@@ -47,9 +47,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // Listen to device updates
     _bluetoothService.devicesStream.listen((devices) {
-      setState(() {
-        _hasBluetoothDevices = devices.isNotEmpty;
-      });
+      if (mounted) {
+        setState(() {});
+      }
+    });
+
+    // Listen to connection status changes to show/hide control panel button
+    _bluetoothService.connectedMachinesStream.listen((connectedMachines) {
+      if (mounted) {
+        setState(() {});
+      }
     });
 
     // If auto-connect is enabled, trigger it after scan
@@ -143,10 +150,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _navigateToControlPanel() {
+    final connectedMachines = _bluetoothService.connectedMachines;
+    
+    if (connectedMachines.isEmpty) {
+      return;
+    }
+
+    // Get the first connected machine's ID
+    final firstConnectedMachineId = connectedMachines.keys.first;
+    
+    // Find the corresponding machine from the machines list
+    final machine = _machines.firstWhere(
+      (m) => m['machine_id'].toString().replaceAll(RegExp(r'[^0-9]'), '') == firstConnectedMachineId,
+      orElse: () => {'machine_id': firstConnectedMachineId, 'name': 'Machine $firstConnectedMachineId'},
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MachineControlPanelScreen(
+          machineId: machine['machine_id']?.toString() ?? firstConnectedMachineId,
+          machineName: machine['name']?.toString() ?? 'Machine $firstConnectedMachineId',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final hasConnectedDevice = _bluetoothService.connectedMachines.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -194,6 +229,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+      // Floating Control Panel Button (shown when Bluetooth device connected)
+      floatingActionButton: hasConnectedDevice
+          ? FloatingActionButton.extended(
+              onPressed: _navigateToControlPanel,
+              backgroundColor: AppTheme.primaryGreen,
+              icon: const Icon(Icons.settings_remote, color: Colors.white),
+              label: const Text(
+                'Control Panel',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          : null,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/lactosure_reading.dart';
 
 /// Bluetooth connection status enum
 enum BluetoothStatus {
@@ -30,6 +31,19 @@ class BluetoothService {
       StreamController.broadcast();
   final StreamController<Map<String, bool>> _connectedMachinesController =
       StreamController.broadcast();
+  final StreamController<LactosureReading> _readingsController =
+      StreamController.broadcast();
+  final StreamController<String> _rawDataController =
+      StreamController.broadcast(); // Broadcasts ANY incoming BLE data
+
+  // Global readings storage - stores latest reading for each machine
+  final Map<String, LactosureReading> _machineReadings = {};
+  // History of readings per machine (for graphs)
+  final Map<String, List<LactosureReading>> _machineReadingHistory = {};
+  static const int _maxHistoryPoints = 20;
+
+  // BLE data subscriptions
+  final List<StreamSubscription> _dataSubscriptions = [];
 
   // Subscriptions
   StreamSubscription<List<ScanResult>>? _scanSubscription;
@@ -67,6 +81,8 @@ class BluetoothService {
       _availableMachineIdsController.stream;
   Stream<Map<String, bool>> get connectedMachinesStream =>
       _connectedMachinesController.stream;
+  Stream<LactosureReading> get readingsStream => _readingsController.stream;
+  Stream<String> get rawDataStream => _rawDataController.stream;
 
   // Public getters
   List<BluetoothDevice> get devices => List.unmodifiable(_lactosureDevices);
@@ -78,6 +94,54 @@ class BluetoothService {
   Map<String, bool> get connectedMachines =>
       Map.unmodifiable(_connectedMachines);
   bool get isAutoConnectEnabled => _autoConnectEnabled;
+
+  // Readings getters
+  Map<String, LactosureReading> get machineReadings =>
+      Map.unmodifiable(_machineReadings);
+  Map<String, List<LactosureReading>> get machineReadingHistory =>
+      Map.unmodifiable(_machineReadingHistory);
+
+  /// Get reading for a specific machine (normalized ID lookup)
+  LactosureReading? getReadingForMachine(String machineId) {
+    final normalizedId = machineId.replaceFirst(RegExp(r'^0+'), '');
+
+    // Try exact match first
+    if (_machineReadings.containsKey(machineId)) {
+      return _machineReadings[machineId];
+    }
+
+    // Try normalized match
+    for (final entry in _machineReadings.entries) {
+      final normalizedKey = entry.key.replaceFirst(RegExp(r'^0+'), '');
+      if (normalizedKey == normalizedId) {
+        return entry.value;
+      }
+    }
+
+    // No data for this machine
+    return null;
+  }
+
+  /// Get history for a specific machine
+  List<LactosureReading> getHistoryForMachine(String machineId) {
+    final normalizedId = machineId.replaceFirst(RegExp(r'^0+'), '');
+
+    // Try exact match first
+    if (_machineReadingHistory.containsKey(machineId)) {
+      return List.unmodifiable(_machineReadingHistory[machineId]!);
+    }
+
+    // Try normalized match
+    for (final entry in _machineReadingHistory.entries) {
+      final normalizedKey = entry.key.replaceFirst(RegExp(r'^0+'), '');
+      if (normalizedKey == normalizedId) {
+        return List.unmodifiable(entry.value);
+      }
+    }
+
+    // No history for this machine
+    return [];
+  }
 
   /// Check if a machine ID is available via BLE
   /// machineId can be like "M201", "S201", etc. - extracts numeric part
@@ -530,12 +594,190 @@ class BluetoothService {
     // Update status if any connected
     if (_connectedMachines.isNotEmpty) {
       _updateStatus(BluetoothStatus.connected);
+
+      // AUTO-START listening to all connected devices for data
+      _startGlobalDataListener();
     }
 
     print(
       '✅ [BLE] Connect all completed: ${results.values.where((v) => v).length}/${results.length} successful',
     );
     return results;
+  }
+
+  /// Start listening to all connected devices and store readings globally
+  void _startGlobalDataListener() async {
+    print('\n═══════════════════════════════════════════════════════════════');
+    print('🔵 [BLE] AUTO-STARTING global data listener for ALL devices');
+    print('═══════════════════════════════════════════════════════════════\n');
+
+    // Cancel existing subscriptions
+    for (final sub in _dataSubscriptions) {
+      await sub.cancel();
+    }
+    _dataSubscriptions.clear();
+
+    for (final entry in _machineDeviceMap.entries) {
+      final machineId = entry.key;
+      final device = entry.value;
+
+      // Only listen to connected devices
+      if (_connectedMachines[machineId] != true) continue;
+
+      try {
+        print('🔵 [BLE $machineId] Setting up global listener...');
+        final services = await device.discoverServices();
+
+        for (final service in services) {
+          for (final char in service.characteristics) {
+            if (char.properties.notify) {
+              await char.setNotifyValue(true);
+              print('✅ [BLE $machineId] Listening on ${char.uuid}');
+
+              final sub = char.lastValueStream.listen((value) {
+                if (value.isNotEmpty) {
+                  final rawData = String.fromCharCodes(value);
+                  _processIncomingData(rawData, machineId);
+                }
+              });
+              _dataSubscriptions.add(sub);
+            }
+          }
+        }
+        print('✅ [BLE $machineId] Global listener active');
+      } catch (e) {
+        print('❌ [BLE $machineId] Error setting up global listener: $e');
+      }
+    }
+  }
+
+  /// Process incoming BLE data and store globally
+  void _processIncomingData(String rawData, String deviceMachineId) {
+    print('\n╔══════════════════════════════════════════════════════════════╗');
+    print('║        📥 BLE DATA RECEIVED (Global Listener)               ║');
+    print('╠══════════════════════════════════════════════════════════════╣');
+    print('║ Device Machine ID: $deviceMachineId');
+    print(
+      '║ Data: ${rawData.substring(0, rawData.length > 50 ? 50 : rawData.length)}...',
+    );
+    print('╚══════════════════════════════════════════════════════════════╝\n');
+
+    // Broadcast raw data immediately (for timer stopping etc.)
+    _rawDataController.add(rawData);
+
+    final reading = LactosureReading.parse(rawData);
+
+    if (reading != null) {
+      // Extract machine ID from data (remove M prefix and leading zeros)
+      final readingMachineId = reading.machineId
+          .replaceFirst(RegExp(r'^[Mm]+'), '')
+          .replaceFirst(RegExp(r'^0+'), '');
+
+      final storageKey = readingMachineId.isNotEmpty
+          ? readingMachineId
+          : deviceMachineId;
+
+      // Store reading
+      _machineReadings[storageKey] = reading;
+
+      // Add to history
+      _machineReadingHistory.putIfAbsent(storageKey, () => []);
+      _machineReadingHistory[storageKey]!.add(reading);
+      if (_machineReadingHistory[storageKey]!.length > _maxHistoryPoints) {
+        _machineReadingHistory[storageKey]!.removeAt(0);
+      }
+
+      // Broadcast to all listeners
+      _readingsController.add(reading);
+
+      print('✅ [BLE Global] Stored reading for machine: $storageKey');
+      print(
+        '📊 [BLE Global] Total readings stored: ${_machineReadings.length} machines',
+      );
+    }
+  }
+
+  // Nordic UART Service UUIDs
+  static const String _nordicUartServiceUuid =
+      '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  static const String _nordicUartRxUuid =
+      '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write to this
+  static const String _nordicUartTxUuid =
+      '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Read from this
+
+  /// Send data (bytes) to a specific machine via BLE
+  /// Returns true if successful, false otherwise
+  Future<bool> sendToMachine(String machineId, List<int> data) async {
+    final normalizedId = machineId.replaceAll(RegExp(r'[^0-9]'), '');
+    final device = _machineDeviceMap[normalizedId];
+
+    if (device == null) {
+      print('❌ [BLE] Machine $machineId not found in device map');
+      return false;
+    }
+
+    if (_connectedMachines[normalizedId] != true) {
+      print('❌ [BLE] Machine $machineId is not connected');
+      return false;
+    }
+
+    try {
+      print(
+        '\n╔══════════════════════════════════════════════════════════════╗',
+      );
+      print('║        📤 SENDING BLE DATA TO MACHINE                        ║');
+      print('╠══════════════════════════════════════════════════════════════╣');
+      print('║ Machine ID: $normalizedId');
+      print(
+        '║ Data (hex): ${data.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ')}',
+      );
+      print('║ Data (bytes): $data');
+      print(
+        '╚══════════════════════════════════════════════════════════════╝\n',
+      );
+
+      // Discover services if needed
+      final services = await device.discoverServices();
+
+      // Find Nordic UART Service
+      BluetoothCharacteristic? rxCharacteristic;
+
+      for (final service in services) {
+        if (service.uuid.toString().toLowerCase() == _nordicUartServiceUuid) {
+          for (final char in service.characteristics) {
+            if (char.uuid.toString().toLowerCase() == _nordicUartRxUuid) {
+              rxCharacteristic = char;
+              break;
+            }
+          }
+        }
+      }
+
+      if (rxCharacteristic == null) {
+        print('❌ [BLE] RX characteristic not found on machine $normalizedId');
+        return false;
+      }
+
+      // Write data to RX characteristic
+      await rxCharacteristic.write(data, withoutResponse: false);
+
+      print('✅ [BLE] Data sent successfully to machine $normalizedId');
+      return true;
+    } catch (e) {
+      print('❌ [BLE] Error sending data to machine $normalizedId: $e');
+      return false;
+    }
+  }
+
+  /// Send hex string to machine (convenience method)
+  /// Example: sendHexToMachine("201", "40 04 07 00 00 41")
+  Future<bool> sendHexToMachine(String machineId, String hexString) async {
+    final bytes = hexString
+        .split(' ')
+        .where((s) => s.isNotEmpty)
+        .map((s) => int.parse(s, radix: 16))
+        .toList();
+    return sendToMachine(machineId, bytes);
   }
 
   /// Disconnect from all connected machines
@@ -548,6 +790,13 @@ class BluetoothService {
     print(
       '🔵 [BLE] Disconnecting from all ${_connectedMachines.length} devices...',
     );
+
+    // Stop all data listeners first
+    for (final sub in _dataSubscriptions) {
+      await sub.cancel();
+    }
+    _dataSubscriptions.clear();
+    print('🔵 [BLE] Stopped all data listeners');
 
     final connectedSerials = _connectedMachines.keys.toList();
 
@@ -585,6 +834,13 @@ class BluetoothService {
     }
 
     print('✅ [BLE] Disconnect all completed');
+  }
+
+  /// Clear all readings
+  void clearReadings() {
+    _machineReadings.clear();
+    _machineReadingHistory.clear();
+    print('🧹 [BLE] All readings cleared');
   }
 
   /// Clear all devices and available machine IDs
@@ -662,6 +918,176 @@ class BluetoothService {
       print('✅ [BLE] Auto-connect completed');
     } else {
       print('⚠️ [BLE] No devices found for auto-connect');
+    }
+  }
+
+  /// Get BLE data stream from ALL connected machines (for debugging)
+  /// Returns a stream of raw data strings from ALL devices
+  Stream<String> getAllMachineDataStream() async* {
+    print('═══════════════════════════════════════════════════════════════');
+    print('🔵 [BLE DEBUG] Starting to listen to ALL connected devices');
+    print(
+      '🔵 [BLE DEBUG] Total connected machines: ${_machineDeviceMap.length}',
+    );
+    print('🔵 [BLE DEBUG] Machine IDs: ${_machineDeviceMap.keys.toList()}');
+    print('═══════════════════════════════════════════════════════════════');
+
+    if (_machineDeviceMap.isEmpty) {
+      print('❌ [BLE DEBUG] No devices connected!');
+      return;
+    }
+
+    // Setup listeners for all connected devices
+    for (var entry in _machineDeviceMap.entries) {
+      final machineId = entry.key;
+      final device = entry.value;
+
+      print(
+        '\n┌─────────────────────────────────────────────────────────────┐',
+      );
+      print('│ Setting up listener for Machine: $machineId');
+      print('└─────────────────────────────────────────────────────────────┘');
+
+      try {
+        print('  🔵 [BLE $machineId] Discovering services...');
+        final services = await device.discoverServices();
+        print('  ✅ [BLE $machineId] Found ${services.length} services');
+
+        for (var service in services) {
+          print('  🔵 [BLE $machineId] Service: ${service.uuid}');
+
+          for (var char in service.characteristics) {
+            print('    📡 [BLE $machineId] Characteristic: ${char.uuid}');
+            print('       - Notify: ${char.properties.notify}');
+            print('       - Read: ${char.properties.read}');
+            print('       - Write: ${char.properties.write}');
+
+            // Listen to ALL characteristics that support notify
+            if (char.properties.notify) {
+              print(
+                '    ✅ [BLE $machineId] Found NOTIFY characteristic: ${char.uuid}',
+              );
+
+              try {
+                await char.setNotifyValue(true);
+                print(
+                  '    ✅ [BLE $machineId] Enabled notifications on ${char.uuid}',
+                );
+
+                // Listen to this characteristic
+                await for (final value in char.lastValueStream) {
+                  if (value.isNotEmpty) {
+                    final rawData = String.fromCharCodes(value);
+
+                    print(
+                      '\n╔════════════════════════════════════════════════════════════╗',
+                    );
+                    print(
+                      '║            📥 BLE DATA RECEIVED FROM DEVICE                ║',
+                    );
+                    print(
+                      '╠════════════════════════════════════════════════════════════╣',
+                    );
+                    print('║ Machine ID: $machineId');
+                    print('║ Characteristic: ${char.uuid}');
+                    print('║ Byte Length: ${value.length}');
+                    print('║ Raw Bytes: $value');
+                    print('║ String Data: $rawData');
+                    print(
+                      '╚════════════════════════════════════════════════════════════╝\n',
+                    );
+
+                    yield rawData;
+                  } else {
+                    print(
+                      '    ⚠️ [BLE $machineId] Empty value received on ${char.uuid}',
+                    );
+                  }
+                }
+              } catch (e) {
+                print('    ❌ [BLE $machineId] Error on ${char.uuid}: $e');
+              }
+            }
+          }
+        }
+      } catch (e, stackTrace) {
+        print('  ❌ [BLE $machineId] Error setting up listener: $e');
+        print('  📍 Stack trace: $stackTrace');
+      }
+    }
+  }
+
+  /// Get BLE data stream from a connected machine
+  /// Returns a stream of raw data strings from the TX characteristic
+  Stream<String> getMachineDataStream(String machineId) async* {
+    final numericId = machineId.replaceAll(RegExp(r'[^0-9]'), '');
+    final device = _machineDeviceMap[numericId];
+
+    if (device == null) {
+      print('❌ [BLE] No device found for machine $machineId');
+      return;
+    }
+
+    if (_connectedMachines[numericId] != true) {
+      print('❌ [BLE] Machine $machineId not connected');
+      return;
+    }
+
+    print('🔵 [BLE] Setting up data stream for machine $machineId...');
+
+    try {
+      // Discover services
+      print('🔵 [BLE] Discovering services for $machineId...');
+      final services = await device.discoverServices();
+      print('✅ [BLE] Found ${services.length} services');
+
+      // Find the Nordic UART service (6E400001-B5A3-F393-E0A9-E50E24DCCA9E)
+      // TX Characteristic: 6E400003-B5A3-F393-E0A9-E50E24DCCA9E (Device -> App)
+      final String txCharacteristicUuid =
+          '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+      BluetoothCharacteristic? txCharacteristic;
+
+      for (var service in services) {
+        print('🔵 [BLE] Checking service: ${service.uuid}');
+        for (var char in service.characteristics) {
+          print('  📡 Characteristic: ${char.uuid}');
+          if (char.uuid.toString().toLowerCase() == txCharacteristicUuid) {
+            txCharacteristic = char;
+            print('✅ [BLE] Found TX characteristic!');
+            break;
+          }
+        }
+        if (txCharacteristic != null) break;
+      }
+
+      if (txCharacteristic == null) {
+        print('❌ [BLE] TX characteristic not found for $machineId');
+        return;
+      }
+
+      // Enable notifications
+      print('🔵 [BLE] Enabling notifications for TX characteristic...');
+      await txCharacteristic.setNotifyValue(true);
+      print('✅ [BLE] Notifications enabled!');
+
+      // Listen to characteristic updates
+      print('🔵 [BLE] Listening for data from $machineId...');
+      await for (final value in txCharacteristic.lastValueStream) {
+        if (value.isNotEmpty) {
+          // Convert bytes to string
+          final rawData = String.fromCharCodes(value);
+
+          // Debug print - show what we received
+          print('📥 [BLE DATA] Machine $machineId: $rawData');
+          print('📥 [BLE RAW BYTES] Length: ${value.length}, Bytes: $value');
+
+          yield rawData;
+        }
+      }
+    } catch (e, stackTrace) {
+      print('❌ [BLE] Error setting up data stream for $machineId: $e');
+      print('📍 [BLE] Stack trace: $stackTrace');
     }
   }
 
