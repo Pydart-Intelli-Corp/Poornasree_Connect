@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/services.dart';
+import '../../services/readings_storage_service.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
 import '../../models/lactosure_reading.dart';
@@ -115,12 +116,25 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   StreamSubscription? _bleDataSubscription;
   StreamSubscription? _rawDataSubscription;
 
+  // Storage service
+  final ReadingsStorageService _storageService = ReadingsStorageService();
+
+  // Today's statistics (across all machines)
+  int _todayTestCount = 0;
+  LactosureReading? _bestReading;
+  String? _bestMachineId;
+  LactosureReading? _worstReading;
+  String? _worstMachineId;
+
   @override
   void initState() {
     super.initState();
     _initializeMachineList();
+    _clearOldReadings(); // Clear readings from previous days
+    _loadSavedReadings(); // Load today's saved readings from storage
     _loadExistingReadings(); // Load readings that were collected before opening this screen
     _setupBLEDataListener();
+    _calculateTodayStatistics(); // Calculate statistics from all machines
   }
 
   @override
@@ -129,6 +143,92 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     _rawDataSubscription?.cancel();
     _testTimer?.cancel();
     super.dispose();
+  }
+
+  /// Calculate today's statistics across all machines
+  void _calculateTodayStatistics() async {
+    final allReadings = await _storageService.loadAllTodayReadings();
+
+    int totalTests = 0;
+    LactosureReading? best;
+    String? bestMachine;
+    LactosureReading? worst;
+    String? worstMachine;
+
+    // Calculate quality score: higher FAT + SNF = better quality
+    double calculateQuality(LactosureReading r) => r.fat + r.snf;
+
+    for (final entry in allReadings.entries) {
+      final machineId = entry.key;
+      final readings = entry.value;
+      totalTests += readings.length;
+
+      for (final reading in readings) {
+        final quality = calculateQuality(reading);
+
+        // Find best
+        if (best == null || quality > calculateQuality(best)) {
+          best = reading;
+          bestMachine = machineId;
+        }
+
+        // Find worst
+        if (worst == null || quality < calculateQuality(worst)) {
+          worst = reading;
+          worstMachine = machineId;
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _todayTestCount = totalTests;
+        _bestReading = best;
+        _bestMachineId = bestMachine;
+        _worstReading = worst;
+        _worstMachineId = worstMachine;
+      });
+    }
+
+    print(
+      '📊 [Stats] Today: $totalTests tests, Best: m$bestMachine, Worst: m$worstMachine',
+    );
+  }
+
+  /// Clear old readings from previous days
+  void _clearOldReadings() async {
+    await _storageService.clearOldReadings();
+  }
+
+  /// Load today's saved readings from storage
+  void _loadSavedReadings() async {
+    print('\n═══════════════════════════════════════════════════════════════');
+    print('🔵 [Control Panel] Loading saved readings from storage');
+    print('═══════════════════════════════════════════════════════════════\n');
+
+    final savedReadings = await _storageService.loadAllTodayReadings();
+
+    if (savedReadings.isNotEmpty && mounted) {
+      setState(() {
+        for (final entry in savedReadings.entries) {
+          final machineId = entry.key;
+          final readings = entry.value;
+
+          if (readings.isNotEmpty) {
+            // Set latest reading
+            _machineReadings[machineId] = readings.last;
+
+            // Set history
+            _machineReadingHistory[machineId] = readings;
+          }
+        }
+      });
+      print(
+        '✅ [Control Panel] Loaded saved readings for ${savedReadings.length} machines',
+      );
+    } else {
+      print('ℹ️ [Control Panel] No saved readings found for today');
+    }
   }
 
   /// Load existing readings from BluetoothService (collected before opening Control Panel)
@@ -195,6 +295,12 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               ? readingMachineId
               : (_currentMachineId ?? 'unknown');
 
+          // Save reading to storage (persists to phone storage)
+          _storageService.saveReading(storageKey, reading);
+
+          // Recalculate statistics with new data
+          _calculateTodayStatistics();
+
           if (mounted) {
             setState(() {
               // Store locally for display
@@ -225,19 +331,19 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       );
 
       // Listen to raw data stream - stops timer IMMEDIATELY when any BLE data arrives
-      _rawDataSubscription = _bluetoothService.rawDataStream.listen(
-        (rawData) {
-          // Stop test timer immediately when ANY raw BLE data is received
-          if (_isTestRunning && mounted) {
-            _testTimer?.cancel();
-            setState(() {
-              _isTestRunning = false;
-              _testElapsedSeconds = 0;
-            });
-            print('⏱️ [Control Panel] Timer stopped - raw BLE data received (${rawData.length} chars)');
-          }
-        },
-      );
+      _rawDataSubscription = _bluetoothService.rawDataStream.listen((rawData) {
+        // Stop test timer immediately when ANY raw BLE data is received
+        if (_isTestRunning && mounted) {
+          _testTimer?.cancel();
+          setState(() {
+            _isTestRunning = false;
+            _testElapsedSeconds = 0;
+          });
+          print(
+            '⏱️ [Control Panel] Timer stopped - raw BLE data received (${rawData.length} chars)',
+          );
+        }
+      });
 
       print('✅ [Control Panel] Listening to global readings stream');
     } catch (e) {
@@ -801,14 +907,40 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     }
   }
 
+  void _clearCurrentReading() {
+    if (_currentMachineId == null) return;
+
+    setState(() {
+      // Clear only the current reading display, keep trends and stats
+      _machineReadings.remove(_currentMachineId);
+    });
+
+    print(
+      '🧹 [Control Panel] Current reading cleared for machine: $_currentMachineId',
+    );
+    CustomSnackbar.show(
+      context,
+      message:
+          'Display cleared for ${_formatMachineId(_currentMachineId ?? '')}',
+      isSuccess: true,
+    );
+  }
+
   void _clearAllReadings() {
     if (_currentMachineId == null) return;
 
     setState(() {
-      // Clear only the current machine's readings
+      // Clear current reading and history
       _machineReadings.remove(_currentMachineId);
       _machineReadingHistory[_currentMachineId]?.clear();
     });
+
+    // Also clear from storage
+    _storageService.clearTodayReadings();
+
+    // Recalculate statistics
+    _calculateTodayStatistics();
+
     print(
       '🧹 [Control Panel] Readings cleared for machine: $_currentMachineId',
     );
@@ -817,6 +949,139 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       message:
           'Readings cleared for ${_formatMachineId(_currentMachineId ?? '')}',
       isSuccess: true,
+    );
+  }
+
+  void _clearTrendOnly() {
+    if (_currentMachineId == null) return;
+
+    setState(() {
+      // Clear only the history (trend), keep current reading
+      _machineReadingHistory[_currentMachineId]?.clear();
+    });
+
+    // Clear from storage too
+    _storageService.clearTodayReadings();
+
+    // Recalculate statistics
+    _calculateTodayStatistics();
+
+    print('🧹 [Control Panel] Trend cleared for machine: $_currentMachineId');
+    CustomSnackbar.show(
+      context,
+      message:
+          'Trend cleared for m${_formatMachineId(_currentMachineId ?? '')}',
+      isSuccess: true,
+    );
+  }
+
+  void _showClearOptions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.delete_sweep_rounded,
+                  color: const Color(0xFFef4444),
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Clear Options',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Clear Trend Only option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFf59e0b).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.show_chart_rounded,
+                  color: Color(0xFFf59e0b),
+                ),
+              ),
+              title: Text(
+                'Clear Trend Only',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              subtitle: Text(
+                'Clears graph history, keeps current values',
+                style: TextStyle(
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _clearTrendOnly();
+              },
+            ),
+
+            const Divider(),
+
+            // Clear All option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFef4444).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.delete_forever_rounded,
+                  color: Color(0xFFef4444),
+                ),
+              ),
+              title: Text(
+                'Clear All',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              subtitle: Text(
+                'Clears everything including current values',
+                style: TextStyle(
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _clearAllReadings();
+              },
+            ),
+
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1092,6 +1357,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   _buildSectionLabel('LIVE TREND'),
                   const SizedBox(height: 8),
                   _buildLiveGraphCard(),
+                  
+                  // === TODAY'S STATISTICS ===
+                  if (_todayTestCount > 0) ...[
+                    const SizedBox(height: 16),
+                    _buildSectionLabel('TODAY\'S STATS'),
+                    const SizedBox(height: 8),
+                    _buildTodayStatsCard(),
+                  ],
                 ],
               ),
             ),
@@ -1164,187 +1437,155 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            // Legend row
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildLegendItem('FAT', fatColor),
-                  const SizedBox(width: 16),
-                  _buildLegendItem('SNF', snfColor),
-                  const SizedBox(width: 16),
-                  _buildLegendItem('CLR', clrColor),
-                  const SizedBox(width: 16),
-                  _buildLegendItem('Water', waterColor),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Graph or placeholder
-            Expanded(
-              child: _readingHistory.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.show_chart,
-                            size: 40,
-                            color: isDark
-                                ? Colors.grey.shade600
-                                : Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Waiting for data...',
-                            style: TextStyle(
-                              color: isDark
-                                  ? Colors.grey.shade500
-                                  : Colors.grey.shade500,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+      child: Stack(
+        children: [
+          // Main content
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                // Legend row
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildLegendItem('FAT', fatColor),
+                      const SizedBox(width: 16),
+                      _buildLegendItem('SNF', snfColor),
+                      const SizedBox(width: 16),
+                      _buildLegendItem('CLR', clrColor),
+                      const SizedBox(width: 16),
+                      _buildLegendItem('Water', waterColor),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Graph
+                Expanded(
+                  child: LineChart(
+                          LineChartData(
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: false,
+                              horizontalInterval: interval,
+                              getDrawingHorizontalLine: (value) => FlLine(
+                                color: isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
+                                strokeWidth: 1,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Graph will show live trends when readings come in',
-                            style: TextStyle(
-                              color: isDark
-                                  ? Colors.grey.shade600
-                                  : Colors.grey.shade400,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: interval,
-                          getDrawingHorizontalLine: (value) => FlLine(
-                            color: isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade200,
-                            strokeWidth: 1,
-                          ),
-                        ),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              interval: 1,
-                              reservedSize: 22,
-                              getTitlesWidget: (value, meta) {
-                                final index = value.toInt();
-                                // Show mark for every reading point
-                                if (index >= 0 &&
-                                    index < _readingHistory.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      '${index + 1}',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.grey.shade500
-                                            : Colors.grey.shade600,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            ),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              interval: interval,
-                              reservedSize: 32,
-                              getTitlesWidget: (value, meta) => Text(
-                                value.toInt().toString(),
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.grey.shade500
-                                      : Colors.grey.shade600,
-                                  fontSize: 10,
+                            titlesData: FlTitlesData(
+                              show: true,
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  interval: 1,
+                                  reservedSize: 22,
+                                  getTitlesWidget: (value, meta) {
+                                    final index = value.toInt();
+                                    // Show mark for every reading point
+                                    if (index >= 0 &&
+                                        index < _readingHistory.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.grey.shade500
+                                                : Colors.grey.shade600,
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
                                 ),
+                              ),
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  interval: interval,
+                                  reservedSize: 32,
+                                  getTitlesWidget: (value, meta) => Text(
+                                    value.toInt().toString(),
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.grey.shade500
+                                          : Colors.grey.shade600,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            minX: 0,
+                            maxX: (_readingHistory.length - 1).toDouble().clamp(
+                              0,
+                              19,
+                            ),
+                            minY: 0,
+                            maxY: maxY,
+                            lineBarsData: [
+                              _buildLineChartBarData(fatSpots, fatColor),
+                              _buildLineChartBarData(snfSpots, snfColor),
+                              _buildLineChartBarData(clrSpots, clrColor),
+                              _buildLineChartBarData(waterSpots, waterColor),
+                            ],
+                            lineTouchData: LineTouchData(
+                              enabled: true,
+                              touchTooltipData: LineTouchTooltipData(
+                                getTooltipColor: (touchedSpot) => isDark
+                                    ? const Color(0xFF1E293B)
+                                    : Colors.white,
+                                tooltipBorder: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade700
+                                      : Colors.grey.shade300,
+                                ),
+                                getTooltipItems: (touchedSpots) {
+                                  return touchedSpots.map((spot) {
+                                    String label = '';
+                                    double actualValue = spot.y;
+                                    if (spot.barIndex == 0) {
+                                      label = 'FAT';
+                                    } else if (spot.barIndex == 1) {
+                                      label = 'SNF';
+                                    } else if (spot.barIndex == 2) {
+                                      label = 'CLR';
+                                    } else if (spot.barIndex == 3) {
+                                      label = 'Water';
+                                    }
+                                    return LineTooltipItem(
+                                      '$label: ${actualValue.toStringAsFixed(2)}',
+                                      TextStyle(
+                                        color: spot.bar.color,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 10,
+                                      ),
+                                    );
+                                  }).toList();
+                                },
                               ),
                             ),
                           ),
                         ),
-                        borderData: FlBorderData(show: false),
-                        minX: 0,
-                        maxX: (_readingHistory.length - 1).toDouble().clamp(
-                          0,
-                          19,
-                        ),
-                        minY: 0,
-                        maxY: maxY,
-                        lineBarsData: [
-                          _buildLineChartBarData(fatSpots, fatColor),
-                          _buildLineChartBarData(snfSpots, snfColor),
-                          _buildLineChartBarData(clrSpots, clrColor),
-                          _buildLineChartBarData(waterSpots, waterColor),
-                        ],
-                        lineTouchData: LineTouchData(
-                          enabled: true,
-                          touchTooltipData: LineTouchTooltipData(
-                            getTooltipColor: (touchedSpot) =>
-                                isDark ? const Color(0xFF1E293B) : Colors.white,
-                            tooltipBorder: BorderSide(
-                              color: isDark
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade300,
-                            ),
-                            getTooltipItems: (touchedSpots) {
-                              return touchedSpots.map((spot) {
-                                String label = '';
-                                double actualValue = spot.y;
-                                if (spot.barIndex == 0) {
-                                  label = 'FAT';
-                                } else if (spot.barIndex == 1) {
-                                  label = 'SNF';
-                                } else if (spot.barIndex == 2) {
-                                  label = 'CLR';
-                                } else if (spot.barIndex == 3) {
-                                  label = 'Water';
-                                }
-                                return LineTooltipItem(
-                                  '$label: ${actualValue.toStringAsFixed(2)}',
-                                  TextStyle(
-                                    color: spot.bar.color,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 10,
-                                  ),
-                                );
-                              }).toList();
-                            },
-                          ),
-                        ),
-                      ),
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeOutCubic,
-                    ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1821,6 +2062,213 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     return result.isEmpty ? '0' : result;
   }
 
+  Widget _buildTodayStatsCard() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+              : [Colors.white, Colors.grey.shade50],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Test count
+          Expanded(
+            child: Column(
+              children: [
+                Icon(
+                  Icons.assessment_rounded,
+                  size: 24,
+                  color: const Color(0xFF3b82f6),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$_todayTestCount',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                Text(
+                  'Tests',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Divider
+          Container(
+            width: 1,
+            height: 50,
+            color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+          ),
+          
+          // Best farmer
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.emoji_events_rounded,
+                        size: 14,
+                        color: const Color(0xFF10B981),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Best',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF10B981),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_bestReading != null) ...[
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Farmer ${_formatFarmerId(_bestReading!.farmerId)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'FAT ${_bestReading!.fat.toStringAsFixed(1)} | SNF ${_bestReading!.snf.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Machine ${_formatMachineId(_bestMachineId ?? '')}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: const Color(0xFF10B981),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          
+          // Divider
+          Container(
+            width: 1,
+            height: 50,
+            color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+          ),
+          
+          // Worst farmer
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.trending_down_rounded,
+                        size: 14,
+                        color: const Color(0xFFef4444),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Worst',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFef4444),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_worstReading != null) ...[
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Farmer ${_formatFarmerId(_worstReading!.farmerId)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'FAT ${_worstReading!.fat.toStringAsFixed(1)} | SNF ${_worstReading!.snf.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Machine ${_formatMachineId(_worstMachineId ?? '')}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: const Color(0xFFef4444),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFarmerCard() {
     return Container(
       decoration: BoxDecoration(
@@ -1830,47 +2278,53 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       ),
       child: Row(
         children: [
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: Colors.teal.withOpacity(0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.person, color: Colors.teal, size: 24),
+            child: const Icon(Icons.person, color: Colors.teal, size: 16),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'FARMER ID',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'FARMER ID',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                    maxLines: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   _formatFarmerId(_currentReading.farmerId),
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Colors.teal,
-                    letterSpacing: 1,
+                    letterSpacing: 0.5,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
-          Container(height: 30, width: 1, color: Colors.teal.withOpacity(0.3)),
-          const SizedBox(width: 12),
+          Container(height: 25, width: 1, color: Colors.teal.withOpacity(0.3)),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: Colors.indigo.withOpacity(0.15),
               shape: BoxShape.circle,
@@ -1878,38 +2332,44 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             child: const Icon(
               Icons.precision_manufacturing,
               color: Colors.indigo,
-              size: 24,
+              size: 16,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'MACHINE ID',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'MACHINE ID',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                    maxLines: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   _formatMachineId(_currentReading.machineId),
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Colors.indigo,
-                    letterSpacing: 1,
+                    letterSpacing: 0.5,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
         ],
       ),
     );
@@ -1983,17 +2443,21 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    title.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: isActive
-                          ? color
-                          : (isDark
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600),
-                      letterSpacing: 0.8,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 7,
+                        fontWeight: FontWeight.w700,
+                        color: isActive
+                            ? color
+                            : (isDark
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600),
+                        letterSpacing: 0.5,
+                      ),
+                      maxLines: 1,
                     ),
                   ),
                 ),
@@ -2297,7 +2761,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             const Color(0xFF3b82f6),
             _handleOk,
             onLongPress: () => _showMachineSelector('OK'),
-            showAllIndicator: true,
+            showAllIndicator: _connectedMachineIds.length > 1,
           ),
           _buildNavButton(
             'Cancel',
@@ -2305,7 +2769,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             const Color(0xFFf59e0b),
             _handleCancel,
             onLongPress: () => _showMachineSelector('Cancel'),
-            showAllIndicator: true,
+            showAllIndicator: _connectedMachineIds.length > 1,
           ),
           _buildNavButton(
             'Clean',
@@ -2313,13 +2777,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             const Color(0xFF8b5cf6),
             _handleClean,
             onLongPress: () => _showMachineSelector('Clean'),
-            showAllIndicator: true,
+            showAllIndicator: _connectedMachineIds.length > 1,
           ),
           _buildNavButton(
             'Clear',
             Icons.restart_alt_rounded,
             const Color(0xFFef4444),
-            _clearAllReadings,
+            _clearCurrentReading,
+            onLongPress: _showClearOptions,
           ),
         ],
       ),
@@ -2367,7 +2832,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     ),
                   ),
                   // Indicator for "Test All" mode
-                  if (_testAllMachines && !_isTestRunning)
+                  if (_testAllMachines && !_isTestRunning && _connectedMachineIds.length > 1)
                     Positioned(
                       right: 0,
                       top: 0,
@@ -2444,7 +2909,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     height: 44,
                     decoration: BoxDecoration(
                       color: isDisabled
-                          ? (isDark ? Colors.grey.shade800 : Colors.grey.shade100)
+                          ? (isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade100)
                           : color.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -2466,7 +2933,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           color: color,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                            color: isDark
+                                ? const Color(0xFF1E1E1E)
+                                : Colors.white,
                             width: 2,
                           ),
                         ),

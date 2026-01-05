@@ -39,17 +39,19 @@ class LactosureReading {
     try {
       print('🔵 [Parser] Raw data received: $data');
       print('🔵 [Parser] Data length: ${data.length} characters');
-      
+
       // Remove trailing characters
       data = data.replaceAll(RegExp(r'\^@|\r|\n'), '').trim();
       print('🔵 [Parser] After cleanup: $data');
-      
+
       // Split by pipe delimiter
       final parts = data.split('|');
       print('🔵 [Parser] Split into ${parts.length} parts');
-      
+
       if (parts.length < 16) {
-        print('❌ [Parser] Invalid data - expected at least 16 parts, got ${parts.length}');
+        print(
+          '❌ [Parser] Invalid data - expected at least 16 parts, got ${parts.length}',
+        );
         print('📄 [Parser] Parts: $parts');
         return null; // Invalid data
       }
@@ -74,9 +76,11 @@ class LactosureReading {
         totalAmount: _parseDouble(_extractValue(parts[13], 'R')), // R00000.00
         rate: _parseDouble(_extractValue(parts[14], 'r')), // r000.00
         incentive: _parseDouble(_extractValue(parts[15], 'i')), // i000.00
-        machineId: parts.length > 16 ? _extractValue(parts[16], 'MM') : '', // MM00201
+        machineId: parts.length > 16
+            ? _extractValue(parts[16], 'MM')
+            : '', // MM00201
       );
-      
+
       print('✅ [Parser] Successfully created LactosureReading object');
       return reading;
     } catch (e, stackTrace) {
@@ -109,5 +113,47 @@ class LactosureReading {
       default:
         return 'Unknown';
     }
+  }
+
+  /// Convert to JSON map for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'milkType': milkType,
+      'fat': fat,
+      'snf': snf,
+      'clr': clr,
+      'protein': protein,
+      'lactose': lactose,
+      'salt': salt,
+      'water': water,
+      'temperature': temperature,
+      'farmerId': farmerId,
+      'quantity': quantity,
+      'totalAmount': totalAmount,
+      'rate': rate,
+      'incentive': incentive,
+      'machineId': machineId,
+    };
+  }
+
+  /// Create from JSON map
+  factory LactosureReading.fromJson(Map<String, dynamic> json) {
+    return LactosureReading(
+      milkType: json['milkType'] ?? '',
+      fat: (json['fat'] ?? 0).toDouble(),
+      snf: (json['snf'] ?? 0).toDouble(),
+      clr: (json['clr'] ?? 0).toDouble(),
+      protein: (json['protein'] ?? 0).toDouble(),
+      lactose: (json['lactose'] ?? 0).toDouble(),
+      salt: (json['salt'] ?? 0).toDouble(),
+      water: (json['water'] ?? 0).toDouble(),
+      temperature: (json['temperature'] ?? 0).toDouble(),
+      farmerId: json['farmerId'] ?? '',
+      quantity: (json['quantity'] ?? 0).toDouble(),
+      totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      rate: (json['rate'] ?? 0).toDouble(),
+      incentive: (json['incentive'] ?? 0).toDouble(),
+      machineId: json['machineId'] ?? '',
+    );
   }
 }
