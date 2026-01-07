@@ -1170,7 +1170,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Sync compares Farmer ID, Date, FAT, SNF & CLR to prevent duplicates',
+                                'Sync compares Farmer ID, Date & all quality parameters (2 decimal precision) to prevent duplicates',
                                 style: TextStyle(color: Colors.blue.shade700, fontSize: 11),
                               ),
                             ),

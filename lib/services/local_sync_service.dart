@@ -283,6 +283,12 @@ class LocalSyncService {
             'fat': reading.fat,
             'snf': reading.snf,
             'clr': reading.clr,
+            'protein': reading.protein ?? 0.0,
+            'lactose': reading.lactose ?? 0.0,
+            'salt': reading.salt ?? 0.0,
+            'water': reading.water ?? 0.0,
+            'temperature': reading.temperature ?? 0.0,
+            'quantity': reading.quantity ?? 0.0,
             'machine_id': reading.machineId,
           };
         }).toList();
@@ -296,20 +302,30 @@ class LocalSyncService {
           body: jsonEncode({'readings': readingsToCheck, 'checkOnly': true}),
         ).timeout(const Duration(seconds: 5));
 
+        print('📡 [LocalSync] Cloud check response: ${response.statusCode}');
+        
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
+          print('📥 [LocalSync] Response data: ${jsonEncode(data)}');
+          
           final results = data['data']['results'] as List;
           
           int cloudDuplicates = 0;
+          int willSync = 0;
           for (final result in results) {
-            if (result['status'] == 'duplicate') {
+            final status = result['status'];
+            print('   Record ${result['local_id']}: status = $status');
+            if (status == 'duplicate') {
               cloudDuplicates++;
+            } else if (status == 'synced') {
+              willSync++;
             }
           }
           
           truePending = pending - cloudDuplicates;
-          print('📊 [LocalSync] Cloud pre-check: $pending pending, $cloudDuplicates already in cloud, $truePending true pending');
+          print('📊 [LocalSync] Cloud pre-check: $pending pending, $cloudDuplicates already in cloud, $willSync will sync, $truePending true pending');
         } else {
+          print('⚠️ [LocalSync] Cloud check failed with status ${response.statusCode}: ${response.body}');
           truePending = pending; // Fallback if check fails
         }
       } catch (e) {

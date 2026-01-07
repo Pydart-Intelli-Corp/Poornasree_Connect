@@ -293,6 +293,10 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  
+  // For dragging/moving the snackbar
+  Offset _position = Offset.zero;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -367,9 +371,9 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
     final isSmallScreen = screenWidth < 400;
 
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 12,
-      left: 12,
-      right: 12,
+      top: MediaQuery.of(context).padding.top + 12 + _position.dy,
+      left: 12 + _position.dx,
+      right: 12 - _position.dx,
       child: SlideTransition(
         position: _slideAnimation,
         child: FadeTransition(
@@ -380,13 +384,14 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
               child: GestureDetector(
                 onHorizontalDragEnd: widget.dismissible
                     ? (details) {
-                        if (details.primaryVelocity != null &&
+                        if (!_isDragging &&
+                            details.primaryVelocity != null &&
                             details.primaryVelocity!.abs() > 100) {
                           _handleDismiss();
                         }
                       }
                     : null,
-                onTap: widget.dismissible ? _handleDismiss : null,
+                onTap: widget.dismissible && !_isDragging ? _handleDismiss : null,
                 child: Material(
                   color: Colors.transparent,
                   child: ClipRRect(
@@ -404,13 +409,15 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
                               : Colors.white.withOpacity(0.92),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: widget.colors.border,
-                            width: 1.5,
+                            color: _isDragging
+                                ? widget.colors.primary.withOpacity(0.6)
+                                : widget.colors.border,
+                            width: _isDragging ? 2.0 : 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: widget.colors.primary.withOpacity(0.2),
-                              blurRadius: 24,
+                              color: widget.colors.primary.withOpacity(_isDragging ? 0.3 : 0.2),
+                              blurRadius: _isDragging ? 32 : 24,
                               offset: const Offset(0, 8),
                               spreadRadius: -4,
                             ),
@@ -424,9 +431,55 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // Drag handle at the top
+                            GestureDetector(
+                              onPanStart: (details) {
+                                setState(() {
+                                  _isDragging = true;
+                                });
+                              },
+                              onPanUpdate: (details) {
+                                setState(() {
+                                  _position = Offset(
+                                    _position.dx + details.delta.dx,
+                                    _position.dy + details.delta.dy,
+                                  );
+                                });
+                              },
+                              onPanEnd: (details) {
+                                setState(() {
+                                  _isDragging = false;
+                                });
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: _isDragging
+                                      ? widget.colors.primary.withOpacity(0.1)
+                                      : Colors.transparent,
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(16),
+                                    topRight: Radius.circular(16),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    width: 36,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withOpacity(0.3)
+                                          : Colors.black.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                             // Main content
                             Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                               child: Row(
                                 children: [
                                   // Icon container with glow effect
