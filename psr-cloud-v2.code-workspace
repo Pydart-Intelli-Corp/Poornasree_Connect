@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "../psr-cloud-v2"
+		},
+		{
+			"path": "."
+		},
+		{
+			"name": "wifi-ble",
+			"path": "C:/Users/Poornasree/Documents/PlatformIO/Projects/wifi-ble"
+		}
+	],
+	"settings": {}
+}

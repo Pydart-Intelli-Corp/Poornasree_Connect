@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 
 /// Reusable selection dialog with radio buttons
@@ -54,7 +55,7 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppTheme.cardDark,
+      backgroundColor: context.cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -169,7 +170,7 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations().tr('cancel')),
               ),
             ),
           ],

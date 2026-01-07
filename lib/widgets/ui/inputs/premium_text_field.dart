@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../utils/utils.dart';
+import '../../../utils/utils.dart';
 
 class PremiumTextField extends StatelessWidget {
   final TextEditingController controller;
@@ -25,9 +25,11 @@ class PremiumTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.darkBg2,
+        color: isDark ? AppTheme.darkBg2 : AppTheme.lightBg2,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppTheme.primaryGreen.withOpacity(0.2),
@@ -37,22 +39,22 @@ class PremiumTextField extends StatelessWidget {
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: AppTheme.textPrimary,
+          color: context.textPrimaryColor,
           letterSpacing: 0.3,
         ),
         decoration: InputDecoration(
           labelText: labelText,
           labelStyle: TextStyle(
-            color: AppTheme.textSecondary,
+            color: context.textSecondaryColor,
             fontSize: 14,
             letterSpacing: 0.3,
           ),
           hintText: hintText,
           hintStyle: TextStyle(
-            color: AppTheme.textSecondary.withOpacity(0.5),
+            color: context.textSecondaryColor.withOpacity(0.5),
             fontSize: 14,
             letterSpacing: 0.3,
           ),
@@ -60,7 +62,8 @@ class PremiumTextField extends StatelessWidget {
             margin: const EdgeInsets.all(10),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: iconBackgroundColor ?? AppTheme.primaryGreen.withOpacity(0.15),
+              color: iconBackgroundColor ??
+                  AppTheme.primaryGreen.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(

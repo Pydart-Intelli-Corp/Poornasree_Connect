@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/utils.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Reusable confirmation dialog with Material Design 3 styling
 class ConfirmationDialog extends StatelessWidget {
@@ -100,7 +101,7 @@ class ConfirmationDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: Text(cancelText ?? 'Cancel'),
+                    child: Text(cancelText ?? AppLocalizations().tr('cancel')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -117,7 +118,7 @@ class ConfirmationDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: Text(confirmText ?? 'Confirm'),
+                    child: Text(confirmText ?? AppLocalizations().tr('confirm')),
                   ),
                 ),
               ],

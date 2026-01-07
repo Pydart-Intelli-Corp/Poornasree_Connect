@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'dart:async';
+import '../../l10n/app_localizations.dart';
 import '../../utils/utils.dart';
-import '../ui/custom_button.dart';
-import '../ui/custom_snackbar.dart';
-import '../ui/info_container.dart';
-import '../ui/flower_spinner.dart';
+import '../ui/ui.dart';
 
 /// OTP Verification Dialog for sensitive operations like viewing passwords
 /// Sends OTP to user's email and verifies before proceeding
@@ -146,8 +144,8 @@ class _OtpVerificationDialogState extends State<OtpVerificationDialog>
           _startResendTimer();
           CustomSnackbar.showSuccess(
             context,
-            message: 'OTP Sent',
-            submessage: 'Check your email for the verification code',
+            message: AppLocalizations().tr('otp_sent_msg'),
+            submessage: AppLocalizations().tr('check_email'),
           );
         } else {
           setState(() {
@@ -270,10 +268,10 @@ class _OtpVerificationDialogState extends State<OtpVerificationDialog>
                       vertical: 12,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.cardDark.withOpacity(0.5),
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: AppTheme.borderDark.withOpacity(0.3),
+                        color: context.borderColor,
                       ),
                     ),
                     child: Row(
@@ -323,9 +321,9 @@ class _OtpVerificationDialogState extends State<OtpVerificationDialog>
                         borderRadius: BorderRadius.circular(10),
                         fieldHeight: 50,
                         fieldWidth: 45,
-                        activeFillColor: AppTheme.cardDark,
-                        inactiveFillColor: AppTheme.cardDark.withOpacity(0.5),
-                        selectedFillColor: AppTheme.cardDark,
+                        activeFillColor: context.cardColor,
+                        inactiveFillColor: context.surfaceColor,
+                        selectedFillColor: context.cardColor,
                         activeColor: AppTheme.primaryGreen,
                         inactiveColor: AppTheme.borderDark,
                         selectedColor: AppTheme.primaryGreen,
@@ -631,7 +629,7 @@ class PasswordRevealDialog extends StatelessWidget {
                 Clipboard.setData(ClipboardData(text: password));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Password copied to clipboard'),
+                    content: Text(AppLocalizations().tr('password_copied')),
                     backgroundColor: AppTheme.primaryGreen,
                     duration: const Duration(seconds: 2),
                   ),
@@ -680,7 +678,7 @@ class PasswordRevealDialog extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: CustomButton(
-                text: 'Close',
+                text: AppLocalizations().tr('close'),
                 type: CustomButtonType.primary,
                 onPressed: () => Navigator.of(context).pop(),
               ),
@@ -824,18 +822,18 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
         if (success) {
           CustomSnackbar.showSuccess(
             context,
-            message: 'Password Updated',
+            message: AppLocalizations().tr('password_updated'),
             submessage: _applyToOthers && _selectedMachineIds.isNotEmpty
-                ? '${widget.passwordType} password updated for ${_selectedMachineIds.length + 1} machine(s)'
-                : '${widget.passwordType} password will be synced to the machine',
+                ? '${widget.passwordType} ${AppLocalizations().tr('password')} ${AppLocalizations().tr('updated')} ${AppLocalizations().tr('for')} ${_selectedMachineIds.length + 1} ${AppLocalizations().tr('machines')}'
+                : '${widget.passwordType} ${AppLocalizations().tr('password')} ${AppLocalizations().tr('will_be_synced')}',
           );
           Navigator.of(context).pop(true);
         } else {
           setState(() => _isLoading = false);
           CustomSnackbar.showError(
             context,
-            message: 'Update Failed',
-            submessage: 'Failed to update password. Please try again.',
+            message: AppLocalizations().tr('update_failed'),
+            submessage: AppLocalizations().tr('failed_update_password'),
           );
         }
       }

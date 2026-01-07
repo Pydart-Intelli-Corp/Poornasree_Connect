@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
+import '../../l10n/l10n.dart';
 import 'otp_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -108,6 +109,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
     final horizontalPadding = ResponsiveHelper.getHorizontalPadding(context);
     final verticalPadding = ResponsiveHelper.getVerticalPadding(context);
     final maxWidth = ResponsiveHelper.getMaxContentWidth(context);
@@ -166,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                         // Welcome Text
                         Text(
-                          'Welcome Back',
+                          l10n.tr('welcome_back'),
                           style: TextStyle(
                             fontSize: ResponsiveHelper.getFontSize(context, 32),
                             fontWeight: FontWeight.w700,
@@ -176,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         SizedBox(height: ResponsiveHelper.getSpacing(context, 8)),
                         Text(
-                          'Sign in to continue',
+                          l10n.tr('sign_in_to_continue'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: ResponsiveHelper.getFontSize(context, 15),
@@ -197,16 +199,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 // Email Field
                                 PremiumTextField(
                                   controller: _emailController,
-                                  labelText: 'Email Address',
+                                  labelText: l10n.tr('email_address'),
                                   hintText: 'your.email@example.com',
                                   icon: Icons.email_rounded,
                                   keyboardType: TextInputType.emailAddress,
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
-                                      return 'Please enter your email';
+                                      return l10n.tr('please_enter_email');
                                     }
                                     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                                      return 'Please enter a valid email';
+                                      return l10n.tr('enter_valid_email');
                                     }
                                     return null;
                                   },
@@ -215,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                                 // Premium Send OTP Button
                                 PremiumGradientButton(
-                                  text: 'Send OTP',
+                                  text: l10n.tr('send_otp'),
                                   icon: Icons.arrow_forward_rounded,
                                   onPressed: _sendOtp,
                                   isLoading: _isLoading,
@@ -227,9 +229,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         const SizedBox(height: UIConstants.spacingXL),
 
                         // Info Container
-                        const InfoContainer(
+                        InfoContainer(
                           icon: Icons.info_outline_rounded,
-                          text: 'A one-time password will be sent to your email address',
+                          text: l10n.tr('otp_will_be_sent'),
                         ),
                       ],
                     ),

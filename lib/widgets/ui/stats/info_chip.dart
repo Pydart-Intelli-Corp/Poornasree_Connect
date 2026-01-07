@@ -1,0 +1,182 @@
+import 'package:flutter/material.dart';
+
+/// Info chip types for value formatting determination
+enum InfoChipType { milkType, protein, lactose, salt, water, temp }
+
+/// A compact info chip widget with icon, title, value and progress bar
+/// Used for displaying parameters like Protein, Lactose, Salt, Water, Temperature
+class InfoChip extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final double maxValue;
+  final InfoChipType type;
+
+  const InfoChip({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.maxValue = 10.0,
+    this.type = InfoChipType.protein,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Extract numeric value for progress calculation
+    final numericStr = value.replaceAll(RegExp(r'[^0-9.]'), '');
+    final double numValue = double.tryParse(numericStr) ?? 0.0;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final isActive = numValue > 0;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: numValue),
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, child) {
+        final progress = (animatedValue / maxValue).clamp(0.0, 1.0);
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                  : [const Color(0xFFF9FAFB), const Color(0xFFEFF6FF)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isActive
+                  ? (isDark ? color.withOpacity(0.3) : color.withOpacity(0.2))
+                  : (isDark ? Colors.grey.withOpacity(0.2) : const Color(0xFFDCE3EB)),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isActive
+                    ? (isDark ? color.withOpacity(0.15) : color.withOpacity(0.08))
+                    : (isDark ? Colors.black.withOpacity(0.05) : const Color(0xFF000000).withOpacity(0.03)),
+                blurRadius: isActive ? (isDark ? 10 : 5) : 3,
+                offset: Offset(0, isActive ? 2 : 1),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row with icon and title
+                Row(
+                  children: [
+                    // Animated icon container
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(isActive ? 0.15 : 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: isActive ? color : color.withOpacity(0.5),
+                        size: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                          letterSpacing: 0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                // Animated value
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  style: TextStyle(
+                    fontSize: isActive ? 16 : 14,
+                    fontWeight: FontWeight.w800,
+                    color: isActive
+                        ? color
+                        : (isDark
+                              ? Colors.grey.shade500
+                              : Colors.grey.shade400),
+                  ),
+                  child: Text(
+                    type == InfoChipType.milkType
+                        ? value
+                        : (type == InfoChipType.temp
+                              ? '${animatedValue.toStringAsFixed(1)}°C'
+                              : '${animatedValue.toStringAsFixed(2)}%'),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Animated line progress indicator
+                Stack(
+                  children: [
+                    // Background track
+                    Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF374151)
+                            : Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    // Animated progress bar
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutCubic,
+                      height: 4,
+                      width: double.infinity,
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: type == InfoChipType.milkType
+                            ? 1.0
+                            : progress,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [color, color.withOpacity(0.7)],
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: isActive
+                                ? [
+                                    BoxShadow(
+                                      color: color.withOpacity(0.5),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

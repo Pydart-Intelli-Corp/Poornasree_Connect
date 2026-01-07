@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../utils/utils.dart';
+import '../../../utils/utils.dart';
 
 class PremiumCard extends StatelessWidget {
   final Widget child;
@@ -18,7 +18,7 @@ class PremiumCard extends StatelessWidget {
     return Container(
       padding: padding ?? const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.cardDark,
+        color: context.cardColor,
         borderRadius: BorderRadius.circular(borderRadius ?? 16),
         border: Border.all(
           color: AppTheme.primaryGreen.withOpacity(0.2),

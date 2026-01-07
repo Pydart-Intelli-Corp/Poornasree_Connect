@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
 import '../../utils/utils.dart';
 import '../auth/login_screen.dart';
@@ -27,27 +28,27 @@ class FarmerDashboardScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Farmer Dashboard'),
+        title: Text(AppLocalizations().tr('farmer_dashboard')),
         actions: [
           PopupMenuButton(
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'profile',
                 child: Row(
                   children: [
-                    Icon(Icons.person_outline),
-                    SizedBox(width: 8),
-                    Text('Profile'),
+                    const Icon(Icons.person_outline),
+                    const SizedBox(width: 8),
+                    Text(AppLocalizations().tr('profile')),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [
-                    Icon(Icons.logout),
-                    SizedBox(width: 8),
-                    Text('Logout'),
+                    const Icon(Icons.logout),
+                    const SizedBox(width: 8),
+                    Text(AppLocalizations().tr('logout')),
                   ],
                 ),
               ),

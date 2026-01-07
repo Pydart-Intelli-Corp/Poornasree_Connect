@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/utils.dart';
+import '../../l10n/l10n.dart';
 
 /// A reusable settings tile widget for settings sections
 class SettingsTile extends StatelessWidget {
@@ -29,7 +30,7 @@ class SettingsTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.darkBg2,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -49,17 +50,17 @@ class SettingsTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
                 Text(
                   subtitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: AppTheme.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                 ),
               ],
@@ -72,45 +73,82 @@ class SettingsTile extends StatelessWidget {
   }
 }
 
-/// Language selector widget
-class LanguageSelector extends StatelessWidget {
-  final String selectedLanguage;
-  final ValueChanged<String> onChanged;
-  final List<String> languages;
+/// Language selector widget - Updated to use AppLocalizations
+class LanguageSelector extends StatefulWidget {
+  final ValueChanged<AppLocale>? onLocaleChanged;
 
   const LanguageSelector({
     super.key,
-    required this.selectedLanguage,
-    required this.onChanged,
-    this.languages = const ['English', 'हिंदी', 'தமிழ்', 'తెలుగు', 'ಕನ್ನಡ'],
+    this.onLocaleChanged,
   });
 
   @override
+  State<LanguageSelector> createState() => _LanguageSelectorState();
+}
+
+class _LanguageSelectorState extends State<LanguageSelector> {
+  late AppLocale _selectedLocale;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLocale = AppLocalizations().currentLocale;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
+    
     return SettingsTile(
       icon: Icons.language,
-      title: 'Language',
-      subtitle: 'Select app language',
+      title: l10n.tr('language'),
+      subtitle: l10n.tr('select_language'),
       iconBackgroundColor: AppTheme.primaryBlue.withOpacity(0.15),
       iconColor: AppTheme.primaryBlue,
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: AppTheme.cardDark,
+          color: context.cardColor,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.borderDark),
+          border: Border.all(color: context.borderColor),
         ),
         child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: selectedLanguage,
+          child: DropdownButton<AppLocale>(
+            value: _selectedLocale,
             isDense: true,
-            dropdownColor: AppTheme.cardDark,
-            style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
-            items: languages
-                .map((lang) => DropdownMenuItem(value: lang, child: Text(lang)))
-                .toList(),
-            onChanged: (value) {
-              if (value != null) onChanged(value);
+            dropdownColor: context.cardColor,
+            style: TextStyle(fontSize: 13, color: context.textPrimaryColor),
+            items: AppLocale.values.map((locale) => DropdownMenuItem(
+              value: locale,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    locale.nativeName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.textPrimaryColor,
+                    ),
+                  ),
+                  if (locale != AppLocale.english) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '(${locale.englishName})',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: context.textSecondaryColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            )).toList(),
+            onChanged: (locale) async {
+              if (locale != null) {
+                await AppLocalizations().setLocale(locale);
+                setState(() => _selectedLocale = locale);
+                widget.onLocaleChanged?.call(locale);
+              }
             },
           ),
         ),
@@ -132,10 +170,12 @@ class ThemeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
+    
     return SettingsTile(
       icon: isDarkMode ? Icons.dark_mode : Icons.light_mode,
-      title: 'Theme',
-      subtitle: isDarkMode ? 'Dark Mode' : 'Light Mode',
+      title: l10n.tr('theme'),
+      subtitle: isDarkMode ? l10n.tr('dark_mode') : l10n.tr('light_mode'),
       iconBackgroundColor: AppTheme.primaryAmber.withOpacity(0.15),
       iconColor: AppTheme.primaryAmber,
       trailing: Switch(
@@ -161,12 +201,14 @@ class AutoConnectToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
+    
     return SettingsTile(
       icon: Icons.bluetooth_connected,
-      title: 'Auto Connect',
+      title: l10n.tr('auto_connect'),
       subtitle: isAutoConnectEnabled
-          ? 'Automatically connect to devices'
-          : 'Manual connection required',
+          ? l10n.tr('auto_connect_desc')
+          : l10n.tr('auto_connect_desc'),
       iconBackgroundColor: AppTheme.primaryBlue.withOpacity(0.15),
       iconColor: AppTheme.primaryBlue,
       trailing: Switch(

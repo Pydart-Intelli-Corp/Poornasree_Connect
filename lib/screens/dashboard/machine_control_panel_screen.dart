@@ -1,22 +1,23 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/services.dart';
 import '../../services/readings_storage_service.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
-import '../../widgets/milk_test_animation.dart';
 import '../../models/lactosure_reading.dart';
-import '../../widgets/reading_card.dart' as reading;
+import '../reports/reports_screen.dart';
 
 class MachineControlPanelScreen extends StatefulWidget {
   final String? machineId;
   final String? machineName;
+  final String? machineType;
 
   const MachineControlPanelScreen({
     super.key,
     this.machineId,
     this.machineName,
+    this.machineType,
   });
 
   @override
@@ -116,12 +117,24 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   int _testElapsedSeconds = 0;
   bool _testAllMachines = true; // Default to test all machines
   Set<String> _selectedTestMachines = {}; // Selected machines for testing
+  // Track machines that received data during current test
+  Set<String> _machinesWithDataReceived = {};
+  List<String> _currentTestMachines =
+      []; // Machines being tested in current test
+  // bool _isShowingResultSnackbar = false; // Prevent duplicate snackbars - Unused
+
+  // Live test overlay
+  OverlayEntry? _liveTestOverlay;
+  final ValueNotifier<Set<String>> _receivedMachinesNotifier = ValueNotifier(
+    {},
+  );
+  final ValueNotifier<bool> _testCompleteNotifier = ValueNotifier(false);
 
   // Machine navigation state
   int _currentMachineIndex = 0;
   List<String> _connectedMachineIds = [];
   String? _currentMachineId;
-  String? _currentMachineName;
+  // String? _currentMachineName; // Unused
 
   // BLE data subscription
   StreamSubscription? _bleDataSubscription;
@@ -137,7 +150,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   String? _bestMachineId;
   LactosureReading? _worstReading;
   String? _worstMachineId;
-  
+
   // Additional statistics
   double _avgFat = 0.0;
   double _avgSnf = 0.0;
@@ -168,6 +181,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     _bleDataSubscription?.cancel();
     _rawDataSubscription?.cancel();
     _testTimer?.cancel();
+    _liveTestOverlay?.remove();
+    _receivedMachinesNotifier.dispose();
+    _testCompleteNotifier.dispose();
     super.dispose();
   }
 
@@ -181,7 +197,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     String? bestMachine;
     LactosureReading? worst;
     String? worstMachine;
-    
+
     // Additional stats
     double sumFat = 0.0;
     double sumSnf = 0.0;
@@ -203,13 +219,13 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
       for (final reading in readings) {
         final quality = calculateQuality(reading);
-        
+
         // Sum for averages
         sumFat += reading.fat;
         sumSnf += reading.snf;
         sumQuantity += reading.quantity;
         sumAmount += reading.totalAmount;
-        
+
         // Track min/max
         if (reading.fat > maxFat) maxFat = reading.fat;
         if (reading.fat < minFat && reading.fat > 0) minFat = reading.fat;
@@ -238,7 +254,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
         _bestMachineId = bestMachine;
         _worstReading = worst;
         _worstMachineId = worstMachine;
-        
+
         // Calculate averages
         _avgFat = totalTests > 0 ? sumFat / totalTests : 0.0;
         _avgSnf = totalTests > 0 ? sumSnf / totalTests : 0.0;
@@ -264,7 +280,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   /// Load today's saved readings from storage (only for trends, not current display)
   void _loadSavedReadings() async {
     print('\n═══════════════════════════════════════════════════════════════');
-    print('🔵 [Control Panel] Loading saved readings from storage (for trends only)');
+    print(
+      '🔵 [Control Panel] Loading saved readings from storage (for trends only)',
+    );
     print('═══════════════════════════════════════════════════════════════\n');
 
     final savedReadings = await _storageService.loadAllTodayReadings();
@@ -293,7 +311,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   /// Load existing readings from BluetoothService (only for trends, not current display)
   void _loadExistingReadings() {
     print('\n═══════════════════════════════════════════════════════════════');
-    print('🔵 [Control Panel] Loading existing readings from BluetoothService (for trends only)');
+    print(
+      '🔵 [Control Panel] Loading existing readings from BluetoothService (for trends only)',
+    );
     print('═══════════════════════════════════════════════════════════════\n');
 
     final existingHistory = _bluetoothService.machineReadingHistory;
@@ -316,6 +336,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   void _setupBLEDataListener() {
     print('\n═══════════════════════════════════════════════════════════════');
     print('🔵 [Control Panel] Setting up BLE listener (using global stream)');
+    print('🔵 [Control Panel] ⚠️ NEW LISTENER CODE v2 - WITH TEST TRACKING ⚠️');
     print('🔵 [Control Panel] Current machine: $_currentMachineId');
     print('═══════════════════════════════════════════════════════════════\n');
 
@@ -371,14 +392,49 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                 _machineReadingHistory[storageKey]!.removeAt(0);
               }
 
-              // Stop test timer when ANY data is received
-              if (_isTestRunning) {
-                _testTimer?.cancel();
-                _isTestRunning = false;
-                _testElapsedSeconds = 0;
-                print('⏱️ [Control Panel] Test completed - data received');
+              // Track machine that received data during test
+              if (_isTestRunning && _currentTestMachines.isNotEmpty) {
+                // Find matching machine in current test
+                for (final testMachine in _currentTestMachines) {
+                  final normalizedTest = _normalizeId(testMachine);
+                  final normalizedStorage = _normalizeId(storageKey);
+                  if (normalizedTest == normalizedStorage ||
+                      testMachine == storageKey) {
+                    final isFirstResponse = _machinesWithDataReceived.isEmpty;
+                    _machinesWithDataReceived.add(testMachine);
+                    // Update notifier for live overlay
+                    _receivedMachinesNotifier.value = Set.from(
+                      _machinesWithDataReceived,
+                    );
+                    print(
+                      '✅ [Test] Machine $testMachine received data (${_machinesWithDataReceived.length}/${_currentTestMachines.length})',
+                    );
+
+                    // Show overlay on first response
+                    if (isFirstResponse) {
+                      CustomSnackbar.dismiss();
+                      _showLiveTestOverlay();
+                    }
+                    break;
+                  }
+                }
+              } else {
+                // Not in test mode - show snackbar for data received
+                _showDataReceivedSnackbar(storageKey, reading);
               }
             });
+
+            // Check if ALL machines received data - mark complete
+            if (_isTestRunning &&
+                _machinesWithDataReceived.length >=
+                    _currentTestMachines.length &&
+                _currentTestMachines.isNotEmpty) {
+              _testTimer?.cancel();
+              print('🎉 [Test] All machines received data!');
+              _testCompleteNotifier.value = true;
+              _completeTest(success: true);
+            }
+
             print('✅ [Control Panel] UI updated for machine: $storageKey');
           }
         },
@@ -387,19 +443,11 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
         },
       );
 
-      // Listen to raw data stream - stops timer IMMEDIATELY when any BLE data arrives
+      // Listen to raw data stream for immediate feedback
       _rawDataSubscription = _bluetoothService.rawDataStream.listen((rawData) {
-        // Stop test timer immediately when ANY raw BLE data is received
-        if (_isTestRunning && mounted) {
-          _testTimer?.cancel();
-          setState(() {
-            _isTestRunning = false;
-            _testElapsedSeconds = 0;
-          });
-          print(
-            '⏱️ [Control Panel] Timer stopped - raw BLE data received (${rawData.length} chars)',
-          );
-        }
+        print(
+          '📡 [Control Panel] Raw BLE data received (${rawData.length} chars)',
+        );
       });
 
       print('✅ [Control Panel] Listening to global readings stream');
@@ -516,8 +564,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
         }
       }
       _currentMachineId = _connectedMachineIds[_currentMachineIndex];
-      _currentMachineName = 'Machine ${_currentMachineId}';
-      
+      // _currentMachineName = 'Machine ${_currentMachineId}'; // Commented - field unused
+
       // Clear all machine readings when panel opens - values start at 0
       // (trends are loaded separately from _loadSavedReadings)
       _machineReadings.clear();
@@ -534,7 +582,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           } else if (_currentMachineIndex >= _connectedMachineIds.length) {
             _currentMachineIndex = _connectedMachineIds.length - 1;
             _currentMachineId = _connectedMachineIds[_currentMachineIndex];
-            _currentMachineName = 'Machine ${_currentMachineId}';
+            // _currentMachineName = 'Machine ${_currentMachineId}'; // Commented - field unused
           }
         });
       }
@@ -550,7 +598,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
         _currentMachineIndex = _connectedMachineIds.length - 1;
       }
       _currentMachineId = _connectedMachineIds[_currentMachineIndex];
-      _currentMachineName = 'Machine $_currentMachineId';
+      // _currentMachineName = 'Machine $_currentMachineId'; // Commented - field unused
       // Reset history navigation when switching machines
       _isViewingHistory = false;
       _historyIndex = 0;
@@ -564,7 +612,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       _currentMachineIndex =
           (_currentMachineIndex + 1) % _connectedMachineIds.length;
       _currentMachineId = _connectedMachineIds[_currentMachineIndex];
-      _currentMachineName = 'Machine $_currentMachineId';
+      // _currentMachineName = 'Machine $_currentMachineId'; // Commented - field unused
       // Reset history navigation when switching machines
       _isViewingHistory = false;
       _historyIndex = 0;
@@ -585,10 +633,10 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     }
 
     if (machinesToTest.isEmpty) {
-      CustomSnackbar.show(
+      CustomSnackbar.showError(
         context,
-        message: 'No machine selected',
-        isSuccess: false,
+        message: AppLocalizations().tr('no_machine_selected'),
+        submessage: AppLocalizations().tr('select_machine_test'),
       );
       return;
     }
@@ -600,32 +648,39 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       }
       _isTestRunning = true;
       _testElapsedSeconds = 0;
+      _machinesWithDataReceived.clear();
+      _currentTestMachines = List.from(machinesToTest);
+      // _isShowingResultSnackbar = false; // Commented - field unused
     });
+
+    // Reset notifiers for live overlay
+    _receivedMachinesNotifier.value = {};
+    _testCompleteNotifier.value = false;
+    _liveTestOverlay?.remove();
+    _liveTestOverlay = null;
 
     // Start timer after 3 seconds delay
     _testTimer?.cancel();
-    Future.delayed(const Duration(milliseconds:3500 ), () {
+    Future.delayed(const Duration(milliseconds: 3500), () {
       if (!mounted || !_isTestRunning) return;
-      
+
       _testTimer = Timer.periodic(const Duration(milliseconds: 1100), (timer) {
         if (mounted) {
           setState(() {
             _testElapsedSeconds++;
           });
 
-          // Auto-stop after 45 seconds (error receiving data)
+          // Auto-stop after 45 seconds
           if (_testElapsedSeconds >= 45) {
             timer.cancel();
-            setState(() {
-              _isTestRunning = false;
-              _testElapsedSeconds = 0;
-            });
-            CustomSnackbar.show(
-              context,
-              message: 'Error receiving data',
-              submessage: 'No response from machine',
-              isSuccess: false,
-            );
+            // Dismiss loading snackbar if still showing
+            CustomSnackbar.dismiss();
+            // Show overlay with results (even if no data received)
+            if (_liveTestOverlay == null) {
+              _showLiveTestOverlay();
+            }
+            _testCompleteNotifier.value = true;
+            _completeTest(success: false, timeout: true);
           }
         } else {
           timer.cancel();
@@ -644,29 +699,135 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     }
 
     if (successCount > 0) {
-      CustomSnackbar.show(
+      // Show loading snackbar - overlay will show when first data arrives
+      CustomSnackbar.showLoading(
         context,
-        message: 'Test command sent',
-        submessage: machinesToTest.length > 1
-            ? 'Testing $successCount/${machinesToTest.length} machines...'
-            : 'Starting milk test on m${_formatMachineId(machinesToTest.first)}...',
-        isSuccess: true,
+        message: machinesToTest.length > 1
+            ? '${AppLocalizations().tr('testing')} ${machinesToTest.length} ${AppLocalizations().tr('machines').toLowerCase()}'
+            : '${AppLocalizations().tr('testing')} m${_formatMachineId(machinesToTest.first)}',
+        submessage: AppLocalizations().tr('waiting_results'),
       );
     } else {
-      CustomSnackbar.show(
+      CustomSnackbar.showError(
         context,
-        message: 'Failed to send test command',
-        submessage: 'Check BLE connection',
-        isSuccess: false,
+        message: AppLocalizations().tr('failed_test_command'),
+        submessage: AppLocalizations().tr('check_ble_connection'),
       );
       _testTimer?.cancel();
       setState(() {
         _isTestRunning = false;
         _testElapsedSeconds = 0;
+        _currentTestMachines.clear();
       });
       return;
     }
   }
+
+  /// Show live test overlay that updates as machines respond
+  void _showLiveTestOverlay() {
+    _liveTestOverlay?.remove();
+    final overlay = Overlay.of(context);
+
+    _liveTestOverlay = OverlayEntry(
+      builder: (context) => LiveTestOverlay(
+        machines: _currentTestMachines,
+        receivedMachinesNotifier: _receivedMachinesNotifier,
+        testCompleteNotifier: _testCompleteNotifier,
+        machineReadings: _machineReadings,
+        onDismiss: () {
+          _liveTestOverlay?.remove();
+          _liveTestOverlay = null;
+        },
+      ),
+    );
+
+    overlay.insert(_liveTestOverlay!);
+  }
+
+  /// Show snackbar when data is received without test button
+  void _showDataReceivedSnackbar(String machineId, LactosureReading reading) {
+    final formattedId = _formatMachineId(machineId);
+    CustomSnackbar.showSuccess(
+      context,
+      message: '${AppLocalizations().tr('data_received')} M$formattedId',
+      submessage:
+          '${AppLocalizations().tr('fat')}: ${reading.fat.toStringAsFixed(1)} | ${AppLocalizations().tr('snf')}: ${reading.snf.toStringAsFixed(1)} | ${AppLocalizations().tr('clr')}: ${reading.clr.toStringAsFixed(1)}',
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  /// Complete the test and update overlay state
+  void _completeTest({required bool success, bool timeout = false}) {
+    _testTimer?.cancel();
+    setState(() {
+      _isTestRunning = false;
+      _testElapsedSeconds = 0;
+    });
+
+    // Auto dismiss overlay after 4 seconds when complete
+    Future.delayed(const Duration(seconds: 4), () {
+      _liveTestOverlay?.remove();
+      _liveTestOverlay = null;
+    });
+  }
+
+  /// Show test completion snackbar with machine status (legacy - kept for reference)
+  // void _showTestCompletionSnackbar({
+  //   required bool success,
+  //   bool timeout = false,
+  // }) {
+  //   if (_isShowingResultSnackbar) return;
+  //   _isShowingResultSnackbar = true;
+  //
+  //   // Cancel timer first
+  //   _testTimer?.cancel();
+  //
+  //   setState(() {
+  //     _isTestRunning = false;
+  //     _testElapsedSeconds = 0;
+  //   });
+  //
+  //   // Dismiss loading snackbar immediately
+  //   CustomSnackbar.dismiss();
+  //
+  //   // Small delay to ensure loading snackbar is removed before showing result
+  //   Future.delayed(const Duration(milliseconds: 100), () {
+  //     if (mounted) {
+  //       // Show result overlay with machine status
+  //       _showTestResultOverlay(success: success, timeout: timeout);
+  //     }
+  //   });
+  // }
+
+  /// Show test result overlay with animated ticks for each machine
+  // void _showTestResultOverlay({required bool success, bool timeout = false}) { // Unused
+  //   final overlay = Overlay.of(context);
+  //   late OverlayEntry overlayEntry;
+  //
+  //   overlayEntry = OverlayEntry(
+  //     builder: (context) => TestResultOverlay(
+  //       machines: _currentTestMachines,
+  //       receivedMachines: _machinesWithDataReceived,
+  //       machineReadings: _machineReadings,
+  //       success: success,
+  //       timeout: timeout,
+  //       onDismiss: () {
+  //         overlayEntry.remove();
+  //         // _isShowingResultSnackbar = false;
+  //       },
+  //     ),
+  //   );
+  //
+  //   overlay.insert(overlayEntry);
+  //
+  //   // Auto dismiss after 5 seconds
+  //   Future.delayed(const Duration(seconds: 5), () {
+  //     if (overlayEntry.mounted) {
+  //       overlayEntry.remove();
+  //       // _isShowingResultSnackbar = false;
+  //     }
+  //   });
+  // }
 
   void _showTestMachineSelector() {
     _showMachineSelector('Test');
@@ -702,7 +863,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+      elevation: 8,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -714,19 +876,11 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(actionIcon, color: actionColor, size: 24),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Select Machines for $actionName',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
+                BottomSheetHeader(
+                  title:
+                      '${AppLocalizations().tr('select_machines_for')} $actionName',
+                  icon: actionIcon,
+                  color: actionColor,
                 ),
                 const SizedBox(height: 16),
 
@@ -743,18 +897,18 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     setState(() {});
                   },
                   title: Text(
-                    'All Machines',
+                    AppLocalizations().tr('all_machines'),
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                   subtitle: Text(
-                    '${_connectedMachineIds.length} machines connected',
+                    '${_connectedMachineIds.length} ${AppLocalizations().tr('machines_connected')}',
                     style: TextStyle(
                       color: isDark
                           ? Colors.grey.shade400
-                          : Colors.grey.shade600,
+                          : const Color(0xFF6B7280),
                     ),
                   ),
                   activeColor: actionColor,
@@ -783,7 +937,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             setState(() {});
                           },
                     title: Text(
-                      'Machine m${_formatMachineId(machineId)}',
+                      '${AppLocalizations().tr('machine')} m${_formatMachineId(machineId)}',
                       style: TextStyle(
                         color: isDark ? Colors.white : Colors.black87,
                       ),
@@ -805,8 +959,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     icon: const Icon(Icons.check_rounded),
                     label: Text(
                       _testAllMachines
-                          ? 'Save (All ${_connectedMachineIds.length} machines)'
-                          : 'Save (${_selectedTestMachines.length} selected)',
+                          ? '${AppLocalizations().tr('save')} (${AppLocalizations().tr('all')} ${_connectedMachineIds.length} ${AppLocalizations().tr('machines').toLowerCase()})'
+                          : '${AppLocalizations().tr('save')} (${_selectedTestMachines.length} ${AppLocalizations().tr('selected').toLowerCase()})',
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: actionColor,
@@ -841,7 +995,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     if (machinesToSend.isEmpty) {
       CustomSnackbar.show(
         context,
-        message: 'No machine selected',
+        message: AppLocalizations().tr('no_machine_selected'),
         isSuccess: false,
       );
       return;
@@ -860,17 +1014,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     if (successCount > 0) {
       CustomSnackbar.show(
         context,
-        message: 'OK command sent',
+        message: AppLocalizations().tr('ok_command_sent'),
         submessage: machinesToSend.length > 1
-            ? 'Sent to $successCount/${machinesToSend.length} machines'
-            : 'Sent to m${_formatMachineId(machinesToSend.first)}',
+            ? '${AppLocalizations().tr('sent_to_machines').replaceAll('{count}', successCount.toString()).replaceAll('{total}', machinesToSend.length.toString())}'
+            : '${AppLocalizations().tr('sent_to_machine').replaceAll('{id}', _formatMachineId(machinesToSend.first))}',
         isSuccess: true,
       );
     } else {
       CustomSnackbar.show(
         context,
-        message: 'Failed to send OK command',
-        submessage: 'Check BLE connection',
+        message: AppLocalizations().tr('failed_ok_command'),
+        submessage: AppLocalizations().tr('check_ble_connection'),
         isSuccess: false,
       );
     }
@@ -900,7 +1054,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     if (machinesToSend.isEmpty) {
       CustomSnackbar.show(
         context,
-        message: 'No machine selected',
+        message: AppLocalizations().tr('no_machine_selected'),
         isSuccess: false,
       );
       return;
@@ -919,17 +1073,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     if (successCount > 0) {
       CustomSnackbar.show(
         context,
-        message: 'Cancel command sent',
+        message: AppLocalizations().tr('cancel_command_sent'),
         submessage: machinesToSend.length > 1
-            ? 'Sent to $successCount/${machinesToSend.length} machines'
-            : 'Sent to m${_formatMachineId(machinesToSend.first)}',
+            ? '${AppLocalizations().tr('sent_to_machines').replaceAll('{count}', successCount.toString()).replaceAll('{total}', machinesToSend.length.toString())}'
+            : '${AppLocalizations().tr('sent_to_machine').replaceAll('{id}', _formatMachineId(machinesToSend.first))}',
         isSuccess: true,
       );
     } else {
       CustomSnackbar.show(
         context,
-        message: 'Failed to send Cancel command',
-        submessage: 'Check BLE connection',
+        message: AppLocalizations().tr('failed_cancel_command'),
+        submessage: AppLocalizations().tr('check_ble_connection'),
         isSuccess: false,
       );
     }
@@ -950,7 +1104,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     if (machinesToClean.isEmpty) {
       CustomSnackbar.show(
         context,
-        message: 'No machine selected',
+        message: AppLocalizations().tr('no_machine_selected'),
         isSuccess: false,
       );
       return;
@@ -969,17 +1123,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     if (successCount > 0) {
       CustomSnackbar.show(
         context,
-        message: 'Clean command sent',
+        message: AppLocalizations().tr('clean_command_sent'),
         submessage: machinesToClean.length > 1
-            ? 'Cleaning $successCount/${machinesToClean.length} machines...'
-            : 'Starting cleaning cycle on m${_formatMachineId(machinesToClean.first)}...',
+            ? '${AppLocalizations().tr('cleaning_machines').replaceAll('{count}', successCount.toString()).replaceAll('{total}', machinesToClean.length.toString())}'
+            : '${AppLocalizations().tr('starting_cleaning').replaceAll('{id}', _formatMachineId(machinesToClean.first))}',
         isSuccess: true,
       );
     } else {
       CustomSnackbar.show(
         context,
-        message: 'Failed to send clean command',
-        submessage: 'Check BLE connection',
+        message: AppLocalizations().tr('failed_clean_command'),
+        submessage: AppLocalizations().tr('check_ble_connection'),
         isSuccess: false,
       );
     }
@@ -999,7 +1153,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     CustomSnackbar.show(
       context,
       message:
-          'Display cleared for ${_formatMachineId(_currentMachineId ?? '')}',
+          '${AppLocalizations().tr('display_cleared')} ${_formatMachineId(_currentMachineId ?? '')}',
       isSuccess: true,
     );
   }
@@ -1025,7 +1179,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     CustomSnackbar.show(
       context,
       message:
-          'Readings cleared for ${_formatMachineId(_currentMachineId ?? '')}',
+          '${AppLocalizations().tr('readings_cleared')} ${_formatMachineId(_currentMachineId ?? '')}',
       isSuccess: true,
     );
   }
@@ -1048,7 +1202,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     CustomSnackbar.show(
       context,
       message:
-          'Trend cleared for m${_formatMachineId(_currentMachineId ?? '')}',
+          '${AppLocalizations().tr('trend_cleared')}${_formatMachineId(_currentMachineId ?? '')}',
       isSuccess: true,
     );
   }
@@ -1058,7 +1212,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+      elevation: 8,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1068,88 +1223,32 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.delete_sweep_rounded,
-                  color: const Color(0xFFef4444),
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Clear Options',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-              ],
+            BottomSheetHeader(
+              title: AppLocalizations().tr('clear_options'),
+              icon: Icons.delete_sweep_rounded,
+              color: const Color(0xFFef4444),
             ),
             const SizedBox(height: 20),
 
             // Clear Trend Only option
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFf59e0b).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.show_chart_rounded,
-                  color: Color(0xFFf59e0b),
-                ),
-              ),
-              title: Text(
-                'Clear Trend Only',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              subtitle: Text(
-                'Clears graph history, keeps current values',
-                style: TextStyle(
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  fontSize: 12,
-                ),
-              ),
+            OptionListTile(
+              title: AppLocalizations().tr('clear_trend_only'),
+              subtitle: AppLocalizations().tr('clear_trend_desc'),
+              icon: Icons.show_chart_rounded,
+              color: const Color(0xFFf59e0b),
+              showDividerAfter: true,
               onTap: () {
                 Navigator.pop(context);
                 _clearTrendOnly();
               },
             ),
 
-            const Divider(),
-
             // Clear All option
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFef4444).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.delete_forever_rounded,
-                  color: Color(0xFFef4444),
-                ),
-              ),
-              title: Text(
-                'Clear All',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              subtitle: Text(
-                'Clears everything including current values',
-                style: TextStyle(
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  fontSize: 12,
-                ),
-              ),
+            OptionListTile(
+              title: AppLocalizations().tr('clear_all'),
+              subtitle: AppLocalizations().tr('clear_all_desc'),
+              icon: Icons.delete_forever_rounded,
+              color: const Color(0xFFef4444),
               onTap: () {
                 Navigator.pop(context);
                 _clearAllReadings();
@@ -1172,43 +1271,78 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Control Panel'),
+        title: Text(AppLocalizations().tr('control_panel')),
         actions: [
           // Machine navigation (shown when multiple machines connected)
           if (showNavigation) ...[
             IconButton(
               onPressed: _switchToPreviousMachine,
               icon: const Icon(Icons.chevron_left),
-              tooltip: 'Previous Machine',
+              tooltip: AppLocalizations().tr('previous_machine'),
               iconSize: 20,
               padding: const EdgeInsets.all(8),
             ),
             // Machine number dropdown
             PopupMenuButton<int>(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isConnected
-                            ? Icons.bluetooth_connected
-                            : Icons.bluetooth_disabled,
-                        color: isConnected ? Colors.green : Colors.red,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _currentMachineId ?? '',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Icon(Icons.arrow_drop_down, size: 14),
-                    ],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF1E293B)
+                  : const Color(0xFFFFFFFF),
+              elevation: 8,
+              offset: const Offset(0, 50),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isConnected
+                      ? (Theme.of(context).brightness == Brightness.dark 
+                          ? AppTheme.primaryGreen.withOpacity(0.15) 
+                          : const Color(0xFFE8F5F1))
+                      : (Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.red.withOpacity(0.15) 
+                          : const Color(0xFFFEE9E7)),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isConnected
+                        ? (Theme.of(context).brightness == Brightness.dark 
+                            ? AppTheme.primaryGreen.withOpacity(0.4) 
+                            : const Color(0xFF10B981))
+                        : (Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.red.withOpacity(0.4) 
+                            : const Color(0xFFEF4444)),
+                    width: 1.5,
                   ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isConnected
+                          ? Icons.bluetooth_connected_rounded
+                          : Icons.bluetooth_disabled_rounded,
+                      color: isConnected ? AppTheme.primaryGreen : Colors.red,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _currentMachineId ?? '',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isConnected ? AppTheme.primaryGreen : Colors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.expand_more_rounded,
+                      size: 16,
+                      color: isConnected ? AppTheme.primaryGreen : Colors.red,
+                    ),
+                  ],
                 ),
               ),
               onSelected: (index) {
@@ -1216,45 +1350,142 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   _currentMachineIndex = index;
                   _currentMachineId =
                       _connectedMachineIds[_currentMachineIndex];
-                  _currentMachineName = 'Machine $_currentMachineId';
+                  // _currentMachineName = 'Machine $_currentMachineId'; // Commented - field unused
                 });
               },
-              itemBuilder: (context) =>
-                  List.generate(_connectedMachineIds.length, (index) {
-                    final machineId = _connectedMachineIds[index];
-                    final machineConnected = _bluetoothService
-                        .isMachineConnected(machineId);
-                    return PopupMenuItem<int>(
-                      value: index,
+              itemBuilder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return List.generate(_connectedMachineIds.length, (index) {
+                  final machineId = _connectedMachineIds[index];
+                  final machineConnected = _bluetoothService.isMachineConnected(
+                    machineId,
+                  );
+                  final isCurrentMachine = index == _currentMachineIndex;
+
+                  return PopupMenuItem<int>(
+                    value: index,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isCurrentMachine
+                            ? AppTheme.primaryGreen.withOpacity(0.1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isCurrentMachine
+                              ? AppTheme.primaryGreen.withOpacity(0.3)
+                              : Colors.transparent,
+                          width: 1,
+                        ),
+                      ),
                       child: Row(
                         children: [
-                          if (index == _currentMachineIndex)
-                            const Icon(
-                              Icons.check,
-                              color: AppTheme.primaryGreen,
-                              size: 20,
-                            )
-                          else
-                            const SizedBox(width: 20),
-                          const SizedBox(width: 8),
-                          Text('Machine $machineId'),
-                          const SizedBox(width: 8),
-                          Icon(
-                            machineConnected
-                                ? Icons.bluetooth_connected
-                                : Icons.bluetooth_disabled,
-                            color: machineConnected ? Colors.green : Colors.red,
-                            size: 16,
+                          // Serial number badge
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: machineConnected
+                                  ? AppTheme.primaryGreen.withOpacity(0.15)
+                                  : Colors.grey.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: machineConnected
+                                    ? AppTheme.primaryGreen.withOpacity(0.4)
+                                    : Colors.grey.withOpacity(0.4),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: machineConnected
+                                      ? AppTheme.primaryGreen
+                                      : Colors.grey,
+                                ),
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: 12),
+                          // Machine info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${AppLocalizations().tr('machine')} $machineId',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: machineConnected
+                                            ? AppTheme.primaryGreen
+                                            : Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      machineConnected
+                                          ? AppLocalizations().tr('connected')
+                                          : AppLocalizations().tr('offline'),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: machineConnected
+                                            ? AppTheme.primaryGreen
+                                            : Colors.red,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Check icon for current machine
+                          if (isCurrentMachine)
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                color: AppTheme.primaryGreen,
+                                size: 16,
+                              ),
+                            ),
                         ],
                       ),
-                    );
-                  }),
+                    ),
+                  );
+                });
+              },
             ),
             IconButton(
               onPressed: _switchToNextMachine,
               icon: const Icon(Icons.chevron_right),
-              tooltip: 'Next Machine',
+              tooltip: AppLocalizations().tr('next_machine'),
               iconSize: 20,
               padding: const EdgeInsets.all(8),
             ),
@@ -1273,11 +1504,67 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   // === SECTION 1: INFO (Top) ===
                   Row(
                     children: [
-                      Expanded(child: _buildSectionLabel('INFO')),
+                      Expanded(
+                        child: SectionLabel(
+                          label: AppLocalizations().tr('info'),
+                        ),
+                      ),
+                      // Reports button
+                      CompactActionButton(
+                        icon: Icons.assessment_rounded,
+                        label: AppLocalizations().tr('reports'),
+                        color: const Color(0xFF8B5CF6),
+                        onTap: () {
+                          // Set machine type for local reports
+                          LocalReportsService().setMachineType(
+                            widget.machineType,
+                          );
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const ReportsScreen(defaultLocalMode: true),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
                       // History navigation
-                      if (_readingHistory.length > 1) ...[
-                        _buildHistoryNavigator(),
-                      ],
+                      if (_readingHistory.length > 1)
+                        HistoryNavigator(
+                          historyCount: _readingHistory.length,
+                          historyIndex: _historyIndex,
+                          isViewingHistory: _isViewingHistory,
+                          onPrevious: () {
+                            setState(() {
+                              _isViewingHistory = true;
+                              _historyIndex++;
+                            });
+                          },
+                          onNext: () {
+                            setState(() {
+                              _historyIndex--;
+                              if (_historyIndex == 0) {
+                                _isViewingHistory = false;
+                              }
+                            });
+                          },
+                          onGoToLive: () {
+                            setState(() {
+                              _isViewingHistory = false;
+                              _historyIndex = 0;
+                            });
+                          },
+                        ),
+                      // Clear button
+                      const SizedBox(width: 8),
+                      CompactActionButton(
+                        icon: Icons.restart_alt_rounded,
+                        label: AppLocalizations().tr('clear'),
+                        color: const Color(0xFFef4444),
+                        onTap: _clearCurrentReading,
+                        onLongPress: _showClearOptions,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1285,36 +1572,57 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   const SizedBox(height: 16),
 
                   // === SECTION 2: PRIMARY READINGS (Fat, SNF, CLR) ===
-                  _buildSectionLabel('MILK QUALITY'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      SectionLabel(
+                        label: AppLocalizations().tr('milk_quality'),
+                      ),
+                      // Show timestamp of current reading
+                      Text(
+                        _formatReadingTimestamp(_currentReading.timestamp),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: _isViewingHistory
+                              ? Colors.orange[700]
+                              : Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 170,
                     child: Row(
                       children: [
                         Expanded(
-                          child: _buildPrimaryCard(
-                            'FAT',
-                            _currentReading.fat.toStringAsFixed(2),
-                            '%',
-                            const Color(0xFFf59e0b),
+                          child: PrimaryReadingCard(
+                            title: AppLocalizations().tr('fat').toUpperCase(),
+                            value: _currentReading.fat.toStringAsFixed(2),
+                            unit: '%',
+                            color: const Color(0xFFf59e0b),
+                            isViewingHistory: _isViewingHistory,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _buildPrimaryCard(
-                            'SNF',
-                            _currentReading.snf.toStringAsFixed(2),
-                            '%',
-                            const Color(0xFF3b82f6),
+                          child: PrimaryReadingCard(
+                            title: AppLocalizations().tr('snf').toUpperCase(),
+                            value: _currentReading.snf.toStringAsFixed(2),
+                            unit: '%',
+                            color: const Color(0xFF3b82f6),
+                            isViewingHistory: _isViewingHistory,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _buildPrimaryCard(
-                            'CLR',
-                            _currentReading.clr.toStringAsFixed(1),
-                            '',
-                            const Color(0xFF8b5cf6),
+                          child: PrimaryReadingCard(
+                            title: AppLocalizations().tr('clr').toUpperCase(),
+                            value: _currentReading.clr.toStringAsFixed(1),
+                            unit: '',
+                            color: const Color(0xFF8b5cf6),
+                            isViewingHistory: _isViewingHistory,
                           ),
                         ),
                       ],
@@ -1323,18 +1631,19 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   const SizedBox(height: 16),
 
                   // === SECTION 3: TRANSACTION ===
-                  _buildSectionLabel('TRANSACTION'),
+                  SectionLabel(label: AppLocalizations().tr('transaction')),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 95,
                     child: Row(
                       children: [
                         Expanded(
-                          child: _buildTransactionCard(
-                            'Quantity',
-                            '${_currentReading.quantity.toStringAsFixed(2)}',
-                            'L',
-                            const Color(0xFF3b82f6),
+                          child: TransactionCard(
+                            title: AppLocalizations().tr('quantity'),
+                            value: _currentReading.quantity.toStringAsFixed(2),
+                            unit: 'L',
+                            color: const Color(0xFF3b82f6),
+                            type: TransactionType.quantity,
                           ),
                         ),
                         Padding(
@@ -1344,16 +1653,20 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade500,
+                              color: Theme.of(context).brightness == Brightness.dark 
+                                  ? Colors.grey.shade500 
+                                  : const Color(0xFF9CA3AF),
                             ),
                           ),
                         ),
                         Expanded(
-                          child: _buildTransactionCard(
-                            'Rate',
-                            '₹${_currentReading.rate.toStringAsFixed(2)}',
-                            '/L',
-                            const Color(0xFFf59e0b),
+                          child: TransactionCard(
+                            title: AppLocalizations().tr('rate'),
+                            value:
+                                '₹${_currentReading.rate.toStringAsFixed(2)}',
+                            unit: '/L',
+                            color: const Color(0xFFf59e0b),
+                            type: TransactionType.rate,
                           ),
                         ),
                         Padding(
@@ -1363,49 +1676,63 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade500,
+                              color: Theme.of(context).brightness == Brightness.dark 
+                                  ? Colors.grey.shade500 
+                                  : const Color(0xFF9CA3AF),
                             ),
                           ),
                         ),
-                        Expanded(flex: 2, child: _buildTotalAmountCard()),
+                        Expanded(
+                          flex: 2,
+                          child: TotalAmountCard(
+                            totalAmount: _currentReading.totalAmount,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
 
                   // === SECTION 4: ADDITIONAL PARAMETERS ===
-                  _buildSectionLabel('OTHER PARAMETERS'),
+                  SectionLabel(
+                    label: AppLocalizations().tr('other_parameters'),
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 80,
                     child: Row(
                       children: [
                         Expanded(
-                          child: _buildInfoChip(
-                            'Milk Type',
-                            _currentReading.milkTypeName,
-                            Icons.category,
-                            const Color(0xFF10B981),
+                          child: InfoChip(
+                            title: AppLocalizations().tr('milk_type'),
+                            value: _currentReading.milkTypeName,
+                            icon: Icons.category,
+                            color: const Color(0xFF10B981),
+                            type: InfoChipType.milkType,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildInfoChip(
-                            'Protein',
-                            '${_currentReading.protein.toStringAsFixed(2)}%',
-                            Icons.fitness_center,
-                            const Color(0xFFef4444),
+                          child: InfoChip(
+                            title: AppLocalizations().tr('protein'),
+                            value:
+                                '${_currentReading.protein.toStringAsFixed(2)}%',
+                            icon: Icons.fitness_center,
+                            color: const Color(0xFFef4444),
                             maxValue: 6.0,
+                            type: InfoChipType.protein,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildInfoChip(
-                            'Lactose',
-                            '${_currentReading.lactose.toStringAsFixed(2)}%',
-                            Icons.science,
-                            const Color(0xFFec4899),
+                          child: InfoChip(
+                            title: AppLocalizations().tr('lactose'),
+                            value:
+                                '${_currentReading.lactose.toStringAsFixed(2)}%',
+                            icon: Icons.science,
+                            color: const Color(0xFFec4899),
                             maxValue: 8.0,
+                            type: InfoChipType.lactose,
                           ),
                         ),
                       ],
@@ -1417,32 +1744,38 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     child: Row(
                       children: [
                         Expanded(
-                          child: _buildInfoChip(
-                            'Salt',
-                            '${_currentReading.salt.toStringAsFixed(2)}%',
-                            Icons.grain,
-                            Colors.white,
+                          child: InfoChip(
+                            title: AppLocalizations().tr('salt'),
+                            value:
+                                '${_currentReading.salt.toStringAsFixed(2)}%',
+                            icon: Icons.grain,
+                            color: Colors.white,
                             maxValue: 2.0,
+                            type: InfoChipType.salt,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildInfoChip(
-                            'Water',
-                            '${_currentReading.water.toStringAsFixed(2)}%',
-                            Icons.water_drop,
-                            const Color(0xFF14B8A6),
+                          child: InfoChip(
+                            title: AppLocalizations().tr('water'),
+                            value:
+                                '${_currentReading.water.toStringAsFixed(2)}%',
+                            icon: Icons.water_drop,
+                            color: const Color(0xFF14B8A6),
                             maxValue: 10.0,
+                            type: InfoChipType.water,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildInfoChip(
-                            'Temp',
-                            '${_currentReading.temperature.toStringAsFixed(1)}°C',
-                            Icons.thermostat,
-                            const Color(0xFFf97316),
+                          child: InfoChip(
+                            title: AppLocalizations().tr('temp'),
+                            value:
+                                '${_currentReading.temperature.toStringAsFixed(1)}°C',
+                            icon: Icons.thermostat,
+                            color: const Color(0xFFf97316),
                             maxValue: 50.0,
+                            type: InfoChipType.temp,
                           ),
                         ),
                       ],
@@ -1451,14 +1784,20 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   const SizedBox(height: 16),
 
                   // === SECTION 5: LIVE GRAPH (Bottom) ===
-                  _buildSectionLabel('LIVE TREND (${_getTodayDateString()})'),
+                  SectionLabel(
+                    label:
+                        '${AppLocalizations().tr('live_trend')} (${_getTodayDateString()})',
+                  ),
                   const SizedBox(height: 8),
-                  _buildLiveGraphCard(),
-                  
+                  LiveTrendGraph(readingHistory: _readingHistory),
+
                   // === TODAY'S STATISTICS ===
                   if (_todayTestCount > 0) ...[
                     const SizedBox(height: 16),
-                    _buildSectionLabel('TODAY\'S STATS (${_getTodayDateString()})'),
+                    SectionLabel(
+                      label:
+                          '${AppLocalizations().tr('todays_stats')} (${_getTodayDateString()})',
+                    ),
                     const SizedBox(height: 8),
                     _buildTodayStatsCard(),
                   ],
@@ -1474,855 +1813,24 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     );
   }
 
-  Widget _buildLiveGraphCard() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Define parameter colors
-    const fatColor = Color(0xFFf59e0b);
-    const snfColor = Color(0xFF3b82f6);
-    const clrColor = Color(0xFF8b5cf6);
-    const waterColor = Color(0xFF14B8A6);
-
-    // Create line data for each parameter
-    List<FlSpot> fatSpots = [];
-    List<FlSpot> snfSpots = [];
-    List<FlSpot> clrSpots = [];
-    List<FlSpot> waterSpots = [];
-
-    double maxValue = 10; // Default minimum scale
-
-    for (int i = 0; i < _readingHistory.length; i++) {
-      final reading = _readingHistory[i];
-      fatSpots.add(FlSpot(i.toDouble(), reading.fat));
-      snfSpots.add(FlSpot(i.toDouble(), reading.snf));
-      clrSpots.add(FlSpot(i.toDouble(), reading.clr));
-      waterSpots.add(FlSpot(i.toDouble(), reading.water));
-
-      // Track max value for auto-scaling
-      if (reading.fat > maxValue) maxValue = reading.fat;
-      if (reading.snf > maxValue) maxValue = reading.snf;
-      if (reading.clr > maxValue) maxValue = reading.clr;
-      if (reading.water > maxValue) maxValue = reading.water;
-    }
-
-    // Round up to next nice interval (10, 20, 30, 40, 50, etc.)
-    final double maxY = ((maxValue / 10).ceil() * 10).toDouble().clamp(10, 100);
-    final double interval = maxY / 10;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      height: 180,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-              : [Colors.white, Colors.grey.shade50],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Main content
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                // Legend row
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildLegendItem('FAT', fatColor),
-                      const SizedBox(width: 16),
-                      _buildLegendItem('SNF', snfColor),
-                      const SizedBox(width: 16),
-                      _buildLegendItem('CLR', clrColor),
-                      const SizedBox(width: 16),
-                      _buildLegendItem('Water', waterColor),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Graph
-                Expanded(
-                  child: LineChart(
-                          LineChartData(
-                            gridData: FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                              horizontalInterval: interval,
-                              getDrawingHorizontalLine: (value) => FlLine(
-                                color: isDark
-                                    ? Colors.grey.shade800
-                                    : Colors.grey.shade200,
-                                strokeWidth: 1,
-                              ),
-                            ),
-                            titlesData: FlTitlesData(
-                              show: true,
-                              rightTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
-                              ),
-                              topTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
-                              ),
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  interval: 1,
-                                  reservedSize: 22,
-                                  getTitlesWidget: (value, meta) {
-                                    final index = value.toInt();
-                                    // Show mark for every reading point
-                                    if (index >= 0 &&
-                                        index < _readingHistory.length) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          '${index + 1}',
-                                          style: TextStyle(
-                                            color: isDark
-                                                ? Colors.grey.shade500
-                                                : Colors.grey.shade600,
-                                            fontSize: 8,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                ),
-                              ),
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  interval: interval,
-                                  reservedSize: 32,
-                                  getTitlesWidget: (value, meta) => Text(
-                                    value.toInt().toString(),
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? Colors.grey.shade500
-                                          : Colors.grey.shade600,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            borderData: FlBorderData(show: false),
-                            minX: 0,
-                            maxX: (_readingHistory.length - 1).toDouble().clamp(
-                              0,
-                              19,
-                            ),
-                            minY: 0,
-                            maxY: maxY,
-                            lineBarsData: [
-                              _buildLineChartBarData(fatSpots, fatColor),
-                              _buildLineChartBarData(snfSpots, snfColor),
-                              _buildLineChartBarData(clrSpots, clrColor),
-                              _buildLineChartBarData(waterSpots, waterColor),
-                            ],
-                            lineTouchData: LineTouchData(
-                              enabled: true,
-                              touchTooltipData: LineTouchTooltipData(
-                                getTooltipColor: (touchedSpot) => isDark
-                                    ? const Color(0xFF1E293B)
-                                    : Colors.white,
-                                tooltipBorder: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
-                                ),
-                                getTooltipItems: (touchedSpots) {
-                                  return touchedSpots.map((spot) {
-                                    String label = '';
-                                    double actualValue = spot.y;
-                                    if (spot.barIndex == 0) {
-                                      label = 'FAT';
-                                    } else if (spot.barIndex == 1) {
-                                      label = 'SNF';
-                                    } else if (spot.barIndex == 2) {
-                                      label = 'CLR';
-                                    } else if (spot.barIndex == 3) {
-                                      label = 'Water';
-                                    }
-                                    return LineTooltipItem(
-                                      '$label: ${actualValue.toStringAsFixed(2)}',
-                                      TextStyle(
-                                        color: spot.bar.color,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 10,
-                                      ),
-                                    );
-                                  }).toList();
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: color.withOpacity(0.5), blurRadius: 4),
-            ],
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHistoryNavigator() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final historyCount = _readingHistory.length;
-    final currentPosition = historyCount - _historyIndex; // 1-based position from oldest
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        color: _isViewingHistory
-            ? const Color(0xFF3b82f6).withOpacity(0.15)
-            : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _isViewingHistory
-              ? const Color(0xFF3b82f6).withOpacity(0.5)
-              : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Previous button (go to older)
-          GestureDetector(
-            onTap: _historyIndex < historyCount - 1
-                ? () {
-                    setState(() {
-                      _isViewingHistory = true;
-                      _historyIndex++;
-                    });
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: _historyIndex < historyCount - 1
-                    ? const Color(0xFF3b82f6).withOpacity(0.2)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.chevron_left_rounded,
-                size: 18,
-                color: _historyIndex < historyCount - 1
-                    ? const Color(0xFF3b82f6)
-                    : Colors.grey.shade400,
-              ),
-            ),
-          ),
-          
-          // Position indicator
-          GestureDetector(
-            onTap: _isViewingHistory
-                ? () {
-                    setState(() {
-                      _isViewingHistory = false;
-                      _historyIndex = 0;
-                    });
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_isViewingHistory) ...[
-                    Icon(
-                      Icons.history_rounded,
-                      size: 12,
-                      color: const Color(0xFF3b82f6),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  Text(
-                    _isViewingHistory ? '$currentPosition/$historyCount' : 'LIVE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: _isViewingHistory
-                          ? const Color(0xFF3b82f6)
-                          : const Color(0xFF10B981),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          // Next button (go to newer / live)
-          GestureDetector(
-            onTap: _historyIndex > 0
-                ? () {
-                    setState(() {
-                      _historyIndex--;
-                      if (_historyIndex == 0) {
-                        _isViewingHistory = false;
-                      }
-                    });
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: _historyIndex > 0
-                    ? const Color(0xFF3b82f6).withOpacity(0.2)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: _historyIndex > 0
-                    ? const Color(0xFF3b82f6)
-                    : Colors.grey.shade400,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  LineChartBarData _buildLineChartBarData(List<FlSpot> spots, Color color) {
-    return LineChartBarData(
-      spots: spots,
-      isCurved: true,
-      color: color,
-      barWidth: 2,
-      isStrokeCapRound: true,
-      dotData: FlDotData(
-        show: true,
-        getDotPainter: (spot, percent, barData, index) {
-          // Only show dot for the last point (latest reading)
-          if (index == spots.length - 1) {
-            return FlDotCirclePainter(
-              radius: 4,
-              color: color,
-              strokeWidth: 2,
-              strokeColor: Colors.white,
-            );
-          }
-          return FlDotCirclePainter(
-            radius: 0,
-            color: Colors.transparent,
-            strokeWidth: 0,
-            strokeColor: Colors.transparent,
-          );
-        },
-      ),
-      belowBarData: BarAreaData(show: true, color: color.withOpacity(0.1)),
-    );
-  }
-
   String _getTodayDateString() {
     final now = DateTime.now();
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    final l10n = AppLocalizations();
+    final months = [
+      l10n.tr('jan'),
+      l10n.tr('feb'),
+      l10n.tr('mar'),
+      l10n.tr('apr'),
+      l10n.tr('may'),
+      l10n.tr('jun'),
+      l10n.tr('jul'),
+      l10n.tr('aug'),
+      l10n.tr('sep'),
+      l10n.tr('oct'),
+      l10n.tr('nov'),
+      l10n.tr('dec'),
+    ];
     return '${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]} ${now.year}';
-  }
-
-  Widget _buildSectionLabel(String label) {
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 16,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryGreen,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey[600],
-            letterSpacing: 1.2,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPrimaryCard(
-    String title,
-    String value,
-    String unit,
-    Color color,
-  ) {
-    final double numValue = double.tryParse(value) ?? 0.0;
-    final double maxValue = title == 'CLR' ? 100 : 15;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isActive = numValue > 0;
-
-    // Icon based on title
-    IconData icon = title == 'FAT'
-        ? Icons.opacity_rounded
-        : title == 'SNF'
-            ? Icons.grain_rounded
-            : Icons.colorize_rounded;
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: numValue),
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedValue, child) {
-        final progress = (animatedValue / maxValue).clamp(0.0, 1.0);
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: isActive
-                  ? [
-                      color.withValues(alpha: isDark ? 0.25 : 0.15),
-                      color.withValues(alpha: isDark ? 0.1 : 0.05),
-                    ]
-                  : isDark
-                      ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                      : [Colors.white, Colors.grey.shade50],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isActive
-                  ? color.withValues(alpha: 0.7)
-                  : color.withValues(alpha: 0.2),
-              width: isActive ? 2.5 : 1.5,
-            ),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                      spreadRadius: 0,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Stack(
-            children: [
-              // Top glow bar
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: isActive ? 1.0 : 0.0,
-                  child: Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          color,
-                          Colors.transparent,
-                        ],
-                      ),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(18),
-                        topRight: Radius.circular(18),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Main content
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Title with icon badge
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? (isActive ? color.withValues(alpha: 0.3) : const Color(0xFF374151))
-                            : (isActive ? color.withValues(alpha: 0.2) : Colors.grey.shade200),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isActive
-                              ? color.withValues(alpha: 0.5)
-                              : (isDark ? Colors.grey.shade600 : Colors.grey.shade300),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            icon,
-                            size: 12,
-                            color: isActive
-                                ? (isDark ? Colors.white : color)
-                                : (isDark ? Colors.grey.shade300 : Colors.grey.shade600),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            unit.isNotEmpty ? '$title($unit)' : title,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: isActive
-                                  ? (isDark ? Colors.white : color)
-                                  : (isDark ? Colors.grey.shade300 : Colors.grey.shade600),
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Large centered value with circular progress
-                    Expanded(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Outer glow ring when active
-                          if (isActive)
-                            Container(
-                              width: 90,
-                              height: 90,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(
-                                  colors: [
-                                    color.withValues(alpha: 0.15),
-                                    color.withValues(alpha: 0.0),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          // Background ring
-                          SizedBox(
-                            width: 75,
-                            height: 75,
-                            child: CircularProgressIndicator(
-                              value: 1.0,
-                              strokeWidth: 6,
-                              backgroundColor: isDark
-                                  ? const Color(0xFF374151)
-                                  : Colors.grey.shade200,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                isDark ? const Color(0xFF374151) : Colors.grey.shade200,
-                              ),
-                            ),
-                          ),
-                          // Progress ring
-                          SizedBox(
-                            width: 75,
-                            height: 75,
-                            child: CircularProgressIndicator(
-                              value: progress,
-                              strokeWidth: 6,
-                              strokeCap: StrokeCap.round,
-                              backgroundColor: Colors.transparent,
-                              valueColor: AlwaysStoppedAnimation<Color>(color),
-                            ),
-                          ),
-                          // Center value
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                animatedValue.toStringAsFixed(2),
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  color: isActive
-                                      ? (isDark ? Colors.white : color)
-                                      : (isDark ? Colors.grey.shade600 : Colors.grey.shade400),
-                                  letterSpacing: -1,
-                                  shadows: isActive
-                                      ? [
-                                          Shadow(
-                                            color: color.withValues(alpha: 0.4),
-                                            blurRadius: 10,
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    // Status indicator
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? const Color(0xFF10B981).withValues(alpha: 0.2)
-                            : Colors.grey.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isActive ? const Color(0xFF10B981) : Colors.grey,
-                              boxShadow: isActive
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(0xFF10B981).withValues(alpha: 0.6),
-                                        blurRadius: 6,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isActive ? 'LIVE' : 'IDLE',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              color: isActive ? const Color(0xFF10B981) : Colors.grey,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildInfoChip(
-    String title,
-    String value,
-    IconData icon,
-    Color color, {
-    double maxValue = 10.0,
-  }) {
-    // Extract numeric value for progress calculation
-    final numericStr = value.replaceAll(RegExp(r'[^0-9.]'), '');
-    final double numValue = double.tryParse(numericStr) ?? 0.0;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isActive = numValue > 0;
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: numValue),
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedValue, child) {
-        final progress = (animatedValue / maxValue).clamp(0.0, 1.0);
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                  : [Colors.white, Colors.grey.shade50],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isActive
-                  ? color.withOpacity(0.3)
-                  : Colors.grey.withOpacity(0.2),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isActive
-                    ? color.withOpacity(0.15)
-                    : Colors.black.withOpacity(0.05),
-                blurRadius: isActive ? 10 : 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header row with icon and title
-                Row(
-                  children: [
-                    // Animated icon container
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(isActive ? 0.15 : 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        icon,
-                        color: isActive ? color : color.withOpacity(0.5),
-                        size: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          letterSpacing: 0.5,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                // Animated value
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 200),
-                  style: TextStyle(
-                    fontSize: isActive ? 16 : 14,
-                    fontWeight: FontWeight.w800,
-                    color: isActive
-                        ? color
-                        : (isDark
-                              ? Colors.grey.shade500
-                              : Colors.grey.shade400),
-                  ),
-                  child: Text(
-                    title == 'Milk Type'
-                        ? value
-                        : (title == 'Temp'
-                              ? '${animatedValue.toStringAsFixed(1)}°C'
-                              : '${animatedValue.toStringAsFixed(2)}%'),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Animated line progress indicator
-                Stack(
-                  children: [
-                    // Background track
-                    Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF374151)
-                            : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    // Animated progress bar
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOutCubic,
-                      height: 4,
-                      width: double.infinity,
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: title == 'Milk Type' ? 1.0 : progress,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [color, color.withOpacity(0.7)],
-                            ),
-                            borderRadius: BorderRadius.circular(2),
-                            boxShadow: isActive
-                                ? [
-                                    BoxShadow(
-                                      color: color.withOpacity(0.5),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   // Format machine ID: "Mm00200" → "m200", "Mm020" → "m20", "M12345" → "12345"
@@ -2343,6 +1851,27 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     return result;
   }
 
+  // Format reading timestamp for display
+  String _formatReadingTimestamp(DateTime? timestamp) {
+    if (timestamp == null) return '--';
+    final now = DateTime.now();
+    final isToday =
+        timestamp.year == now.year &&
+        timestamp.month == now.month &&
+        timestamp.day == now.day;
+
+    final timeStr =
+        '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+
+    if (isToday) {
+      return '${AppLocalizations().tr('today')} $timeStr';
+    } else {
+      final dateStr =
+          '${timestamp.day.toString().padLeft(2, '0')}/${timestamp.month.toString().padLeft(2, '0')}';
+      return '$dateStr $timeStr';
+    }
+  }
+
   // Format farmer ID: "00310" → "310", "000000" → "0"
   String _formatFarmerId(String id) {
     final result = id.replaceFirst(RegExp(r'^0+'), '');
@@ -2350,358 +1879,99 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   }
 
   Widget _buildTodayStatsCard() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-              : [Colors.white, Colors.grey.shade50],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-          width: 1,
-        ),
-      ),
+    return GradientCard(
       child: Column(
         children: [
           // Summary row (Tests, Quantity, Amount)
           Row(
             children: [
-              _buildStatItem(
-                'Tests',
-                '$_todayTestCount',
-                Icons.assignment_rounded,
-                const Color(0xFF3b82f6),
-                isDark,
+              StatItem(
+                label: AppLocalizations().tr('tests'),
+                value: '$_todayTestCount',
+                icon: Icons.assignment_rounded,
+                color: const Color(0xFF3b82f6),
               ),
-              _buildStatDivider(isDark),
-              _buildStatItem(
-                'Quantity',
-                '${_totalQuantity.toStringAsFixed(1)}L',
-                Icons.water_drop_rounded,
-                const Color(0xFF06b6d4),
-                isDark,
+              const StatDivider(),
+              StatItem(
+                label: AppLocalizations().tr('quantity'),
+                value: '${_totalQuantity.toStringAsFixed(1)}L',
+                icon: Icons.water_drop_rounded,
+                color: const Color(0xFF06b6d4),
               ),
-              _buildStatDivider(isDark),
-              _buildStatItem(
-                'Amount',
-                '₹${_totalAmount.toStringAsFixed(0)}',
-                Icons.currency_rupee_rounded,
-                const Color(0xFF10B981),
-                isDark,
+              const StatDivider(),
+              StatItem(
+                label: AppLocalizations().tr('amount'),
+                value: '₹${_totalAmount.toStringAsFixed(0)}',
+                icon: Icons.currency_rupee_rounded,
+                color: const Color(0xFF10B981),
               ),
             ],
           ),
-          
+
           const SizedBox(height: 12),
-          Divider(height: 1, color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+          const ThemedDivider(),
           const SizedBox(height: 12),
-          
+
           // Averages row (Avg FAT, Avg SNF)
           Row(
             children: [
-              _buildStatItem(
-                'Avg FAT',
-                _avgFat.toStringAsFixed(2),
-                Icons.opacity_rounded,
-                const Color(0xFFf59e0b),
-                isDark,
-                subtitle: '${_lowestFat.toStringAsFixed(1)} - ${_highestFat.toStringAsFixed(1)}',
+              StatItem(
+                label: AppLocalizations().tr('avg_fat'),
+                value: _avgFat.toStringAsFixed(2),
+                icon: Icons.opacity_rounded,
+                color: const Color(0xFFf59e0b),
+                subtitle:
+                    '${_lowestFat.toStringAsFixed(1)} - ${_highestFat.toStringAsFixed(1)}',
               ),
-              _buildStatDivider(isDark),
-              _buildStatItem(
-                'Avg SNF',
-                _avgSnf.toStringAsFixed(2),
-                Icons.grain_rounded,
-                const Color(0xFF8b5cf6),
-                isDark,
-                subtitle: '${_lowestSnf.toStringAsFixed(1)} - ${_highestSnf.toStringAsFixed(1)}',
+              const StatDivider(),
+              StatItem(
+                label: AppLocalizations().tr('avg_snf'),
+                value: _avgSnf.toStringAsFixed(2),
+                icon: Icons.grain_rounded,
+                color: const Color(0xFF8b5cf6),
+                subtitle:
+                    '${_lowestSnf.toStringAsFixed(1)} - ${_highestSnf.toStringAsFixed(1)}',
               ),
             ],
           ),
-          
+
           const SizedBox(height: 12),
-          Divider(height: 1, color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+          const ThemedDivider(),
           const SizedBox(height: 12),
-          
+
           // Best and Worst row
           Row(
             children: [
-              // Best farmer
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFF10B981).withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(
-                              Icons.emoji_events_rounded,
-                              size: 14,
-                              color: Color(0xFF10B981),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Best Quality',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF10B981),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_bestReading != null) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.person_rounded, size: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Farmer ${_formatFarmerId(_bestReading!.farmerId)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            _buildMiniStat('FAT', _bestReading!.fat.toStringAsFixed(1), const Color(0xFFf59e0b), isDark),
-                            const SizedBox(width: 8),
-                            _buildMiniStat('SNF', _bestReading!.snf.toStringAsFixed(1), const Color(0xFF8b5cf6), isDark),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'm${_formatMachineId(_bestMachineId ?? '')}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-                          ),
-                        ),
-                      ] else ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'No data yet',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+              QualityHighlightCard(
+                title: AppLocalizations().tr('best_quality'),
+                icon: Icons.emoji_events_rounded,
+                color: const Color(0xFF10B981),
+                farmerLabel: _bestReading != null
+                    ? '${AppLocalizations().tr('farmer')} ${_formatFarmerId(_bestReading!.farmerId)}'
+                    : null,
+                farmerId: _bestReading?.farmerId,
+                fatValue: _bestReading?.fat,
+                snfValue: _bestReading?.snf,
+                machineId: _bestMachineId != null
+                    ? 'm${_formatMachineId(_bestMachineId!)}'
+                    : null,
               ),
-              
               const SizedBox(width: 10),
-              
-              // Worst farmer
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFef4444).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFFef4444).withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFef4444).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(
-                              Icons.trending_down_rounded,
-                              size: 14,
-                              color: Color(0xFFef4444),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Needs Improvement',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFFef4444),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_worstReading != null) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.person_rounded, size: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Farmer ${_formatFarmerId(_worstReading!.farmerId)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            _buildMiniStat('FAT', _worstReading!.fat.toStringAsFixed(1), const Color(0xFFf59e0b), isDark),
-                            const SizedBox(width: 8),
-                            _buildMiniStat('SNF', _worstReading!.snf.toStringAsFixed(1), const Color(0xFF8b5cf6), isDark),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'm${_formatMachineId(_worstMachineId ?? '')}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-                          ),
-                        ),
-                      ] else ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'No data yet',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+              QualityHighlightCard(
+                title: AppLocalizations().tr('needs_improvement'),
+                icon: Icons.trending_down_rounded,
+                color: const Color(0xFFef4444),
+                farmerLabel: _worstReading != null
+                    ? '${AppLocalizations().tr('farmer')} ${_formatFarmerId(_worstReading!.farmerId)}'
+                    : null,
+                farmerId: _worstReading?.farmerId,
+                fatValue: _worstReading?.fat,
+                snfValue: _worstReading?.snf,
+                machineId: _worstMachineId != null
+                    ? 'm${_formatMachineId(_worstMachineId!)}'
+                    : null,
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon, Color color, bool isDark, {String? subtitle}) {
-    return Expanded(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 16, color: color),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 8,
-                color: color.withOpacity(0.8),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatDivider(bool isDark) {
-    return Container(
-      width: 1,
-      height: 45,
-      color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
-    );
-  }
-
-  Widget _buildMiniStat(String label, String value, Color color, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label ',
-            style: TextStyle(
-              fontSize: 8,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 9,
-              color: isDark ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
           ),
         ],
       ),
@@ -2709,619 +1979,52 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   }
 
   Widget _buildFarmerCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF3b82f6).withOpacity(0.08),
+        color: isDark 
+            ? const Color(0xFF3b82f6).withOpacity(0.08)
+            : const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF3b82f6).withOpacity(0.3), width: 1),
+        border: Border.all(
+          color: isDark 
+              ? const Color(0xFF3b82f6).withOpacity(0.3)
+              : const Color(0xFFBFDBFE),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
-          // TESTS (first - most important metric)
           const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3b82f6).withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.assignment_rounded, color: Color(0xFF3b82f6), size: 16),
+          FarmerInfoItem(
+            label: AppLocalizations().tr('tests').toUpperCase(),
+            value:
+                '${_currentMachineId != null ? (_machineTestCounts[_currentMachineId] ?? 0) : 0}',
+            icon: Icons.assignment_rounded,
+            color: const Color(0xFF3b82f6),
+            showDivider: false,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'TESTS',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  '${_currentMachineId != null ? (_machineTestCounts[_currentMachineId] ?? 0) : 0}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF3b82f6),
-                    letterSpacing: 0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ],
-            ),
+          FarmerInfoItem(
+            label: AppLocalizations().tr('machine').toUpperCase(),
+            value: _formatMachineId(_currentReading.machineId),
+            icon: Icons.precision_manufacturing,
+            color: Colors.indigo,
           ),
-          // MACHINE ID (second - device info)
-          Container(height: 25, width: 1, color: Colors.indigo.withOpacity(0.3)),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.indigo.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.precision_manufacturing,
-              color: Colors.indigo,
-              size: 16,
-            ),
+          FarmerInfoItem(
+            label: AppLocalizations().tr('farmer').toUpperCase(),
+            value: _formatFarmerId(_currentReading.farmerId),
+            icon: Icons.person,
+            color: Colors.teal,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'MACHINE',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  _formatMachineId(_currentReading.machineId),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.indigo,
-                    letterSpacing: 0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ],
-            ),
-          ),
-          // FARMER ID (third - person info)
-          Container(height: 25, width: 1, color: Colors.teal.withOpacity(0.3)),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.teal.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person, color: Colors.teal, size: 16),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'FARMER',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  _formatFarmerId(_currentReading.farmerId),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.teal,
-                    letterSpacing: 0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ],
-            ),
-          ),
-          // BONUS (fourth - earnings info)
-          Container(height: 25, width: 1, color: Colors.purple.withOpacity(0.3)),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.purple.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.card_giftcard,
-              color: Colors.purple,
-              size: 16,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'BONUS',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  '₹${_currentReading.incentive.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.purple,
-                    letterSpacing: 0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ],
-            ),
+          FarmerInfoItem(
+            label: AppLocalizations().tr('bonus').toUpperCase(),
+            value: '₹${_currentReading.incentive.toStringAsFixed(2)}',
+            icon: Icons.card_giftcard,
+            color: Colors.purple,
           ),
           const SizedBox(width: 12),
         ],
       ),
-    );
-  }
-
-  Widget _buildTransactionCard(
-    String title,
-    String value,
-    String unit,
-    Color color,
-  ) {
-    final numericStr = value.replaceAll(RegExp(r'[^0-9.]'), '');
-    final double numValue = double.tryParse(numericStr) ?? 0.0;
-    final double maxValue = title == 'Quantity' ? 50 : 100;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isActive = numValue > 0;
-
-    // Icon based on title
-    IconData icon = title == 'Quantity' ? Icons.water_drop_rounded : Icons.currency_rupee_rounded;
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: numValue),
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedValue, child) {
-        final progress = (animatedValue / maxValue).clamp(0.0, 1.0);
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isActive
-                  ? [
-                      color.withValues(alpha: isDark ? 0.2 : 0.1),
-                      color.withValues(alpha: isDark ? 0.1 : 0.05),
-                    ]
-                  : isDark
-                      ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                      : [Colors.white, Colors.grey.shade50],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isActive
-                  ? color.withValues(alpha: 0.6)
-                  : color.withValues(alpha: 0.2),
-              width: isActive ? 2 : 1,
-            ),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                      spreadRadius: 0,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Stack(
-            children: [
-              // Glow effect at top
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: isActive ? 1.0 : 0.0,
-                  child: Container(
-                    height: 3,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          color.withValues(alpha: 0.8),
-                          Colors.transparent,
-                        ],
-                      ),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Main content
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Title with icon
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          child: Icon(
-                            icon,
-                            key: ValueKey(isActive),
-                            size: 10,
-                            color: isActive
-                                ? color
-                                : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          title.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
-                            color: isActive
-                                ? color
-                                : (isDark ? Colors.grey.shade500 : Colors.grey.shade500),
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    // Large centered value
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            value.contains('₹')
-                                ? '₹${animatedValue.toStringAsFixed(2)}'
-                                : animatedValue.toStringAsFixed(2),
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: isActive
-                                  ? (isDark ? Colors.white : color)
-                                  : (isDark ? Colors.grey.shade600 : Colors.grey.shade400),
-                              letterSpacing: -0.5,
-                              shadows: isActive
-                                  ? [
-                                      Shadow(
-                                        color: color.withValues(alpha: 0.3),
-                                        blurRadius: 8,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                          if (unit.isNotEmpty)
-                            Text(
-                              unit,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isActive
-                                    ? color.withValues(alpha: 0.8)
-                                    : (isDark ? Colors.grey.shade600 : Colors.grey.shade500),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    // Progress indicator with percentage
-                    Column(
-                      children: [
-                        // Progress bar
-                        Container(
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF374151)
-                                : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: Stack(
-                              children: [
-                                FractionallySizedBox(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: progress,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          color.withValues(alpha: 0.6),
-                                          color,
-                                        ],
-                                      ),
-                                      boxShadow: isActive
-                                          ? [
-                                              BoxShadow(
-                                                color: color.withValues(alpha: 0.5),
-                                                blurRadius: 6,
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTotalAmountCard() {
-    final double totalAmount = _currentReading.totalAmount;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isActive = totalAmount > 0;
-    const color = Color(0xFF10B981);
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: totalAmount),
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedValue, child) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isActive
-                  ? (isDark
-                      ? [const Color(0xFF1E293B), color.withValues(alpha: 0.15)]
-                      : [Colors.white, color.withValues(alpha: 0.1)])
-                  : (isDark
-                      ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                      : [Colors.white, Colors.grey.shade50]),
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isActive
-                  ? color.withValues(alpha: 0.6)
-                  : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-              width: isActive ? 2 : 1,
-            ),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                      spreadRadius: 2,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Stack(
-            children: [
-              // Glowing accent bar at top (only when active)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: isActive ? 1.0 : 0.0,
-                  child: Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [color, color.withValues(alpha: 0.6), color],
-                      ),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(14),
-                        topRight: Radius.circular(14),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.6),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Content
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Title with icon
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? color.withValues(alpha: 0.2)
-                                : (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: Icon(
-                              Icons.account_balance_wallet,
-                              key: ValueKey(isActive),
-                              color: isActive
-                                  ? color
-                                  : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-                              size: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 300),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isActive
-                                ? (isDark ? Colors.grey.shade300 : Colors.grey.shade600)
-                                : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          ),
-                          child: const Text('TOTAL'),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    // Animated amount
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        style: TextStyle(
-                          fontSize: isActive ? 24 : 20,
-                          fontWeight: FontWeight.w900,
-                          color: isActive
-                              ? color
-                              : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-                        ),
-                        child: Text('₹${animatedValue.toStringAsFixed(2)}'),
-                      ),
-                    ),
-                    const Spacer(),
-                    // Status badge
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isActive ? 10 : 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? color.withOpacity(0.15)
-                            : Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            width: isActive ? 8 : 6,
-                            height: isActive ? 8 : 6,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isActive ? color : Colors.grey,
-                              boxShadow: isActive
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withOpacity(0.6),
-                                        blurRadius: 6,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isActive ? 'PAID' : 'PENDING',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              color: isActive ? color : Colors.grey,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -3337,13 +2040,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF000000).withOpacity(0.08),
+            blurRadius: isDark ? 20 : 12,
+            offset: isDark ? const Offset(0, 4) : const Offset(0, 2),
+            spreadRadius: isDark ? 0 : -2,
           ),
         ],
         border: Border.all(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+          color: isDark ? Colors.grey.shade800 : const Color(0xFFE5E7EB),
           width: 1,
         ),
       ),
@@ -3351,36 +2055,32 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildTestButton(),
-          _buildNavButton(
-            'OK',
-            Icons.done_rounded,
-            const Color(0xFF3b82f6),
-            _handleOk,
+          ActionButton(
+            label: AppLocalizations().tr('ok'),
+            icon: Icons.done_rounded,
+            color: const Color(0xFF3b82f6),
+            onTap: _handleOk,
             onLongPress: () => _showMachineSelector('OK'),
             showAllIndicator: _connectedMachineIds.length > 1,
+            isAllMode: _testAllMachines,
           ),
-          _buildNavButton(
-            'Cancel',
-            Icons.close_rounded,
-            const Color(0xFFf59e0b),
-            _handleCancel,
+          ActionButton(
+            label: AppLocalizations().tr('cancel'),
+            icon: Icons.close_rounded,
+            color: const Color(0xFFf59e0b),
+            onTap: _handleCancel,
             onLongPress: () => _showMachineSelector('Cancel'),
             showAllIndicator: _connectedMachineIds.length > 1,
+            isAllMode: _testAllMachines,
           ),
-          _buildNavButton(
-            'Clean',
-            Icons.opacity_rounded,
-            const Color(0xFF8b5cf6),
-            _handleClean,
+          ActionButton(
+            label: AppLocalizations().tr('clean'),
+            icon: Icons.opacity_rounded,
+            color: const Color(0xFF8b5cf6),
+            onTap: _handleClean,
             onLongPress: () => _showMachineSelector('Clean'),
             showAllIndicator: _connectedMachineIds.length > 1,
-          ),
-          _buildNavButton(
-            'Clear',
-            Icons.restart_alt_rounded,
-            const Color(0xFFef4444),
-            _clearCurrentReading,
-            onLongPress: _showClearOptions,
+            isAllMode: _testAllMachines,
           ),
         ],
       ),
@@ -3388,187 +2088,27 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   }
 
   Widget _buildTestButton() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final color = _isTestRunning
         ? const Color(0xFFf59e0b)
         : const Color(0xFF10B981);
-    final isDisabled = _isTestRunning;
-    final label = _isTestRunning ? '${_testElapsedSeconds}s' : 'Test';
+    final label = _isTestRunning
+        ? '${_testElapsedSeconds}s'
+        : AppLocalizations().tr('test');
     final icon = _isTestRunning
         ? Icons.hourglass_top_rounded
         : Icons.play_arrow_rounded;
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: _isTestRunning ? null : _handleTest,
-        onLongPress: _isTestRunning ? null : _showTestMachineSelector,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isDisabled
-                          ? (isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade100)
-                          : color.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: _isTestRunning
-                        ? MilkTestAnimation(
-                            primaryColor: color,
-                            size: 44,
-                          )
-                        : Icon(
-                            icon,
-                            color: isDisabled ? Colors.grey : color,
-                            size: 24,
-                          ),
-                  ),
-                  // Indicator for "Test All" mode
-                  if (_testAllMachines && !_isTestRunning && _connectedMachineIds.length > 1)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDark
-                                ? const Color(0xFF1E1E1E)
-                                : Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'A',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: isDisabled
-                      ? Colors.grey
-                      : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavButton(
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback? onTap, {
-    VoidCallback? onLongPress,
-    bool showAllIndicator = false,
-  }) {
-    final isDisabled = onTap == null;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isDisabled
-                          ? (isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade100)
-                          : color.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: isDisabled ? Colors.grey : color,
-                      size: 24,
-                    ),
-                  ),
-                  // "A" indicator for "All Machines" mode
-                  if (showAllIndicator && _testAllMachines)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDark
-                                ? const Color(0xFF1E1E1E)
-                                : Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'A',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: isDisabled
-                      ? Colors.grey
-                      : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return ActionButton(
+      label: label,
+      icon: icon,
+      color: color,
+      onTap: _isTestRunning ? null : _handleTest,
+      onLongPress: _isTestRunning ? null : _showTestMachineSelector,
+      showAllIndicator: _connectedMachineIds.length > 1,
+      isAllMode: _testAllMachines && !_isTestRunning,
+      customIcon: _isTestRunning
+          ? MilkTestAnimation(primaryColor: color, size: 44)
+          : null,
     );
   }
 }

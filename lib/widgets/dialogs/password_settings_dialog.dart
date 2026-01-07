@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../l10n/app_localizations.dart';
 import '../../utils/utils.dart';
-import '../ui/custom_button.dart';
-import '../ui/custom_snackbar.dart';
-import '../ui/info_container.dart';
+import '../ui/ui.dart';
 import 'otp_verification_dialog.dart';
 
 /// Password Settings Dialog for updating machine passwords
@@ -258,7 +257,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: 'Close',
+                    text: AppLocalizations().tr('close'),
                     type: CustomButtonType.outline,
                     onPressed: () => Navigator.of(context).pop(false),
                   ),
@@ -292,7 +291,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Password Settings',
+                AppLocalizations().tr('password_settings'),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -347,20 +346,20 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
       case 'pending':
         bgColor = AppTheme.primaryAmber.withOpacity(0.15);
         textColor = AppTheme.primaryAmber;
-        label = 'Pending';
+        label = AppLocalizations().tr('pending');
         icon = Icons.schedule;
         break;
       case 'downloaded':
         bgColor = AppTheme.primaryGreen.withOpacity(0.15);
         textColor = AppTheme.primaryGreen;
-        label = 'Downloaded';
+        label = AppLocalizations().tr('downloaded');
         icon = Icons.check_circle_outline;
         break;
       case 'none':
       default:
         bgColor = AppTheme.textSecondary.withOpacity(0.1);
         textColor = AppTheme.textSecondary;
-        label = 'Not Set';
+        label = AppLocalizations().tr('not_set');
         icon = Icons.remove_circle_outline;
         break;
     }
@@ -485,7 +484,7 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
     if (!hasPassword) {
       CustomSnackbar.show(
         context,
-        message: 'No Password Set',
+        message: AppLocalizations().tr('no_password_set'),
         submessage:
             'This machine does not have a ${widget.passwordType.toLowerCase()} password configured.',
         isError: true,
@@ -553,9 +552,9 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.cardDark.withOpacity(0.5),
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.borderDark.withOpacity(0.3)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         children: [

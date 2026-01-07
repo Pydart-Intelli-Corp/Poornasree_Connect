@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 
 /// Reusable machine selection dialog for changing master machine
@@ -79,7 +80,7 @@ class _MachineSelectionDialogState extends State<MachineSelectionDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppTheme.cardDark,
+      backgroundColor: context.cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -225,7 +226,7 @@ class _MachineSelectionDialogState extends State<MachineSelectionDialog> {
                     elevation: isSelected ? 2 : 0,
                     color: isSelected
                         ? AppTheme.primaryGreen.withOpacity(0.1)
-                        : AppTheme.cardDark2,
+                        : context.surfaceColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: BorderSide(
@@ -289,7 +290,7 @@ class _MachineSelectionDialogState extends State<MachineSelectionDialog> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text('Cancel'),
+                    child: Text(AppLocalizations().tr('cancel')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -302,7 +303,7 @@ class _MachineSelectionDialogState extends State<MachineSelectionDialog> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryGreen,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppTheme.cardDark2,
+                      disabledBackgroundColor: context.surfaceColor,
                       disabledForegroundColor: AppTheme.textTertiary,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),

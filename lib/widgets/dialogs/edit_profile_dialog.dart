@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../utils/utils.dart';
+import '../../l10n/l10n.dart';
 import 'form_field_widget.dart';
 import 'package:provider/provider.dart';
 
@@ -296,6 +297,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   }
 
   Widget _buildHeader() {
+    final l10n = AppLocalizations();
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -314,9 +316,9 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Edit Profile',
-              style: TextStyle(
+            Text(
+              l10n.tr('edit_profile'),
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -333,6 +335,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   }
 
   Widget _buildActionButtons() {
+    final l10n = AppLocalizations();
     return Row(
       children: [
         Expanded(
@@ -346,7 +349,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Text('Cancel'),
+            child: Text(l10n.tr('cancel')),
           ),
         ),
         const SizedBox(width: 12),
@@ -371,7 +374,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : const Text('Save Changes'),
+                : Text(l10n.tr('save_changes')),
           ),
         ),
       ],

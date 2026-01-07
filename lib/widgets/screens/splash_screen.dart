@@ -191,20 +191,28 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0A0E27),
-              Color(0xFF1A1F3A),
-              Color(0xFF0F172A),
-            ],
-            stops: [0.0, 0.5, 1.0],
+            colors: isDark
+                ? [
+                    const Color(0xFF0A0E27),
+                    const Color(0xFF1A1F3A),
+                    const Color(0xFF0F172A),
+                  ]
+                : [
+                    const Color(0xFFFAFAFA),
+                    const Color(0xFFF5F5F5),
+                    const Color(0xFFEFEFEF),
+                  ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -215,9 +223,11 @@ class _SplashScreenState extends State<SplashScreen>
                 // Subtle grid pattern overlay
                 Positioned.fill(
                   child: Opacity(
-                    opacity: 0.03,
+                    opacity: isDark ? 0.03 : 0.02,
                     child: CustomPaint(
-                      painter: GridPainter(),
+                      painter: GridPainter(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
                     ),
                   ),
                 ),
@@ -268,7 +278,7 @@ class _SplashScreenState extends State<SplashScreen>
                             width: 160,
                             height: 160,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
+                              color: isDark ? const Color(0xFF1E293B) : Colors.white.withOpacity(0.8),
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: const Icon(
@@ -296,7 +306,9 @@ class _SplashScreenState extends State<SplashScreen>
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 1.5,
-                            color: Colors.white.withOpacity(0.5),
+                            color: isDark 
+                                ? Colors.white.withOpacity(0.5)
+                                : Colors.black.withOpacity(0.4),
                           ),
                         ),
                       ],
@@ -332,7 +344,9 @@ class _SplashScreenState extends State<SplashScreen>
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 1,
-                                color: Colors.white.withOpacity(0.6),
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.6)
+                                    : Colors.black.withOpacity(0.5),
                               ),
                             ),
                           ],
@@ -343,7 +357,9 @@ class _SplashScreenState extends State<SplashScreen>
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
-                            color: Colors.white.withOpacity(0.3),
+                            color: isDark
+                                ? Colors.white.withOpacity(0.3)
+                                : Colors.black.withOpacity(0.2),
                             letterSpacing: 1,
                           ),
                         ),
@@ -363,10 +379,14 @@ class _SplashScreenState extends State<SplashScreen>
 
 // Grid painter for subtle tech background
 class GridPainter extends CustomPainter {
+  final Color color;
+
+  GridPainter({this.color = Colors.white});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.05)
+      ..color = color.withOpacity(0.05)
       ..strokeWidth = 0.5;
 
     const gridSize = 40.0;

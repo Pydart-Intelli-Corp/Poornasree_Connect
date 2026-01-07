@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
+import '../../services/services.dart';
 import '../../utils/utils.dart';
+import '../../widgets/widgets.dart';
 
 class SalesReportScreen extends StatefulWidget {
   const SalesReportScreen({super.key});
@@ -30,6 +34,18 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     });
 
     try {
+      // Check internet connection first
+      final connectivityService = ConnectivityService();
+      final isOnline = await connectivityService.checkConnectivity();
+      
+      if (!isOnline) {
+        setState(() {
+          _errorMessage = 'NO_INTERNET';
+          _isLoading = false;
+        });
+        return;
+      }
+      
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.user?.token;
 
@@ -43,7 +59,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -54,12 +70,103 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       } else {
         throw Exception('Failed to load sales');
       }
-    } catch (e) {
+    } on TimeoutException {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = 'CONNECTION_TIMEOUT';
         _isLoading = false;
       });
+    } catch (e) {
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('Network is unreachable')) {
+        setState(() {
+          _errorMessage = 'NO_INTERNET';
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  /// Build error widget based on error type
+  Widget _buildErrorWidget() {
+    final isNoInternet = _errorMessage == 'NO_INTERNET';
+    final isTimeout = _errorMessage == 'CONNECTION_TIMEOUT';
+    
+    IconData icon;
+    Color iconColor;
+    String title;
+    String message;
+    
+    if (isNoInternet) {
+      icon = Icons.cloud_off_rounded;
+      iconColor = Colors.orange;
+      title = 'No Internet Connection';
+      message = 'Sales report requires an internet connection.\n\nPlease check your network and try again.';
+    } else if (isTimeout) {
+      icon = Icons.timer_off_rounded;
+      iconColor = Colors.amber;
+      title = 'Connection Timeout';
+      message = 'The server took too long to respond.\nPlease check your connection and try again.';
+    } else {
+      icon = Icons.error_outline_rounded;
+      iconColor = Colors.red.shade300;
+      title = 'Error loading sales';
+      message = _errorMessage ?? 'Unknown error occurred';
+    }
+    
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 64, color: iconColor),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _fetchData,
+              icon: const Icon(Icons.refresh, size: 20),
+              label: Text(AppLocalizations().tr('retry')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Color _getPaymentStatusColor(String? status) {
@@ -84,66 +191,22 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sales Report'),
+        title: Text(AppLocalizations().tr('sales_report')),
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _fetchData,
-            tooltip: 'Refresh',
+            tooltip: AppLocalizations().tr('refresh'),
           ),
         ],
       ),
       body: _isLoading
           ? Center(
-              child: CircularProgressIndicator(
-                color: AppTheme.primaryGreen,
-              ),
+              child: FlowerSpinner(size: 48),
             )
           : _errorMessage != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Colors.red.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading sales',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: _fetchData,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryGreen,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
+              ? _buildErrorWidget()
               : _records.isEmpty
                   ? Center(
                       child: Column(
@@ -371,7 +434,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Close', style: TextStyle(color: AppTheme.primaryGreen)),
+            child: Text(AppLocalizations().tr('close'), style: TextStyle(color: AppTheme.primaryGreen)),
           ),
         ],
       ),

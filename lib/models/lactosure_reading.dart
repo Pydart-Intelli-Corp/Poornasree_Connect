@@ -1,3 +1,5 @@
+import '../services/shift_settings_service.dart';
+
 class LactosureReading {
   final String milkType;
   final double fat;
@@ -14,6 +16,8 @@ class LactosureReading {
   final double rate;
   final double incentive;
   final String machineId;
+  final DateTime? timestamp; // Reading timestamp from BLE data
+  final String? shift; // Shift at time of reading (MR/EV) - stored to preserve original shift
 
   LactosureReading({
     required this.milkType,
@@ -31,6 +35,8 @@ class LactosureReading {
     required this.rate,
     required this.incentive,
     required this.machineId,
+    this.timestamp,
+    this.shift,
   });
 
   /// Parses BLE data string
@@ -61,6 +67,24 @@ class LactosureReading {
         print('   [$i]: ${parts[i]}');
       }
 
+      // Parse timestamp if available (parts[17]: D2026-01-05_10:28:12)
+      DateTime? readingTimestamp;
+      if (parts.length > 17) {
+        try {
+          final timestampStr = _extractValue(parts[17], 'D');
+          // Format: 2026-01-05_10:28:12
+          final cleanTimestamp = timestampStr.replaceAll('_', ' ');
+          readingTimestamp = DateTime.tryParse(cleanTimestamp);
+        } catch (e) {
+          print('⚠️ [Parser] Could not parse timestamp: $e');
+        }
+      }
+      
+      // Determine shift at time of reading (preserve original shift even if settings change later)
+      final effectiveTimestamp = readingTimestamp ?? DateTime.now();
+      final shiftService = ShiftSettingsService();
+      final currentShift = shiftService.getShiftForTime(effectiveTimestamp);
+      
       final reading = LactosureReading(
         milkType: _extractValue(parts[2], 'CH'), // CH1
         fat: _parseDouble(_extractValue(parts[3], 'F')), // F05.21
@@ -79,6 +103,8 @@ class LactosureReading {
         machineId: parts.length > 16
             ? _extractValue(parts[16], 'MM')
             : '', // MM00201
+        timestamp: effectiveTimestamp,
+        shift: currentShift, // Store shift at time of reading
       );
 
       print('✅ [Parser] Successfully created LactosureReading object');
@@ -117,6 +143,12 @@ class LactosureReading {
 
   /// Convert to JSON map for storage
   Map<String, dynamic> toJson() {
+    // Debug: Print values being saved
+    print('💾 [LactosureReading.toJson] Saving:');
+    print('   fat: $fat, snf: $snf, clr: $clr');
+    print('   protein: $protein, lactose: $lactose');
+    print('   salt: $salt, water: $water, shift: $shift');
+    
     return {
       'milkType': milkType,
       'fat': fat,
@@ -133,11 +165,19 @@ class LactosureReading {
       'rate': rate,
       'incentive': incentive,
       'machineId': machineId,
+      'timestamp': timestamp?.toIso8601String(),
+      'shift': shift, // Store shift with reading
     };
   }
 
   /// Create from JSON map
   factory LactosureReading.fromJson(Map<String, dynamic> json) {
+    // Debug: Print JSON values being loaded
+    print('📂 [LactosureReading.fromJson] Loading:');
+    print('   JSON fat: ${json['fat']}, snf: ${json['snf']}, clr: ${json['clr']}');
+    print('   JSON protein: ${json['protein']}, lactose: ${json['lactose']}');
+    print('   JSON salt: ${json['salt']}, water: ${json['water']}, shift: ${json['shift']}');
+    
     return LactosureReading(
       milkType: json['milkType'] ?? '',
       fat: (json['fat'] ?? 0).toDouble(),
@@ -154,6 +194,8 @@ class LactosureReading {
       rate: (json['rate'] ?? 0).toDouble(),
       incentive: (json['incentive'] ?? 0).toDouble(),
       machineId: json['machineId'] ?? '',
+      timestamp: json['timestamp'] != null ? DateTime.tryParse(json['timestamp']) : null,
+      shift: json['shift'], // Load stored shift
     );
   }
 }

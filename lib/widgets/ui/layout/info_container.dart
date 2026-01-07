@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../utils/utils.dart';
+import '../../../utils/utils.dart';
 
 class InfoContainer extends StatelessWidget {
   final String text;
@@ -21,8 +21,10 @@ class InfoContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? AppTheme.darkBg2;
-    final txtColor = textColor ?? AppTheme.textSecondary;
+    final isDark = context.isDarkMode;
+    final bgColor =
+        backgroundColor ?? (isDark ? AppTheme.darkBg2 : AppTheme.lightBg2);
+    final txtColor = textColor ?? context.textSecondaryColor;
     final icnColor = iconColor ?? AppTheme.primaryGreen;
 
     return Container(

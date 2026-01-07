@@ -5,6 +5,7 @@ import 'dart:async';
 import '../../providers/providers.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
+import '../../l10n/l10n.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../dashboard/farmer_dashboard_screen.dart';
 
@@ -325,7 +326,7 @@ class _OtpScreenState extends State<OtpScreen>
 
                               // Title
                               Text(
-                                'Verify OTP',
+                                AppLocalizations().tr('verify_otp'),
                                 style: TextStyle(
                                   fontSize: ResponsiveHelper.getFontSize(context, 32),
                                   fontWeight: FontWeight.w700,
@@ -349,8 +350,8 @@ class _OtpScreenState extends State<OtpScreen>
                                       letterSpacing: 0.3,
                                     ),
                                     children: [
-                                      const TextSpan(
-                                        text: 'We sent a verification code to\n',
+                                      TextSpan(
+                                        text: '${AppLocalizations().tr('otp_sent_to_email')}\n',
                                       ),
                                       TextSpan(
                                         text: widget.email,
@@ -429,7 +430,7 @@ class _OtpScreenState extends State<OtpScreen>
 
                                       // Verify Button
                                       PremiumGradientButton(
-                                        text: 'Verify & Continue',
+                                        text: AppLocalizations().tr('verify_continue'),
                                         icon: Icons.check_circle_rounded,
                                         onPressed: _verifyOtp,
                                         isLoading: _isLoading,
@@ -445,7 +446,7 @@ class _OtpScreenState extends State<OtpScreen>
                                         children: [
                                           Flexible(
                                             child: Text(
-                                              'Didn\'t receive code? ',
+                                              '${AppLocalizations().tr('didnt_receive_code')} ',
                                               style: TextStyle(
                                                 color: AppTheme.textSecondary,
                                                 fontSize: ResponsiveHelper.getFontSize(context, 14),
@@ -473,7 +474,7 @@ class _OtpScreenState extends State<OtpScreen>
                                                     ),
                                                     const SizedBox(width: 4),
                                                     Text(
-                                                      'Resend',
+                                                      AppLocalizations().tr('resend'),
                                                       style: TextStyle(
                                                         color: AppTheme.primaryGreen,
                                                         fontSize: ResponsiveHelper.getFontSize(context, 14),
@@ -521,10 +522,9 @@ class _OtpScreenState extends State<OtpScreen>
                               const SizedBox(height: UIConstants.spacingXL),
 
                               // Security Info
-                              const InfoContainer(
+                              InfoContainer(
                                 icon: Icons.shield_outlined,
-                                text:
-                                    'Your information is secured with end-to-end encryption',
+                                text: AppLocalizations().tr('info_encrypted'),
                               ),
                             ],
                           ),

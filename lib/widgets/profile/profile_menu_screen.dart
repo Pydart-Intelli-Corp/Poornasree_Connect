@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../utils/utils.dart';
+import '../../l10n/l10n.dart';
+import '../../providers/providers.dart';
 import '../common/common.dart';
 import '../profile/profile.dart';
 import '../dialogs/dialogs.dart';
@@ -9,10 +12,9 @@ import '../dialogs/dialogs.dart';
 class ProfileMenuScreen extends StatefulWidget {
   final UserModel? user;
   final bool isDarkMode;
-  final String selectedLanguage;
   final bool isAutoConnectEnabled;
   final ValueChanged<bool> onThemeChanged;
-  final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<AppLocale> onLanguageChanged;
   final ValueChanged<bool> onAutoConnectChanged;
   final VoidCallback onLogout;
   final VoidCallback? onProfileUpdated;
@@ -21,7 +23,6 @@ class ProfileMenuScreen extends StatefulWidget {
     super.key,
     this.user,
     required this.isDarkMode,
-    required this.selectedLanguage,
     required this.isAutoConnectEnabled,
     required this.onThemeChanged,
     required this.onLanguageChanged,
@@ -35,10 +36,9 @@ class ProfileMenuScreen extends StatefulWidget {
     BuildContext context, {
     UserModel? user,
     required bool isDarkMode,
-    required String selectedLanguage,
     required bool isAutoConnectEnabled,
     required ValueChanged<bool> onThemeChanged,
-    required ValueChanged<String> onLanguageChanged,
+    required ValueChanged<AppLocale> onLanguageChanged,
     required ValueChanged<bool> onAutoConnectChanged,
     required VoidCallback onLogout,
     VoidCallback? onProfileUpdated,
@@ -54,7 +54,6 @@ class ProfileMenuScreen extends StatefulWidget {
           return ProfileMenuScreen(
             user: user,
             isDarkMode: isDarkMode,
-            selectedLanguage: selectedLanguage,
             isAutoConnectEnabled: isAutoConnectEnabled,
             onThemeChanged: onThemeChanged,
             onLanguageChanged: onLanguageChanged,
@@ -88,14 +87,12 @@ class ProfileMenuScreen extends StatefulWidget {
 
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   late bool _isDarkMode;
-  late String _selectedLanguage;
   late bool _isAutoConnectEnabled;
 
   @override
   void initState() {
     super.initState();
     _isDarkMode = widget.isDarkMode;
-    _selectedLanguage = widget.selectedLanguage;
     _isAutoConnectEnabled = widget.isAutoConnectEnabled;
   }
 
@@ -115,10 +112,12 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
+    
     return Material(
       color: Colors.transparent,
       child: Container(
-        color: AppTheme.darkBg,
+        color: context.backgroundColor,
         child: SafeArea(
           child: Column(
             children: [
@@ -151,11 +150,11 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                       const SizedBox(height: 16),
 
                       // App Version
-                      const Text(
-                        'Poornasree Connect v1.0.0',
+                      Text(
+                        '${l10n.tr('app_name')} v1.0.0',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.textTertiary,
+                          color: context.textSecondaryColor,
                         ),
                       ),
                     ],
@@ -170,10 +169,12 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   }
 
   Widget _buildHeader() {
+    final l10n = AppLocalizations();
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.cardDark,
+        color: context.cardColor,
         border: Border(
           bottom: BorderSide(
             color: AppTheme.primaryGreen.withOpacity(0.2),
@@ -184,16 +185,16 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            'Profile',
+          Text(
+            l10n.tr('profile'),
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: context.textPrimaryColor,
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, color: AppTheme.textSecondary),
+            icon: Icon(Icons.close, color: context.textSecondaryColor),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -202,22 +203,28 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   }
 
   Widget _buildSettingsCard() {
+    final l10n = AppLocalizations();
+    
     return SectionCard(
-      title: 'Settings',
+      title: l10n.tr('settings'),
       child: Column(
         children: [
           LanguageSelector(
-            selectedLanguage: _selectedLanguage,
-            onChanged: (value) {
-              setState(() => _selectedLanguage = value);
-              widget.onLanguageChanged(value);
+            onLocaleChanged: (locale) {
+              widget.onLanguageChanged(locale);
+              // Force rebuild to update all localized text
+              if (mounted) {
+                setState(() {});
+              }
             },
           ),
           const SizedBox(height: 12),
           ThemeToggle(
             isDarkMode: _isDarkMode,
-            onChanged: (value) {
+            onChanged: (value) async {
               setState(() => _isDarkMode = value);
+              final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+              await themeProvider.setDarkMode(value);
               widget.onThemeChanged(value);
             },
           ),
@@ -229,18 +236,22 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
               widget.onAutoConnectChanged(value);
             },
           ),
+          const SizedBox(height: 12),
+          const ShiftSettingsWidget(),
         ],
       ),
     );
   }
 
   Widget _buildLogoutButton() {
+    final l10n = AppLocalizations();
+    
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: _handleLogout,
         icon: const Icon(Icons.logout, size: 20),
-        label: const Text('Logout'),
+        label: Text(l10n.tr('logout')),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.red.withOpacity(0.15),
           foregroundColor: Colors.red,

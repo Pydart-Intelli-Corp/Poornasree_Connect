@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/bluetooth_service.dart';
+import '../../l10n/l10n.dart';
 
 /// Machine-specific Bluetooth status button
 /// Shows "Offline" initially, changes to "Connect" when BLE device is discovered
@@ -207,11 +208,12 @@ class _BluetoothStatusButtonState extends State<BluetoothStatusButton> {
 
   /// Get status information based on BLE availability and connection state
   _StatusInfo _getStatusInfo() {
+    final l10n = AppLocalizations();
     if (_isConnected) {
       // Machine is connected - show "Disconnect" in red
       return _StatusInfo(
         icon: Icons.bluetooth_connected,
-        label: 'Disconnect',
+        label: l10n.tr('disconnect'),
         iconColor: Colors.red,
         textColor: Colors.red,
         bgColor: Colors.red.withOpacity(0.15),
@@ -221,7 +223,7 @@ class _BluetoothStatusButtonState extends State<BluetoothStatusButton> {
       // Connecting - show "Connecting..." in amber
       return _StatusInfo(
         icon: Icons.bluetooth_searching,
-        label: 'Connecting...',
+        label: l10n.tr('connecting'),
         iconColor: Colors.amber,
         textColor: Colors.amber,
         bgColor: Colors.amber.withOpacity(0.15),
@@ -231,7 +233,7 @@ class _BluetoothStatusButtonState extends State<BluetoothStatusButton> {
       // Machine is available via BLE - show "Connect" in blue
       return _StatusInfo(
         icon: Icons.bluetooth,
-        label: 'Connect',
+        label: l10n.tr('connect'),
         iconColor: Colors.blue,
         textColor: Colors.blue,
         bgColor: Colors.blue.withOpacity(0.15),
@@ -241,7 +243,7 @@ class _BluetoothStatusButtonState extends State<BluetoothStatusButton> {
       // Currently scanning - show subtle scanning indicator
       return _StatusInfo(
         icon: Icons.bluetooth_searching,
-        label: 'Offline',
+        label: l10n.tr('offline_status'),
         iconColor: Colors.grey.shade400,
         textColor: Colors.grey.shade300,
         bgColor: Colors.grey.withOpacity(0.1),
@@ -251,7 +253,7 @@ class _BluetoothStatusButtonState extends State<BluetoothStatusButton> {
       // Machine not available - show "Offline" in grey
       return _StatusInfo(
         icon: Icons.bluetooth_disabled,
-        label: 'Offline',
+        label: l10n.tr('offline_status'),
         iconColor: Colors.grey.shade400,
         textColor: Colors.grey.shade300,
         bgColor: Colors.grey.withOpacity(0.1),

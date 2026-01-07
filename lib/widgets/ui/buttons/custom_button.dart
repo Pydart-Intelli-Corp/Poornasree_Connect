@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'flower_spinner.dart';
-import '../../utils/utils.dart';
+import '../feedback/flower_spinner.dart';
+import '../../../utils/utils.dart';
 
 enum CustomButtonType {
   primary,

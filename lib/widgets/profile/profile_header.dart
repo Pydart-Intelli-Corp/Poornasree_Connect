@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../utils/utils.dart';
+import '../../l10n/l10n.dart';
 import '../common/common.dart';
 import 'profile_avatar.dart';
 
@@ -13,6 +14,7 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
     return Column(
       children: [
         // Avatar
@@ -21,11 +23,11 @@ class ProfileHeader extends StatelessWidget {
 
         // Name
         Text(
-          user?.name ?? 'User',
-          style: const TextStyle(
+          user?.name ?? l10n.tr('user'),
+          style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: context.textPrimaryColor,
           ),
         ),
         const SizedBox(height: 4),
@@ -33,7 +35,7 @@ class ProfileHeader extends StatelessWidget {
         // Email
         Text(
           user?.email ?? '',
-          style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+          style: TextStyle(fontSize: 14, color: context.textSecondaryColor),
         ),
         const SizedBox(height: 12),
 
@@ -53,13 +55,14 @@ class ProfileDetailsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations();
     return SectionCard(
-      title: 'Profile Details',
+      title: l10n.tr('profile_details'),
       trailing: onEditPressed != null
           ? TextButton.icon(
               onPressed: onEditPressed,
               icon: const Icon(Icons.edit, size: 16),
-              label: const Text('Edit'),
+              label: Text(l10n.tr('edit')),
               style: TextButton.styleFrom(
                 foregroundColor: AppTheme.primaryGreen,
                 padding: const EdgeInsets.symmetric(
@@ -73,70 +76,70 @@ class ProfileDetailsCard extends StatelessWidget {
         children: [
           DetailRow(
             icon: Icons.badge_outlined,
-            label: 'ID',
+            label: l10n.tr('id'),
             value: user?.id ?? '-',
           ),
           DetailRow(
             icon: Icons.email_outlined,
-            label: 'Email',
+            label: l10n.tr('email'),
             value: user?.email ?? '-',
           ),
           DetailRow(
             icon: Icons.person_outline,
-            label: 'Name',
+            label: l10n.tr('name'),
             value: user?.name ?? '-',
           ),
           DetailRow(
             icon: Icons.security_outlined,
-            label: 'Role',
+            label: l10n.tr('role'),
             value: (user?.role ?? '-').toUpperCase(),
           ),
           if (user?.societyName != null)
             DetailRow(
               icon: Icons.business_outlined,
-              label: 'Society',
+              label: l10n.tr('society'),
               value: user?.societyName ?? '-',
             ),
           if (user?.societyId != null)
             DetailRow(
               icon: Icons.tag_outlined,
-              label: 'Society ID',
+              label: l10n.tr('society_id'),
               value: user?.societyId ?? '-',
             ),
           if (user?.bmcName != null)
             DetailRow(
               icon: Icons.warehouse_outlined,
-              label: 'BMC',
+              label: l10n.tr('bmc'),
               value: user?.bmcName ?? '-',
             ),
           if (user?.dairyName != null)
             DetailRow(
               icon: Icons.factory_outlined,
-              label: 'Dairy',
+              label: l10n.tr('dairy'),
               value: user?.dairyName ?? '-',
             ),
           if (user?.location != null)
             DetailRow(
               icon: Icons.location_on_outlined,
-              label: 'Location',
+              label: l10n.tr('location'),
               value: user?.location ?? '-',
             ),
           if (user?.phone != null || user?.contactPhone != null)
             DetailRow(
               icon: Icons.phone_outlined,
-              label: 'Phone',
+              label: l10n.tr('phone'),
               value: user?.phone ?? user?.contactPhone ?? '-',
             ),
           if (user?.presidentName != null)
             DetailRow(
               icon: Icons.person_pin_outlined,
-              label: 'President',
+              label: l10n.tr('president'),
               value: user?.presidentName ?? '-',
             ),
           if (user?.adminName != null)
             DetailRow(
               icon: Icons.admin_panel_settings_outlined,
-              label: 'Admin',
+              label: l10n.tr('admin'),
               value: user?.adminName ?? '-',
             ),
         ],

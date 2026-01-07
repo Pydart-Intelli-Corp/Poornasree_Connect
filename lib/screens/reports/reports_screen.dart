@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,9 +9,12 @@ import '../../providers/providers.dart';
 import '../../services/services.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
+import '../../l10n/l10n.dart';
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  final bool defaultLocalMode;
+  
+  const ReportsScreen({super.key, this.defaultLocalMode = false});
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -22,6 +26,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<dynamic> _records = [];
   List<dynamic> _allRecords = [];
   String? _errorMessage;
+  late bool _isLocalMode; // Toggle between local and cloud reports
   
   // Filter states
   DateTime? _fromDate;
@@ -35,11 +40,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<Map<String, dynamic>> _machines = [];
   List<Map<String, dynamic>> _farmers = [];
   
+  // Services
+  final LocalReportsService _localReportsService = LocalReportsService();
+  final ReadingsStorageService _storageService = ReadingsStorageService();
+  
+  // Stream subscription for auto-refresh
+  StreamSubscription? _readingSubscription;
+  
   // Column selection for reports
   static const List<Map<String, String>> availableColumns = [
     {'key': 'sl_no', 'label': 'Sl.No'},
     {'key': 'date_time', 'label': 'Date & Time'},
-    {'key': 'farmer', 'label': 'Farmer'},
+    {'key': 'farmer', 'label': 'Farmer ID'},
     {'key': 'society', 'label': 'Society'},
     {'key': 'machine', 'label': 'Machine'},
     {'key': 'shift', 'label': 'Shift'},
@@ -100,6 +112,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize local mode from parameter
+    _isLocalMode = widget.defaultLocalMode;
     // Initialize with current report defaults
     _selectedColumns = List.from(currentReportDefaultColumns);
     // Lock to landscape orientation
@@ -108,11 +122,73 @@ class _ReportsScreenState extends State<ReportsScreen> {
       DeviceOrientation.landscapeRight,
     ]);
     _loadColumnPreferences();
+    
+    // Initialize society/machine details then fetch data
+    _initializeAndFetch();
+    
+    // Subscribe to new readings for auto-refresh in local mode
+    _readingSubscription = _storageService.onNewReading.listen((_) {
+      if (_isLocalMode && mounted) {
+        // Auto-refresh when new data is received
+        _fetchRecords();
+      }
+    });
+  }
+  
+  /// Initialize society/machine details then fetch data
+  Future<void> _initializeAndFetch() async {
+    await _initSocietyDetails();
     _fetchData();
+  }
+  
+  Future<void> _initSocietyDetails() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    if (user != null) {
+      _localReportsService.setSocietyDetails(
+        societyId: user.societyId ?? user.societyIdentifier,
+        societyName: user.societyName ?? user.name,
+      );
+      
+      // Fetch machine type from API if in local mode
+      if (_isLocalMode && user.token != null) {
+        try {
+          final response = await http.get(
+            Uri.parse('${ApiConfig.baseUrl}/api/external/machines'),
+            headers: {
+              'Authorization': 'Bearer ${user.token}',
+              'Content-Type': 'application/json',
+            },
+          ).timeout(const Duration(seconds: 5));
+          
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            final machines = List<Map<String, dynamic>>.from(data['data'] ?? []);
+            if (machines.isNotEmpty) {
+              // Use the first machine's type as default
+              final machineType = machines.first['machine_type']?.toString();
+              if (machineType != null && machineType.isNotEmpty) {
+                _localReportsService.setMachineType(machineType);
+              }
+            }
+          }
+        } catch (e) {
+          print('Error fetching machine type: $e - trying cached data');
+          // Try to load from cache
+          await _localReportsService.loadCachedMachineType();
+        }
+      }
+    } else {
+      // No user - try to load from cache for offline mode
+      await _localReportsService.loadCachedSocietyDetails();
+      await _localReportsService.loadCachedMachineType();
+    }
   }
 
   @override
   void dispose() {
+    // Cancel stream subscription
+    _readingSubscription?.cancel();
     // Restore all orientations when leaving this screen
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -174,28 +250,265 @@ class _ReportsScreenState extends State<ReportsScreen> {
   
   Future<void> _fetchMachines() async {
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.user?.token;
-      if (token == null) return;
-      
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/external/machines'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      if (_isLocalMode) {
+        // Load machines from local storage
+        final machines = await _localReportsService.getLocalMachines();
         setState(() {
-          _machines = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          _machines = machines;
         });
-        print('Fetched machines: ${_machines.map((m) => {'id': m['id'], 'machine_id': m['machine_id'], 'machine_type': m['machine_type']}).toList()}');
+        print('Fetched local machines: ${_machines.map((m) => {'id': m['id'], 'machine_id': m['machine_id']}).toList()}');
+      } else {
+        // Fetch from cloud API
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final token = authProvider.user?.token;
+        if (token == null) return;
+        
+        try {
+          final response = await http.get(
+            Uri.parse('${ApiConfig.baseUrl}/api/external/machines'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          ).timeout(const Duration(seconds: 10));
+          
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            setState(() {
+              _machines = List<Map<String, dynamic>>.from(data['data'] ?? []);
+            });
+            print('Fetched machines: ${_machines.map((m) => {'id': m['id'], 'machine_id': m['machine_id'], 'machine_type': m['machine_type']}).toList()}');
+          } else {
+            // API error - try cache
+            await _loadCachedMachines();
+          }
+        } catch (e) {
+          // Network error - try cache
+          print('Error fetching machines from API: $e - trying cache');
+          await _loadCachedMachines();
+        }
       }
     } catch (e) {
       print('Error fetching machines: $e');
     }
+  }
+  
+  Future<void> _loadCachedMachines() async {
+    final cacheService = OfflineCacheService();
+    final cachedMachines = await cacheService.getCachedMachines();
+    if (cachedMachines.isNotEmpty) {
+      setState(() {
+        _machines = List<Map<String, dynamic>>.from(cachedMachines);
+      });
+      print('Loaded cached machines: ${_machines.length}');
+    }
+  }
+
+  /// Build error widget based on error type
+  Widget _buildErrorWidget() {
+    final isNoInternet = _errorMessage == 'NO_INTERNET';
+    final isTimeout = _errorMessage == 'CONNECTION_TIMEOUT';
+    
+    IconData icon;
+    Color iconColor;
+    String title;
+    String message;
+    String buttonText;
+    
+    if (isNoInternet) {
+      icon = Icons.cloud_off_rounded;
+      iconColor = Colors.orange;
+      title = 'No Internet Connection';
+      message = 'Cloud reports require an internet connection.\nPlease check your network and try again,\nor switch to Local Mode to view offline reports.';
+      buttonText = 'Retry';
+    } else if (isTimeout) {
+      icon = Icons.timer_off_rounded;
+      iconColor = Colors.amber;
+      title = 'Connection Timeout';
+      message = 'The server took too long to respond.\nPlease check your connection and try again.';
+      buttonText = 'Retry';
+    } else {
+      icon = Icons.error_outline_rounded;
+      iconColor = Colors.red.shade300;
+      title = 'Error loading $_selectedReport';
+      message = _errorMessage ?? 'Unknown error occurred';
+      buttonText = 'Retry';
+    }
+    
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icon with background
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 64,
+                color: iconColor,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimaryColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: context.textSecondaryColor,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Action buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : () {
+                    HapticFeedback.lightImpact();
+                    _fetchData();
+                  },
+                  icon: _isLoading 
+                      ? const FlowerSpinner(size: 16)
+                      : const Icon(Icons.refresh, size: 20),
+                  label: Text(buttonText),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+                if (isNoInternet && !_isLocalMode) ...[
+                  const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _isLocalMode = true;
+                        _errorMessage = null;
+                      });
+                      _fetchData();
+                    },
+                    icon: const Icon(Icons.smartphone, size: 20),
+                    label: Text(AppLocalizations().tr('local_mode')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryTeal,
+                      side: BorderSide(color: AppTheme.primaryTeal, width: 2),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Show a reusable no internet dialog
+  void _showNoInternetDialog(BuildContext context, {
+    required String title,
+    required String message,
+    required IconData icon,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: context.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.cloud_off_rounded,
+                size: 48,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: TextStyle(
+                color: context.textPrimaryColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.textSecondaryColor,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'OK',
+              style: TextStyle(color: context.textSecondaryColor),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Retry connectivity check
+              final isOnline = await ConnectivityService().checkConnectivity();
+              if (isOnline) {
+                CustomSnackbar.showSuccess(
+                  context,
+                  message: AppLocalizations().tr('connected'),
+                  submessage: AppLocalizations().tr('try_again'),
+                );
+              } else {
+                CustomSnackbar.showError(
+                  context,
+                  message: AppLocalizations().tr('offline_status'),
+                  submessage: AppLocalizations().tr('no_internet_message'),
+                );
+              }
+            },
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(AppLocalizations().tr('retry')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
   
   void _extractFarmersFromRecords() {
@@ -234,82 +547,157 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.user?.token;
-
-      if (token == null) {
-        throw Exception('No authentication token');
-      }
-
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/external/reports/$_selectedReport?limit=50&offset=0'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final records = data['data']['records'] ?? [];
-        print('DEBUG: Loaded ${records.length} records');
-        if (records.isNotEmpty) {
-          print('DEBUG: First record keys: ${(records[0] as Map).keys.toList()}');
-          print('DEBUG: First record machine_id: ${records[0]['machine_id']}');
-          print('DEBUG: Sample machine_ids in records: ${records.take(5).map((r) => r['machine_id']).toList()}');
-        }
+      if (_isLocalMode) {
+        // Fetch from local storage
+        final records = await _localReportsService.getCollectionRecords(
+          fromDate: _fromDate,
+          toDate: _toDate,
+          machineFilter: _machineFilter,
+          farmerFilter: _farmerFilter,
+          shiftFilter: _shiftFilter,
+          channelFilter: _channelFilter,
+        );
+        
         setState(() {
           _allRecords = records;
           _applyFilters();
           _isLoading = false;
         });
         
-        // Extract farmers from records after loading
         _extractFarmersFromRecords();
       } else {
-        throw Exception('Failed to load $_selectedReport');
+        // Check connectivity first for cloud reports
+        final connectivityService = ConnectivityService();
+        final isOnline = await connectivityService.checkConnectivity();
+        
+        if (!isOnline) {
+          setState(() {
+            _errorMessage = 'NO_INTERNET';
+            _isLoading = false;
+          });
+          return;
+        }
+        
+        // Fetch from cloud API
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final token = authProvider.user?.token;
+
+        if (token == null) {
+          throw Exception('No authentication token');
+        }
+
+        final response = await http.get(
+          Uri.parse('${ApiConfig.baseUrl}/api/external/reports/$_selectedReport?limit=50&offset=0'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          final records = data['data']['records'] ?? [];
+          print('DEBUG: Loaded ${records.length} records');
+          if (records.isNotEmpty) {
+            print('DEBUG: First record keys: ${(records[0] as Map).keys.toList()}');
+            print('DEBUG: First record machine_id: ${records[0]['machine_id']}');
+            print('DEBUG: Sample machine_ids in records: ${records.take(5).map((r) => r['machine_id']).toList()}');
+          }
+          setState(() {
+            _allRecords = records;
+            _applyFilters();
+            _isLoading = false;
+          });
+          
+          // Extract farmers from records after loading
+          _extractFarmersFromRecords();
+        } else {
+          throw Exception('Failed to load $_selectedReport');
+        }
       }
-    } catch (e) {
+    } on TimeoutException {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = 'CONNECTION_TIMEOUT';
         _isLoading = false;
       });
+    } catch (e) {
+      // Check if it's a network error
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('Network is unreachable')) {
+        setState(() {
+          _errorMessage = 'NO_INTERNET';
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Restore portrait orientation before going back
-        await SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-        ]);
-        return true;
+    return PopScope(
+      canPop: true,
+      onPopInvoked: (bool didPop) async {
+        if (didPop) {
+          // Restore portrait orientation after going back
+          await SystemChrome.setPreferredOrientations([
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+          ]);
+        }
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Reports Management'),
+          title: Text(AppLocalizations().tr('reports_management')),
           elevation: 0,
           actions: [
+            // Local/Cloud toggle
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: context.borderColor,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildToggleOption(AppLocalizations().tr('cloud'), Icons.cloud_outlined, !_isLocalMode, false),
+                  const SizedBox(width: 4),
+                  _buildToggleOption(AppLocalizations().tr('local'), Icons.storage_outlined, _isLocalMode, true),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
             _buildReportTypeChip(
-              'Collections',
+              AppLocalizations().tr('collections'),
               'collections',
               Icons.water_drop_outlined,
             ),
-            const SizedBox(width: 4),
-            _buildReportTypeChip(
-              'Dispatches',
-              'dispatches',
-              Icons.local_shipping_outlined,
-            ),
-            const SizedBox(width: 4),
-            _buildReportTypeChip(
-              'Sales',
-              'sales',
-              Icons.sell_outlined,
-            ),
+            // Hide Dispatches and Sales buttons in local mode
+            if (!_isLocalMode) ...[
+              const SizedBox(width: 4),
+              _buildReportTypeChip(
+                AppLocalizations().tr('dispatches'),
+                'dispatches',
+                Icons.local_shipping_outlined,
+              ),
+              const SizedBox(width: 4),
+              _buildReportTypeChip(
+                AppLocalizations().tr('sales'),
+                'sales',
+                Icons.sell_outlined,
+              ),
+            ],
             const SizedBox(width: 12),
             // Email button
             Builder(
@@ -317,8 +705,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 return IconButton(
                   icon: const Icon(Icons.email_outlined, size: 20),
                   onPressed: _records.isEmpty ? null : () => _showEmailDialog(),
-                  tooltip: 'Email Report',
-                  color: Colors.white,
+                  tooltip: AppLocalizations().tr('email_report'),
+                  color: context.textPrimaryColor,
                 );
               }
             ),
@@ -331,9 +719,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 HapticFeedback.lightImpact();
                 _fetchData();
               },
-              tooltip: 'Refresh Data',
-              color: Colors.white,
+              tooltip: AppLocalizations().tr('refresh_data'),
+              color: context.textPrimaryColor,
             ),
+            // Sync button (only show in local mode)
+            if (_isLocalMode)
+              Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+                  onPressed: () => _showSyncDialog(context),
+                  tooltip: AppLocalizations().tr('sync_to_cloud'),
+                  color: context.textPrimaryColor,
+                ),
+              ),
+            // Clear local data button (only show in local mode)
+            if (_isLocalMode)
+              Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () => _showClearLocalDataDialog(context),
+                  tooltip: AppLocalizations().tr('clear_local_data'),
+                  color: context.textPrimaryColor,
+                ),
+              ),
             // Filter button with badge
             Builder(
               builder: (BuildContext context) {
@@ -342,8 +750,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     IconButton(
                       icon: const Icon(Icons.filter_list, size: 20),
                       onPressed: () => _showFiltersDropdown(context),
-                      tooltip: 'Filters',
-                      color: Colors.white,
+                      tooltip: AppLocalizations().tr('filters'),
+                      color: context.textPrimaryColor,
                     ),
                     if (_fromDate != null || _toDate != null || _shiftFilter != 'all' || _channelFilter != 'all' || _machineFilter != null || _farmerFilter != null)
                       Positioned(
@@ -376,54 +784,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                   )
                 : _errorMessage != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                size: 64,
-                                color: Colors.red.shade300,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Error loading $_selectedReport',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _errorMessage!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: _isLoading ? null : () {
-                                  HapticFeedback.lightImpact();
-                                  _fetchData();
-                                },
-                                icon: _isLoading 
-                                    ? const FlowerSpinner(size: 16)
-                                    : const Icon(Icons.refresh),
-                                label: Text(_isLoading ? 'Loading...' : 'Retry'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primaryGreen,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
+                    ? _buildErrorWidget()
                     : _records.isEmpty
                         ? Center(
                             child: Column(
@@ -432,7 +793,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 Icon(
                                   _getReportIcon(_selectedReport),
                                   size: 64,
-                                  color: AppTheme.textSecondary.withOpacity(0.5),
+                                  color: context.textSecondaryColor.withOpacity(0.5),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
@@ -440,7 +801,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w600,
-                                    color: AppTheme.textPrimary,
+                                    color: context.textPrimaryColor,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -448,7 +809,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   '${_getReportTitle(_selectedReport)} data will appear here',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: AppTheme.textSecondary,
+                                    color: context.textSecondaryColor,
                                   ),
                                 ),
                               ],
@@ -458,6 +819,46 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  Widget _buildToggleOption(String label, IconData icon, bool isSelected, bool isLocalMode) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _isLocalMode = isLocalMode;
+        });
+        HapticFeedback.lightImpact();
+        _fetchData();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? context.cardColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? AppTheme.primaryGreen : context.textSecondaryColor,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? AppTheme.primaryGreen : context.textSecondaryColor,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -486,7 +887,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           border: Border.all(
             color: isSelected
                 ? AppTheme.primaryGreen
-                : Colors.white.withOpacity(0.3),
+                : context.borderColor,
             width: 1,
           ),
         ),
@@ -496,7 +897,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Icon(
               icon,
               size: 16,
-              color: Colors.white,
+              color: isSelected ? Colors.white : context.textPrimaryColor,
             ),
             const SizedBox(width: 4),
             Text(
@@ -504,7 +905,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: isSelected ? Colors.white : context.textPrimaryColor,
                 letterSpacing: 0.3,
               ),
             ),
@@ -606,7 +1007,436 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
   }
 
-  void _showEmailDialog() {
+  void _showSyncDialog(BuildContext context) async {
+    // Check internet connection first
+    final connectivityService = ConnectivityService();
+    final isOnline = await connectivityService.checkConnectivity();
+    
+    if (!isOnline) {
+      _showNoInternetDialog(
+        context,
+        title: AppLocalizations().tr('cannot_sync'),
+        message: AppLocalizations().tr('sync_requires_internet_msg'),
+        icon: Icons.cloud_sync,
+      );
+      return;
+    }
+    
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    final LocalSyncService syncService = LocalSyncService();
+    
+    bool isSyncing = false;
+    int syncedCount = 0;
+    int totalCount = 0;
+    Map<String, int>? syncSummary;
+    String? syncMessage;
+    bool syncComplete = false;
+    bool isLoadingSummary = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (dialogContext, setState) {
+          // Load sync summary with cloud check on first build
+          if (syncSummary == null && !isSyncing && !syncComplete && isLoadingSummary) {
+            isLoadingSummary = false;
+            syncService.getSyncSummary(
+              token: user?.token,
+              checkCloud: true, // Enable smart pending count
+            ).then((summary) {
+              setState(() {
+                syncSummary = summary;
+              });
+            }).catchError((e) {
+              // Fallback to local count if cloud check fails
+              print('⚠️ Cloud check failed, using local count: $e');
+              syncService.getSyncSummary(checkCloud: false).then((summary) {
+                setState(() {
+                  syncSummary = summary;
+                });
+              });
+            });
+          }
+
+          return AlertDialog(
+            backgroundColor: context.cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.cloud_sync, color: AppTheme.primaryGreen, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  AppLocalizations().tr('sync_to_cloud'),
+                  style: TextStyle(color: context.textPrimaryColor, fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 350,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (syncSummary == null && !syncComplete) ...[
+                      // Loading summary with cloud check
+                      Center(
+                        child: Column(
+                          children: [
+                            const FlowerSpinner(size: 32),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Checking cloud for duplicates...',
+                              style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (syncSummary != null && !syncComplete) ...[
+                      // Sync summary before syncing
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.borderColor),
+                        ),
+                        child: Column(
+                          children: [
+                            _buildSyncStatRow(AppLocalizations().tr('total_local'), syncSummary!['total'] ?? 0, Icons.storage),
+                            const SizedBox(height: 6),
+                            _buildSyncStatRow(AppLocalizations().tr('pending'), syncSummary!['pending'] ?? 0, Icons.hourglass_empty, color: Colors.orange),
+                            const SizedBox(height: 6),
+                            _buildSyncStatRow(AppLocalizations().tr('synced'), syncSummary!['synced'] ?? 0, Icons.check_circle, color: AppTheme.primaryGreen),
+                            const SizedBox(height: 6),
+                            _buildSyncStatRow(AppLocalizations().tr('duplicates'), syncSummary!['duplicates'] ?? 0, Icons.content_copy, color: Colors.blue),
+                            if ((syncSummary!['errors'] ?? 0) > 0) ...[
+                              const SizedBox(height: 6),
+                              _buildSyncStatRow(AppLocalizations().tr('errors'), syncSummary!['errors'] ?? 0, Icons.error_outline, color: Colors.red),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if ((syncSummary!['pending'] ?? 0) == 0)
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryGreen.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle, color: AppTheme.primaryGreen, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                AppLocalizations().tr('all_records_synced'),
+                                style: TextStyle(color: AppTheme.primaryGreen, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...[
+                      Text(
+                        '${syncSummary!['pending']} ${AppLocalizations().tr('records_will_upload')}',
+                        style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
+                      ),
+                      const SizedBox(height: 8),
+                      // Info note about duplicate detection
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Sync compares Farmer ID, Date, FAT, SNF & CLR to prevent duplicates',
+                                style: TextStyle(color: Colors.blue.shade700, fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                  if (isSyncing) ...[
+                    // Sync in progress
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: totalCount > 0 ? syncedCount / totalCount : null,
+                      backgroundColor: context.surfaceColor,
+                      valueColor: AlwaysStoppedAnimation(AppTheme.primaryGreen),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Text(
+                        '${AppLocalizations().tr('syncing_progress')} $syncedCount / $totalCount',
+                        style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                  if (syncComplete && syncMessage != null) ...[
+                    // Sync complete
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.cloud_done, color: AppTheme.primaryGreen, size: 48),
+                          const SizedBox(height: 12),
+                          Text(
+                            AppLocalizations().tr('sync_complete_title'),
+                            style: TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            syncMessage!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+                ),
+              ),
+            ),
+            actions: [
+              if (!isSyncing && !syncComplete)
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(AppLocalizations().tr('cancel'), style: TextStyle(color: context.textSecondaryColor)),
+                ),
+              if (!isSyncing && !syncComplete && (syncSummary?['pending'] ?? 0) > 0)
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    if (user?.token == null) {
+                      CustomSnackbar.showError(
+                        context,
+                        message: AppLocalizations().tr('please_login_sync'),
+                      );
+                      return;
+                    }
+
+                    setState(() {
+                      isSyncing = true;
+                      totalCount = syncSummary?['pending'] ?? 0;
+                      syncedCount = 0;
+                    });
+
+                    final result = await syncService.syncToCloud(
+                      token: user!.token!,
+                      societyId: user.societyId ?? user.id,
+                      onProgress: (synced, total) {
+                        setState(() {
+                          syncedCount = synced;
+                          totalCount = total;
+                        });
+                      },
+                    );
+
+                    setState(() {
+                      isSyncing = false;
+                      syncComplete = true;
+                      syncMessage = '${result['synced']} synced, ${result['duplicates']} duplicates, ${result['errors']} errors';
+                    });
+
+                    // Refresh the local reports after sync
+                    _fetchData();
+                  },
+                  icon: const Icon(Icons.cloud_upload, size: 18),
+                  label: Text(AppLocalizations().tr('start_sync')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              if (syncComplete)
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text(AppLocalizations().tr('done')),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSyncStatRow(String label, int value, IconData icon, {Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: color ?? context.textSecondaryColor),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
+            ),
+          ],
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: (color ?? context.textSecondaryColor).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            value.toString(),
+            style: TextStyle(
+              color: color ?? context.textPrimaryColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showClearLocalDataDialog(BuildContext context) {
+    final LocalSyncService syncService = LocalSyncService();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: context.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.delete_forever, color: Colors.red, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              AppLocalizations().tr('clear_local_data'),
+              style: TextStyle(color: context.textPrimaryColor, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              AppLocalizations().tr('delete_local_warning'),
+              style: TextStyle(color: context.textSecondaryColor, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      AppLocalizations().tr('unsynced_data_warning'),
+                      style: TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppLocalizations().tr('cancel'), style: TextStyle(color: context.textSecondaryColor)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              
+              // Clear all local readings
+              await _storageService.clearAllReadings();
+              
+              // Also clear sync status
+              await syncService.resetAllSyncStatus();
+              
+              // Refresh the view
+              _fetchData();
+              
+              if (mounted) {
+                CustomSnackbar.showSuccess(
+                  context,
+                  message: AppLocalizations().tr('data_cleared'),
+                );
+              }
+            },
+            icon: const Icon(Icons.delete_forever, size: 18),
+            label: Text(AppLocalizations().tr('clear_all')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEmailDialog() async {
+    // Check internet connection first
+    final connectivityService = ConnectivityService();
+    final isOnline = await connectivityService.checkConnectivity();
+    
+    if (!isOnline) {
+      _showNoInternetDialog(
+        context,
+        title: AppLocalizations().tr('cannot_send_email'),
+        message: AppLocalizations().tr('no_internet_message'),
+        icon: Icons.email_outlined,
+      );
+      return;
+    }
+    
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userEmail = authProvider.user?.email ?? '';
     
@@ -624,15 +1454,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          backgroundColor: AppTheme.cardDark,
+          backgroundColor: context.cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: Row(
             children: [
               Icon(Icons.email_outlined, color: AppTheme.primaryGreen, size: 24),
               const SizedBox(width: 8),
               Text(
-                'Email Report',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 18),
+                AppLocalizations().tr('email_report'),
+                style: TextStyle(color: context.textPrimaryColor, fontSize: 18),
               ),
             ],
           ),
@@ -645,14 +1475,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Send CSV and PDF reports to your email:',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                    AppLocalizations().tr('send_email_description'),
+                    style: TextStyle(color: context.textSecondaryColor, fontSize: 14),
                   ),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppTheme.darkBg2,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
                     ),
@@ -664,7 +1494,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           child: Text(
                             userEmail,
                             style: TextStyle(
-                              color: AppTheme.textPrimary,
+                              color: context.textPrimaryColor,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
@@ -679,18 +1509,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   Row(
                     children: [
                       Text(
-                        'Report Columns:',
+                        AppLocalizations().tr('report_columns'),
                         style: TextStyle(
-                          color: AppTheme.textPrimary,
+                          color: context.textPrimaryColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const Spacer(),
                       Text(
-                        '${tempSelectedColumns.length} selected',
+                        '${tempSelectedColumns.length} ${AppLocalizations().tr('selected')}',
                         style: TextStyle(
-                          color: AppTheme.textSecondary,
+                          color: context.textSecondaryColor,
                           fontSize: 11,
                         ),
                       ),
@@ -709,7 +1539,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           color: AppTheme.primaryGreen,
                         ),
                         label: Text(
-                          'Select Columns',
+                          AppLocalizations().tr('select_columns'),
                           style: TextStyle(
                             color: AppTheme.primaryGreen,
                             fontSize: 11,
@@ -725,7 +1555,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppTheme.darkBg2,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
                     ),
@@ -735,7 +1565,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       children: tempSelectedColumns.take(15).map((columnKey) {
                         final column = currentReportAvailableColumns.firstWhere(
                           (col) => col['key'] == columnKey,
-                          orElse: () => {'key': columnKey, 'label': columnKey},
+                          orElse: () => <String, String>{'key': columnKey, 'label': columnKey},
                         );
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -758,13 +1588,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppTheme.textSecondary.withOpacity(0.2),
+                              color: context.textSecondaryColor.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '+${tempSelectedColumns.length - 15} more',
+                              '+${tempSelectedColumns.length - 15} ${AppLocalizations().tr('more')}',
                               style: TextStyle(
-                                color: AppTheme.textSecondary,
+                                color: context.textSecondaryColor,
                                 fontSize: 9,
                               ),
                             ),
@@ -776,8 +1606,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   
                   const SizedBox(height: 8),
                   Text(
-                    'Report: ${_records.length} ${_selectedReport} records, ${tempSelectedColumns.length} columns',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                    '${AppLocalizations().tr('reports')}: ${_records.length} ${_selectedReport} ${AppLocalizations().tr('records')}, ${tempSelectedColumns.length} ${AppLocalizations().tr('columns')}',
+                    style: TextStyle(color: context.textSecondaryColor, fontSize: 11),
                   ),
                 ],
               ),
@@ -786,7 +1616,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           actions: [
             TextButton(
               onPressed: isLoading ? null : () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+              child: Text(AppLocalizations().tr('cancel'), style: TextStyle(color: context.textSecondaryColor)),
             ),
             ElevatedButton.icon(
               onPressed: isLoading || userEmail.isEmpty || tempSelectedColumns.isEmpty
@@ -822,7 +1652,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       size: 16,
                     )
                   : const Icon(Icons.send, size: 16),
-              label: Text(isLoading ? 'Sending...' : 'Send Report'),
+              label: Text(isLoading ? AppLocalizations().tr('sending') : AppLocalizations().tr('send_report')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryGreen,
                 foregroundColor: Colors.white,
@@ -976,7 +1806,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     List<String> headers = [];
     
     for (String columnKey in selectedColumns) {
-      final column = availableColumns.firstWhere((col) => col['key'] == columnKey, orElse: () => {'key': columnKey, 'label': columnKey});
+      final column = availableColumns.firstWhere((col) => col['key'] == columnKey, orElse: () => <String, String>{'key': columnKey, 'label': columnKey});
       headers.add(column['label']!);
     }
     csvData.add(headers);
@@ -1019,17 +1849,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             }
             break;
           case 'farmer':
-            String farmerId = record['farmer_id']?.toString() ?? '';
-            String farmerName = record['farmer_name']?.toString() ?? '';
-            if (farmerId.isNotEmpty && farmerName.isNotEmpty) {
-              value = '$farmerId - $farmerName';
-            } else if (farmerId.isNotEmpty) {
-              value = farmerId;
-            } else if (farmerName.isNotEmpty) {
-              value = farmerName;
-            } else {
-              value = '';
-            }
+            // Show only farmer ID
+            value = record['farmer_id']?.toString() ?? '';
             break;
           case 'society':
             String societyId = record['society_id']?.toString() ?? '';
@@ -1359,7 +2180,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     showMenu(
       context: context,
       position: position,
-      color: AppTheme.cardDark,
+      color: context.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -1385,26 +2206,34 @@ class _ReportsScreenState extends State<ReportsScreen> {
               children: [
                 Icon(Icons.filter_list, color: AppTheme.primaryGreen, size: 18),
                 const SizedBox(width: 8),
-                const Text(
-                  'Filters',
+                Text(
+                  AppLocalizations().tr('filters'),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: context.textPrimaryColor,
                   ),
                 ),
                 const Spacer(),
-                InkWell(
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () {
                     Navigator.pop(context);
                     _clearFilters();
                   },
-                  child: Text(
-                    'Clear',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.primaryGreen,
-                      fontWeight: FontWeight.w600,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryGreen.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      AppLocalizations().tr('clear'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.primaryGreen,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -1424,7 +2253,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   Icon(Icons.calendar_today, size: 14, color: AppTheme.primaryGreen),
                   const SizedBox(width: 6),
                   Text(
-                    'Date Range',
+                    AppLocalizations().tr('date_range'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -1447,11 +2276,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     builder: (context, child) {
                       return Theme(
                         data: Theme.of(context).copyWith(
-                          colorScheme: ColorScheme.dark(
+                          colorScheme: context.isDarkMode ? ColorScheme.dark(
                             primary: AppTheme.primaryGreen,
                             onPrimary: Colors.white,
-                            surface: AppTheme.cardDark,
+                            surface: context.cardColor,
                             onSurface: Colors.white,
+                          ) : ColorScheme.light(
+                            primary: AppTheme.primaryGreen,
+                            onPrimary: Colors.white,
+                            surface: context.cardColor,
+                            onSurface: Colors.black87,
                           ),
                         ),
                         child: child!,
@@ -1469,7 +2303,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppTheme.darkBg2,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: _fromDate != null || _toDate != null
@@ -1483,7 +2317,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         child: Text(
                           _fromDate != null && _toDate != null
                               ? '${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year} - ${_toDate!.day}/${_toDate!.month}/${_toDate!.year}'
-                              : 'Select date range',
+                              : AppLocalizations().tr('select_date_range'),
                           style: TextStyle(
                             fontSize: 11,
                             color: _fromDate != null ? AppTheme.primaryGreen : Colors.white54,
@@ -1507,7 +2341,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           enabled: false,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: _buildDropdownFilter(
-            'Shift',
+            AppLocalizations().tr('shift'),
             Icons.wb_sunny_outlined,
             _shiftFilter,
             ['all', 'morning', 'evening'],
@@ -1518,7 +2352,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 _applyFilters();
               });
             },
-            (value) => value == 'all' ? 'All Shifts' : value == 'morning' ? 'Morning' : 'Evening',
+            (value) => value == 'all' ? AppLocalizations().tr('all_shifts') : value == 'morning' ? AppLocalizations().tr('morning') : AppLocalizations().tr('evening'),
           ),
         ),
         // Channel Filter
@@ -1526,7 +2360,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           enabled: false,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: _buildDropdownFilter(
-            'Channel',
+            AppLocalizations().tr('channel'),
             Icons.waves,
             _channelFilter,
             ['all', 'COW', 'BUFFALO', 'MIXED'],
@@ -1537,7 +2371,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 _applyFilters();
               });
             },
-            (value) => value == 'all' ? 'All Channels' : value,
+            (value) => value == 'all' ? AppLocalizations().tr('all_channels') : value,
           ),
         ),
         // Machine Filter (All report types)
@@ -1545,7 +2379,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           enabled: false,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: _buildDropdownFilter(
-            'Machine',
+            AppLocalizations().tr('machine'),
             Icons.precision_manufacturing,
             _machineFilter ?? 'all',
             ['all', ..._machines.where((m) => m['machine_id'] != null && m['machine_id'].toString().isNotEmpty).map((m) => m['machine_id'].toString())],
@@ -1557,12 +2391,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
               });
             },
             (value) {
-              if (value == 'all') return 'All Machines';
-              final machine = _machines.firstWhere(
-                (m) => m['machine_id']?.toString() == value,
-                orElse: () => {},
-              );
-              final type = machine['machine_type']?.toString() ?? 'Machine';
+              if (value == 'all') return AppLocalizations().tr('all_machines');
+              Map<String, dynamic> machine = <String, dynamic>{};
+              try {
+                machine = _machines.firstWhere(
+                  (m) => m['machine_id']?.toString() == value,
+                );
+              } catch (_) {
+                // Not found, use empty map
+              }
+              final type = machine['machine_type']?.toString() ?? AppLocalizations().tr('machine');
               final machineId = machine['machine_id']?.toString() ?? value;
               return '$type - $machineId';
             },
@@ -1574,7 +2412,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             enabled: false,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: _buildDropdownFilter(
-              'Farmer',
+              AppLocalizations().tr('farmer'),
               Icons.person_outline,
               _farmerFilter ?? 'all',
               ['all', ..._farmers.map((f) => f['id']?.toString() ?? '')],
@@ -1586,12 +2424,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 });
               },
               (value) {
-                if (value == 'all') return 'All Farmers';
-                final farmer = _farmers.firstWhere(
-                  (f) => f['id']?.toString() == value,
-                  orElse: () => {},
-                );
-                final name = farmer['name']?.toString() ?? 'Farmer';
+                if (value == 'all') return AppLocalizations().tr('all_farmers');
+                Map<String, dynamic> farmer = <String, dynamic>{};
+                try {
+                  farmer = _farmers.firstWhere(
+                    (f) => f['id']?.toString() == value,
+                  );
+                } catch (_) {
+                  // Not found, use empty map
+                }
+                final name = farmer['name']?.toString() ?? AppLocalizations().tr('farmer');
                 return '$name - ID: $value';
               },
             ),
@@ -1613,12 +2455,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
               children: [
                 Icon(Icons.info_outline, size: 14, color: AppTheme.primaryGreen),
                 const SizedBox(width: 6),
-                Text(
-                  'Showing ${_records.length} of ${_allRecords.length} records',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.primaryGreen,
-                    fontWeight: FontWeight.w500,
+                Expanded(
+                  child: Text(
+                    '${AppLocalizations().tr('showing_records_of')} ${_records.length} ${AppLocalizations().tr('of')} ${_allRecords.length} ${AppLocalizations().tr('records')}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.primaryGreen,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -1658,7 +2502,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: AppTheme.darkBg2,
+            color: context.surfaceColor,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: value != 'all' ? AppTheme.primaryGreen : Colors.white24,
@@ -1676,9 +2520,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             style: TextStyle(
               fontSize: 11,
-              color: value != 'all' ? AppTheme.primaryGreen : Colors.white70,
+              color: value != 'all' ? AppTheme.primaryGreen : context.textSecondaryColor,
             ),
-            dropdownColor: AppTheme.cardDark,
+            dropdownColor: context.cardColor,
             items: options.map((String item) {
               return DropdownMenuItem<String>(
                 value: item,
@@ -1695,7 +2539,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Container(
       margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppTheme.cardDark,
+        color: context.cardColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppTheme.primaryGreen.withOpacity(0.2),
@@ -1715,7 +2559,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 AppTheme.primaryGreen.withOpacity(0.15),
               ),
               dataRowColor: MaterialStateProperty.all(
-                AppTheme.cardDark,
+                context.cardColor,
               ),
               border: TableBorder.all(
                 color: AppTheme.primaryGreen.withOpacity(0.1),
@@ -1731,7 +2575,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
               dataTextStyle: TextStyle(
                 fontSize: 11,
-                color: AppTheme.textPrimary,
+                color: context.textPrimaryColor,
               ),
               columns: _getTableColumns(),
               rows: _records.asMap().entries.map((entry) {
@@ -1740,8 +2584,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 return DataRow(
                   color: MaterialStateProperty.all(
                     index.isEven
-                        ? AppTheme.cardDark
-                        : AppTheme.cardDark.withOpacity(0.7),
+                        ? context.cardColor
+                        : context.surfaceColor,
                   ),
                   cells: _getTableCells(record, index + 1),
                 );
@@ -1757,54 +2601,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
     switch (_selectedReport) {
       case 'collections':
         return [
-          const DataColumn(label: Text('No.')),
-          const DataColumn(label: Text('Date & Time')),
-          const DataColumn(label: Text('Farmer')),
-          const DataColumn(label: Text('Society')),
-          const DataColumn(label: Text('Machine')),
-          const DataColumn(label: Text('Shift')),
-          const DataColumn(label: Text('Channel')),
-          const DataColumn(label: Text('FAT %')),
-          const DataColumn(label: Text('SNF %')),
-          const DataColumn(label: Text('CLR')),
-          const DataColumn(label: Text('Protein %')),
-          const DataColumn(label: Text('Lactose %')),
-          const DataColumn(label: Text('Salt %')),
-          const DataColumn(label: Text('Water %')),
-          const DataColumn(label: Text('Temp (°C)')),
-          const DataColumn(label: Text('Rate/L')),
-          const DataColumn(label: Text('Bonus')),
-          const DataColumn(label: Text('Qty (L)')),
-          const DataColumn(label: Text('Amount')),
+          DataColumn(label: Text(AppLocalizations().tr('sl_no'))),
+          DataColumn(label: Text(AppLocalizations().tr('date_time'))),
+          DataColumn(label: Text(AppLocalizations().tr('farmer_id'))),
+          DataColumn(label: Text(AppLocalizations().tr('society'))),
+          DataColumn(label: Text(AppLocalizations().tr('machine'))),
+          DataColumn(label: Text(AppLocalizations().tr('shift'))),
+          DataColumn(label: Text(AppLocalizations().tr('channel'))),
+          DataColumn(label: Text(AppLocalizations().tr('fat_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('snf_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('clr'))),
+          DataColumn(label: Text(AppLocalizations().tr('protein_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('lactose_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('salt_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('water_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('temp_c'))),
+          DataColumn(label: Text(AppLocalizations().tr('rate_per_liter'))),
+          DataColumn(label: Text(AppLocalizations().tr('bonus'))),
+          DataColumn(label: Text(AppLocalizations().tr('qty_liter'))),
+          DataColumn(label: Text(AppLocalizations().tr('amount'))),
         ];
       case 'dispatches':
         return [
-          const DataColumn(label: Text('No.')),
-          const DataColumn(label: Text('Date & Time')),
-          const DataColumn(label: Text('Dispatch ID')),
-          const DataColumn(label: Text('Society')),
-          const DataColumn(label: Text('Machine')),
-          const DataColumn(label: Text('Shift')),
-          const DataColumn(label: Text('Channel')),
-          const DataColumn(label: Text('Qty (L)')),
-          const DataColumn(label: Text('FAT %')),
-          const DataColumn(label: Text('SNF %')),
-          const DataColumn(label: Text('CLR')),
-          const DataColumn(label: Text('Rate/L')),
-          const DataColumn(label: Text('Amount')),
+          DataColumn(label: Text(AppLocalizations().tr('sl_no'))),
+          DataColumn(label: Text(AppLocalizations().tr('date_time'))),
+          DataColumn(label: Text(AppLocalizations().tr('dispatch_id'))),
+          DataColumn(label: Text(AppLocalizations().tr('society'))),
+          DataColumn(label: Text(AppLocalizations().tr('machine'))),
+          DataColumn(label: Text(AppLocalizations().tr('shift'))),
+          DataColumn(label: Text(AppLocalizations().tr('channel'))),
+          DataColumn(label: Text(AppLocalizations().tr('qty_liter'))),
+          DataColumn(label: Text(AppLocalizations().tr('fat_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('snf_percent'))),
+          DataColumn(label: Text(AppLocalizations().tr('clr'))),
+          DataColumn(label: Text(AppLocalizations().tr('rate_per_liter'))),
+          DataColumn(label: Text(AppLocalizations().tr('amount'))),
         ];
       case 'sales':
         return [
-          const DataColumn(label: Text('No.')),
-          const DataColumn(label: Text('Date & Time')),
-          const DataColumn(label: Text('Count')),
-          const DataColumn(label: Text('Society')),
-          const DataColumn(label: Text('Machine')),
-          const DataColumn(label: Text('Shift')),
-          const DataColumn(label: Text('Channel')),
-          const DataColumn(label: Text('Qty (L)')),
-          const DataColumn(label: Text('Rate/L')),
-          const DataColumn(label: Text('Amount')),
+          DataColumn(label: Text(AppLocalizations().tr('sl_no'))),
+          DataColumn(label: Text(AppLocalizations().tr('date_time'))),
+          DataColumn(label: Text(AppLocalizations().tr('count'))),
+          DataColumn(label: Text(AppLocalizations().tr('society'))),
+          DataColumn(label: Text(AppLocalizations().tr('machine'))),
+          DataColumn(label: Text(AppLocalizations().tr('shift'))),
+          DataColumn(label: Text(AppLocalizations().tr('channel'))),
+          DataColumn(label: Text(AppLocalizations().tr('qty_liter'))),
+          DataColumn(label: Text(AppLocalizations().tr('rate_per_liter'))),
+          DataColumn(label: Text(AppLocalizations().tr('amount'))),
         ];
       default:
         return [];
@@ -1827,13 +2671,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(record['farmer_name'] ?? 'Unknown', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text('ID: ${record['farmer_id']?.toString() ?? "-"}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
-              ],
+            Center(
+              child: Text(
+                _formatFarmerId(record['farmer_id']?.toString() ?? '-'),
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           DataCell(
@@ -2083,7 +2925,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
     } else if (['EV', 'EX', 'EVENING'].contains(shiftStr)) {
       return Colors.purple;
     }
-    return AppTheme.textSecondary;
+    return Colors.grey;
+  }
+
+  // Format farmer ID: "00310" → "310", "00000" → "0"
+  String _formatFarmerId(String? id) {
+    if (id == null || id.isEmpty || id == '-') return '-';
+    final result = id.replaceFirst(RegExp(r'^0+'), '');
+    return result.isEmpty ? '0' : result;
   }
 
   String _formatShift(String? shift) {
@@ -2107,7 +2956,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       case 'MIXED':
         return Colors.purple;
       default:
-        return AppTheme.textSecondary;
+        return Colors.grey;
     }
   }
 
@@ -2150,19 +2999,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
     
     if (_machineFilter != null) {
-      final machine = _machines.firstWhere(
-        (m) => m['machine_id']?.toString() == _machineFilter,
-        orElse: () => {},
-      );
+      Map<String, dynamic> machine = <String, dynamic>{};
+      try {
+        machine = _machines.firstWhere(
+          (m) => m['machine_id']?.toString() == _machineFilter,
+        );
+      } catch (_) {
+        // Not found, use empty map
+      }
       final machineName = machine['machine_type']?.toString() ?? 'Machine';
       filters.add('Machine: $machineName ($_machineFilter)');
     }
     
     if (_farmerFilter != null) {
-      final farmer = _farmers.firstWhere(
-        (f) => f['id']?.toString() == _farmerFilter,
-        orElse: () => {},
-      );
+      Map<String, dynamic> farmer = <String, dynamic>{};
+      try {
+        farmer = _farmers.firstWhere(
+          (f) => f['id']?.toString() == _farmerFilter,
+        );
+      } catch (_) {
+        // Not found, use empty map
+      }
       final farmerName = farmer['name']?.toString() ?? 'Farmer';
       filters.add('Farmer: $farmerName ($_farmerFilter)');
     }
@@ -2190,7 +3047,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          backgroundColor: AppTheme.cardDark,
+          backgroundColor: context.cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           titlePadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
           contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
@@ -2201,12 +3058,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
               const SizedBox(width: 6),
               Text(
                 'Select Columns',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 15),
+                style: TextStyle(color: context.textPrimaryColor, fontSize: 15),
               ),
               const Spacer(),
               Text(
                 '${tempSelection.length} selected',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+                style: TextStyle(color: context.textSecondaryColor, fontSize: 10),
               ),
             ],
           ),
@@ -2288,12 +3145,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               decoration: BoxDecoration(
                                 color: isSelected 
                                     ? AppTheme.primaryGreen.withOpacity(0.1)
-                                    : AppTheme.darkBg2,
+                                    : context.surfaceColor,
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                   color: isSelected 
                                       ? AppTheme.primaryGreen.withOpacity(0.5)
-                                      : AppTheme.textSecondary.withOpacity(0.2),
+                                      : context.borderColor.withOpacity(0.5),
                                 ),
                               ),
                               child: CheckboxListTile(
@@ -2328,8 +3185,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   column['label']!,
                                   style: TextStyle(
                                     color: isDefaultColumn 
-                                        ? AppTheme.textSecondary.withOpacity(0.8)
-                                        : AppTheme.textPrimary,
+                                        ? context.textSecondaryColor.withOpacity(0.8)
+                                        : context.textPrimaryColor,
                                     fontSize: 11,
                                     fontWeight: isDefaultColumn ? FontWeight.w600 : FontWeight.normal,
                                   ),
@@ -2338,7 +3195,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     ? Text(
                                         'Required',
                                         style: TextStyle(
-                                          color: AppTheme.textSecondary.withOpacity(0.6),
+                                          color: context.textSecondaryColor.withOpacity(0.6),
                                           fontSize: 9,
                                         ),
                                       )
@@ -2365,7 +3222,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+              child: Text('Cancel', style: TextStyle(color: context.textSecondaryColor, fontSize: 11)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -2375,11 +3232,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryGreen,
                 foregroundColor: Colors.white,
+                elevation: 2,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('Apply', style: TextStyle(fontSize: 11)),
+              child: Text(AppLocalizations().tr('apply'), style: const TextStyle(fontSize: 11)),
             ),
           ],
         ),

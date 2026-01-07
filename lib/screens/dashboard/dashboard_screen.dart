@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
 import '../../services/services.dart';
 import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
+import '../../l10n/l10n.dart';
 import '../auth/login_screen.dart';
 import '../reports/reports_screen.dart';
 import 'machine_control_panel_screen.dart';
@@ -18,21 +21,74 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardService _dashboardService = DashboardService();
   final BluetoothService _bluetoothService = BluetoothService();
+  final ConnectivityService _connectivityService = ConnectivityService();
+  final OfflineCacheService _cacheService = OfflineCacheService();
+
   List<dynamic> _machines = [];
   Map<String, dynamic>? _statistics;
   bool _isLoading = true;
   String? _errorMessage;
 
+  // Offline mode tracking
+  bool _isOffline = false;
+  bool _isFromCache = false;
+  String _lastSyncTime = 'Never';
+  StreamSubscription<bool>? _connectivitySubscription;
+
   // Settings state
   bool _isDarkMode = true;
-  String _selectedLanguage = 'English';
   bool _isAutoConnectEnabled = false;
 
   @override
   void initState() {
     super.initState();
+    _initializeTheme();
+    _initConnectivityListener();
     _loadData();
     _initializeBluetooth();
+  }
+
+  void _initializeTheme() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    setState(() {
+      _isDarkMode = themeProvider.isDarkMode;
+    });
+  }
+
+  void _initConnectivityListener() {
+    // Start periodic connectivity checking
+    _connectivityService.startPeriodicCheck(
+      interval: const Duration(seconds: 30),
+    );
+
+    // Listen to connectivity changes
+    _connectivitySubscription = _connectivityService.connectivityStream.listen((
+      isConnected,
+    ) {
+      if (mounted) {
+        setState(() {
+          _isOffline = !isConnected;
+        });
+
+        // If connection restored and we were showing cached data, refresh
+        if (isConnected && _isFromCache) {
+          print('🌐 [Dashboard] Connection restored - refreshing data...');
+          _loadData();
+        }
+      }
+    });
+
+    // Load last sync time
+    _loadLastSyncTime();
+  }
+
+  Future<void> _loadLastSyncTime() async {
+    final lastSync = await _cacheService.getLastSyncTimeFormatted();
+    if (mounted) {
+      setState(() {
+        _lastSyncTime = lastSync;
+      });
+    }
   }
 
   void _initializeBluetooth() async {
@@ -68,6 +124,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _bluetoothService.stopScan();
+    _connectivitySubscription?.cancel();
+    _connectivityService.stopPeriodicCheck();
     super.dispose();
   }
 
@@ -97,17 +155,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final machinesResult = results[0];
     final statsResult = results[1];
 
+    bool fromCache = false;
+
     if (machinesResult['success']) {
       _machines = machinesResult['machines'];
+      if (machinesResult['fromCache'] == true) fromCache = true;
     } else {
       _errorMessage = machinesResult['message'];
     }
 
     if (statsResult['success']) {
       _statistics = statsResult['statistics'];
+      if (statsResult['fromCache'] == true) fromCache = true;
     }
 
-    setState(() => _isLoading = false);
+    // Update last sync time
+    await _loadLastSyncTime();
+
+    setState(() {
+      _isLoading = false;
+      _isFromCache = fromCache;
+      _isOffline = !_connectivityService.isConnected;
+    });
   }
 
   Future<void> _logout() async {
@@ -131,15 +200,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context,
       user: user,
       isDarkMode: _isDarkMode,
-      selectedLanguage: _selectedLanguage,
       isAutoConnectEnabled: _isAutoConnectEnabled,
       onThemeChanged: (value) {
         setState(() => _isDarkMode = value);
-        // TODO: Implement actual theme switching
+        // Theme is persisted by ThemeProvider in profile_menu_screen
       },
-      onLanguageChanged: (value) {
-        setState(() => _selectedLanguage = value);
-        // TODO: Implement actual language switching
+      onLanguageChanged: (locale) {
+        // Language is handled by AppLocalizations, just rebuild UI
+        setState(() {});
       },
       onAutoConnectChanged: (value) async {
         setState(() => _isAutoConnectEnabled = value);
@@ -152,26 +220,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _navigateToControlPanel() {
     final connectedMachines = _bluetoothService.connectedMachines;
-    
+
     if (connectedMachines.isEmpty) {
       return;
     }
 
     // Get the first connected machine's ID
     final firstConnectedMachineId = connectedMachines.keys.first;
-    
+
     // Find the corresponding machine from the machines list
     final machine = _machines.firstWhere(
-      (m) => m['machine_id'].toString().replaceAll(RegExp(r'[^0-9]'), '') == firstConnectedMachineId,
-      orElse: () => {'machine_id': firstConnectedMachineId, 'name': 'Machine $firstConnectedMachineId'},
+      (m) =>
+          m['machine_id'].toString().replaceAll(RegExp(r'[^0-9]'), '') ==
+          firstConnectedMachineId,
+      orElse: () => {
+        'machine_id': firstConnectedMachineId,
+        'name': 'Machine $firstConnectedMachineId',
+        'machine_type': 'Lactosure',
+      },
     );
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MachineControlPanelScreen(
-          machineId: machine['machine_id']?.toString() ?? firstConnectedMachineId,
-          machineName: machine['name']?.toString() ?? 'Machine $firstConnectedMachineId',
+          machineId:
+              machine['machine_id']?.toString() ?? firstConnectedMachineId,
+          machineName:
+              machine['name']?.toString() ?? 'Machine $firstConnectedMachineId',
+          machineType: machine['machine_type']?.toString() ?? 'Lactosure',
         ),
       ),
     );
@@ -182,68 +259,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
     final hasConnectedDevice = _bluetoothService.connectedMachines.isNotEmpty;
+    final l10n = AppLocalizations();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        actions: [
-          // Bluetooth dropdown menu
-          _BluetoothDropdownButton(bluetoothService: _bluetoothService),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: 'Refresh',
-          ),
-          IconButton(
-            icon: const Icon(Icons.assessment_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ReportsScreen()),
-              );
-            },
-            tooltip: 'Reports',
-          ),
-          IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: _showProfileMenu,
-            tooltip: 'Profile Menu',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Dashboard Header
-          DashboardHeader(
-            user: user,
-            statistics: _statistics,
-            onRefresh: _loadData,
-          ),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) async {
+        if (didPop) return;
 
-          // Main Content
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadData,
-              child: _buildContent(),
+        final shouldExit = await ExitConfirmationDialog.show(context);
+        if (shouldExit && context.mounted) {
+          // Exit the app
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.tr('dashboard')),
+          actions: [
+            // Bluetooth dropdown menu
+            _BluetoothDropdownButton(bluetoothService: _bluetoothService),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadData,
+              tooltip: l10n.tr('refresh'),
             ),
-          ),
-        ],
-      ),
-      // Floating Control Panel Button (shown when Bluetooth device connected)
-      floatingActionButton: hasConnectedDevice
-          ? FloatingActionButton.extended(
-              onPressed: _navigateToControlPanel,
-              backgroundColor: AppTheme.primaryGreen,
-              icon: const Icon(Icons.settings_remote, color: Colors.white),
-              label: const Text(
-                'Control Panel',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
+            IconButton(
+              icon: const Icon(Icons.assessment_outlined),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        const ReportsScreen(defaultLocalMode: false),
+                  ),
+                );
+              },
+              tooltip: l10n.tr('reports'),
+            ),
+            // Offline/Sync Status Icon
+            if (_isOffline || _isFromCache) _buildOfflineStatusIcon(),
+            IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: _showProfileMenu,
+              tooltip: l10n.tr('profile'),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // Dashboard Header
+            DashboardHeader(
+              user: user,
+              statistics: _statistics,
+              onRefresh: _loadData,
+            ),
+
+            // Main Content
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadData,
+                child: _buildContent(),
               ),
-            )
-          : null,
+            ),
+          ],
+        ),
+        // Floating Control Panel Button (shown when Bluetooth device connected)
+        floatingActionButton: hasConnectedDevice
+            ? FloatingActionButton.extended(
+                onPressed: _navigateToControlPanel,
+                backgroundColor: AppTheme.primaryGreen,
+                icon: const Icon(Icons.settings_remote, color: Colors.white),
+                label: Text(
+                  l10n.tr('control_panel'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            : null,
+      ),
     );
   }
 
@@ -259,7 +354,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _buildMachinesList();
   }
 
+  /// Minimal offline status icon for AppBar
+  Widget _buildOfflineStatusIcon() {
+    final l10n = AppLocalizations();
+    return IconButton(
+      icon: Stack(
+        children: [
+          Icon(
+            _isOffline ? Icons.cloud_off : Icons.cloud_done,
+            color: _isOffline ? Colors.orange : AppTheme.primaryTeal,
+          ),
+          // Small indicator dot
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: _isOffline ? Colors.orange : AppTheme.primaryTeal,
+                shape: BoxShape.circle,
+                border: Border.all(color: context.borderColor, width: 1),
+              ),
+            ),
+          ),
+        ],
+      ),
+      onPressed: _showOfflineStatusPopup,
+      tooltip: _isOffline
+          ? l10n.tr('offline_mode')
+          : l10n.tr('using_cached_data'),
+    );
+  }
+
+  /// Show offline status popup with details
+  void _showOfflineStatusPopup() {
+    final l10n = AppLocalizations();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: context.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              _isOffline ? Icons.cloud_off : Icons.cloud_done,
+              color: _isOffline ? Colors.orange : AppTheme.primaryTeal,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              _isOffline ? l10n.tr('offline_mode') : l10n.tr('cached_data'),
+              style: TextStyle(color: context.textPrimaryColor, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isOffline
+                  ? l10n.tr('offline_cached_msg')
+                  : l10n.tr('cached_pull_refresh'),
+              style: TextStyle(color: context.textSecondaryColor, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  size: 16,
+                  color: context.textSecondaryColor,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${l10n.tr('last_synced')}: $_lastSyncTime',
+                  style: TextStyle(
+                    color: context.textSecondaryColor,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          if (!_isOffline)
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadData();
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(l10n.tr('sync_now')),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primaryTeal,
+              ),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.tr('ok')),
+            style: TextButton.styleFrom(
+              foregroundColor: context.textSecondaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorState() {
+    final l10n = AppLocalizations();
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -273,7 +479,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 24),
           CustomButton(
-            text: 'Retry',
+            text: l10n.tr('retry'),
             onPressed: _loadData,
             icon: Icons.refresh,
           ),
@@ -291,9 +497,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
-                const Text(
-                  'Machines',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  AppLocalizations().tr('machines'),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Container(
@@ -366,7 +575,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No machines found',
+            AppLocalizations().tr('no_machines'),
             style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
           ),
         ],
@@ -450,16 +659,17 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
       if (successCount > 0) {
         CustomSnackbar.showSuccess(
           context,
-          message: 'Connected to $successCount/${results.length} devices',
+          message:
+              '${AppLocalizations().tr('connected_to_devices')} $successCount/${results.length} ${AppLocalizations().tr('devices')}',
           submessage: successCount == results.length
-              ? 'All devices connected successfully'
-              : 'Some devices failed to connect',
+              ? AppLocalizations().tr('all_devices_connected')
+              : AppLocalizations().tr('some_devices_failed'),
         );
       } else {
         CustomSnackbar.showError(
           context,
-          message: 'Connection failed',
-          submessage: 'Could not connect to any device',
+          message: AppLocalizations().tr('connection_failed'),
+          submessage: AppLocalizations().tr('could_not_connect'),
         );
       }
     }
@@ -475,8 +685,8 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
 
       CustomSnackbar.showSuccess(
         context,
-        message: 'Disconnected from all devices',
-        submessage: 'All BLE connections closed',
+        message: AppLocalizations().tr('disconnected_from_all'),
+        submessage: AppLocalizations().tr('all_ble_closed'),
       );
     }
   }
@@ -488,7 +698,7 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      tooltip: 'Bluetooth Options',
+      tooltip: AppLocalizations().tr('bluetooth_options'),
       icon: Stack(
         children: [
           Icon(_getStatusIcon(), color: _getStatusColor()),
@@ -569,12 +779,12 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
                   const SizedBox(width: 8),
                   Text(
                     _status == BluetoothStatus.scanning
-                        ? 'Scanning...'
+                        ? AppLocalizations().tr('scanning')
                         : _connectedCount > 0
-                        ? '$_connectedCount Connected'
+                        ? '$_connectedCount ${AppLocalizations().tr('connected_count')}'
                         : _availableCount > 0
-                        ? '$_availableCount Available'
-                        : 'Offline',
+                        ? '$_availableCount ${AppLocalizations().tr('available_count')}'
+                        : AppLocalizations().tr('offline'),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: _getStatusColor(),
@@ -586,7 +796,7 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
                 Padding(
                   padding: const EdgeInsets.only(left: 28),
                   child: Text(
-                    '$_availableCount device(s) found',
+                    '$_availableCount ${AppLocalizations().tr('devices_found')}',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
@@ -597,24 +807,26 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
 
         // Scan option
         if (_status == BluetoothStatus.scanning)
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'stop_scan',
             child: Row(
               children: [
                 Icon(Icons.stop, color: Colors.orange),
                 SizedBox(width: 12),
-                Text('Stop Scan'),
+                Expanded(child: Text(AppLocalizations().tr('stop_scan'))),
               ],
             ),
           )
         else
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'scan',
             child: Row(
               children: [
                 Icon(Icons.bluetooth_searching, color: Colors.blue),
                 SizedBox(width: 12),
-                Text('Scan for Devices'),
+                Expanded(
+                  child: Text(AppLocalizations().tr('scan_for_devices')),
+                ),
               ],
             ),
           ),
@@ -635,7 +847,13 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
                       color: _availableCount > 0 ? Colors.green : Colors.grey,
                     ),
               const SizedBox(width: 12),
-              Text(_isConnectingAll ? 'Connecting...' : 'Connect All'),
+              Expanded(
+                child: Text(
+                  _isConnectingAll
+                      ? AppLocalizations().tr('connecting')
+                      : AppLocalizations().tr('connect_all'),
+                ),
+              ),
             ],
           ),
         ),
@@ -653,7 +871,13 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
                       color: _connectedCount > 0 ? Colors.red : Colors.grey,
                     ),
               const SizedBox(width: 12),
-              Text(_isDisconnectingAll ? 'Disconnecting...' : 'Disconnect All'),
+              Expanded(
+                child: Text(
+                  _isDisconnectingAll
+                      ? AppLocalizations().tr('disconnecting')
+                      : AppLocalizations().tr('disconnect_all'),
+                ),
+              ),
             ],
           ),
         ),

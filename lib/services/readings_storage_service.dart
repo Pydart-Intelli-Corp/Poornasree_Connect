@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/lactosure_reading.dart';
@@ -12,6 +13,13 @@ class ReadingsStorageService {
   static const String _keyPrefix = 'readings_';
   static const int _maxReadingsPerMachine =
       100; // Max readings to store per machine per day
+
+  /// Stream controller to broadcast new readings
+  final StreamController<LactosureReading> _readingStreamController =
+      StreamController<LactosureReading>.broadcast();
+
+  /// Stream of new readings - listen to get notified when data is saved
+  Stream<LactosureReading> get onNewReading => _readingStreamController.stream;
 
   /// Get today's date string for storage key
   String _getTodayKey() {
@@ -57,6 +65,9 @@ class ReadingsStorageService {
       print(
         '💾 [Storage] Saved reading for machine $machineId (${readings.length} total today)',
       );
+      
+      // Broadcast the new reading to listeners
+      _readingStreamController.add(reading);
     } catch (e) {
       print('❌ [Storage] Error saving reading: $e');
     }
@@ -217,6 +228,30 @@ class ReadingsStorageService {
       print('🧹 [Storage] Cleared all readings for today');
     } catch (e) {
       print('❌ [Storage] Error clearing today readings: $e');
+    }
+  }
+
+  /// Clear ALL local readings (all dates)
+  Future<int> clearAllReadings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final allKeys = prefs.getKeys();
+      final readingKeys = allKeys
+          .where((k) => k.startsWith(_keyPrefix))
+          .toList();
+
+      int removedCount = 0;
+      for (final key in readingKeys) {
+        await prefs.remove(key);
+        removedCount++;
+      }
+
+      print('🧹 [Storage] Cleared ALL local readings ($removedCount entries)');
+      return removedCount;
+    } catch (e) {
+      print('❌ [Storage] Error clearing all readings: $e');
+      return 0;
     }
   }
 }

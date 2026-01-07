@@ -702,8 +702,9 @@ class BluetoothService {
       '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
   static const String _nordicUartRxUuid =
       '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Write to this
-  static const String _nordicUartTxUuid =
-      '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Read from this
+  // Unused - keeping for reference
+  // static const String _nordicUartTxUuid =
+  //     '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Read from this
 
   /// Send data (bytes) to a specific machine via BLE
   /// Returns true if successful, false otherwise

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../utils/utils.dart';
-import 'flower_spinner.dart';
+import '../../../utils/utils.dart';
+import '../feedback/flower_spinner.dart';
 
 class PremiumGradientButton extends StatelessWidget {
   final String text;

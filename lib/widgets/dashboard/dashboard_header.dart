@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../utils/utils.dart';
+import '../../l10n/l10n.dart';
 
 /// Compact dashboard header widget - minimal info, full details in profile
 class DashboardHeader extends StatelessWidget {
@@ -21,7 +22,7 @@ class DashboardHeader extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(ResponsiveHelper.getSpacing(context, 16)),
       decoration: BoxDecoration(
-        color: AppTheme.cardDark,
+        color: context.cardColor,
         border: Border(
           bottom: BorderSide(
             color: AppTheme.primaryGreen.withValues(alpha: 0.2),
@@ -43,7 +44,7 @@ class DashboardHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.darkBg2,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppTheme.primaryGreen.withValues(alpha: 0.2),
@@ -88,7 +89,7 @@ class DashboardHeader extends StatelessWidget {
                         style: TextStyle(
                           fontSize: ResponsiveHelper.getFontSize(context, 16),
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
+                          color: context.textPrimaryColor,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -123,7 +124,7 @@ class DashboardHeader extends StatelessWidget {
                   _getHierarchyText(),
                   style: TextStyle(
                     fontSize: ResponsiveHelper.getFontSize(context, 12),
-                    color: AppTheme.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -154,6 +155,8 @@ class DashboardHeader extends StatelessWidget {
   }
 
   Widget _buildStatisticsRow(BuildContext context) {
+    final isDark = context.isDarkMode;
+    
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -161,8 +164,8 @@ class DashboardHeader extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppTheme.primaryGreen.withValues(alpha: 0.08),
-            AppTheme.primaryGreen.withValues(alpha: 0.03),
+            AppTheme.primaryGreen.withValues(alpha: isDark ? 0.08 : 0.05),
+            AppTheme.primaryGreen.withValues(alpha: isDark ? 0.03 : 0.01),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
@@ -183,7 +186,7 @@ class DashboardHeader extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'Last 30 Days',
+                AppLocalizations().tr('last_30_days'),
                 style: TextStyle(
                   fontSize: ResponsiveHelper.getFontSize(context, 12),
                   fontWeight: FontWeight.w600,
@@ -212,34 +215,34 @@ class DashboardHeader extends StatelessWidget {
               Expanded(
                 child: _buildStatItem(
                   context,
-                  'Revenue',
+                  AppLocalizations().tr('revenue'),
                   '₹${_formatNumber(statistics?['totalRevenue30Days'] ?? 0)}',
                   Icons.currency_rupee,
                 ),
               ),
-              _buildDivider(),
+              _buildDivider(context),
               Expanded(
                 child: _buildStatItem(
                   context,
-                  'Collection',
+                  AppLocalizations().tr('collection'),
                   '${_formatNumber(statistics?['totalCollection30Days'] ?? 0)} L',
                   Icons.water_drop_outlined,
                 ),
               ),
-              _buildDivider(),
+              _buildDivider(context),
               Expanded(
                 child: _buildStatItem(
                   context,
-                  'Fat',
+                  AppLocalizations().tr('fat'),
                   '${(statistics?['avgFat'] ?? 0).toStringAsFixed(1)}%',
                   Icons.opacity,
                 ),
               ),
-              _buildDivider(),
+              _buildDivider(context),
               Expanded(
                 child: _buildStatItem(
                   context,
-                  'SNF',
+                  AppLocalizations().tr('snf'),
                   '${(statistics?['avgSnf'] ?? 0).toStringAsFixed(1)}%',
                   Icons.water,
                 ),
@@ -251,12 +254,12 @@ class DashboardHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildDivider() {
+  Widget _buildDivider(BuildContext context) {
     return Container(
       width: 1,
       height: 32,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: AppTheme.borderDark,
+      color: context.borderColor,
     );
   }
 
@@ -279,7 +282,7 @@ class DashboardHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: ResponsiveHelper.getFontSize(context, 13),
             fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
+            color: context.textPrimaryColor,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -288,7 +291,7 @@ class DashboardHeader extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: ResponsiveHelper.getFontSize(context, 9),
-            color: AppTheme.textTertiary,
+            color: context.textSecondaryColor,
           ),
         ),
       ],

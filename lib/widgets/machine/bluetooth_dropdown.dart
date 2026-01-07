@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' hide BluetoothService;
 import '../../services/bluetooth_service.dart';
 import '../../utils/config/theme.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Professional Bluetooth device dropdown with Lactosure-BLE filtering
 class BluetoothDropdown extends StatefulWidget {
@@ -157,7 +158,7 @@ class _BluetoothDropdownState extends State<BluetoothDropdown> {
               ),
               const SizedBox(width: 12),
               Text(
-                'Scanning for devices...',
+                AppLocalizations().tr('scanning_for_devices'),
                 style: TextStyle(color: AppTheme.textSecondary),
               ),
             ],
@@ -180,14 +181,14 @@ class _BluetoothDropdownState extends State<BluetoothDropdown> {
                   Icon(Icons.bluetooth_disabled, color: AppTheme.textSecondary, size: 20),
                   const SizedBox(width: 12),
                   Text(
-                    'No Lactosure-BLE devices',
+                    AppLocalizations().tr('no_lactosure_ble_devices'),
                     style: TextStyle(color: AppTheme.textSecondary),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                'Make sure devices are powered on',
+                AppLocalizations().tr('make_sure_devices_powered'),
                 style: TextStyle(
                   fontSize: 11,
                   color: AppTheme.textSecondary.withOpacity(0.7),
@@ -206,7 +207,7 @@ class _BluetoothDropdownState extends State<BluetoothDropdown> {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(
-            'Available Devices (${_devices.length})',
+            '${AppLocalizations().tr('available_devices_count')} (${_devices.length})',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -249,7 +250,7 @@ class _BluetoothDropdownState extends State<BluetoothDropdown> {
                       Text(
                         device.platformName.isNotEmpty
                             ? device.platformName
-                            : 'Unknown Device',
+                            : AppLocalizations().tr('unknown_device'),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
@@ -293,18 +294,18 @@ class _BluetoothDropdownState extends State<BluetoothDropdown> {
     if (_selectedDevice != null) {
       return _selectedDevice!.platformName.isNotEmpty
           ? _selectedDevice!.platformName
-          : 'Device Selected';
+          : AppLocalizations().tr('device_selected');
     }
 
     switch (_status) {
       case BluetoothStatus.offline:
-        return 'No Devices';
+        return AppLocalizations().tr('no_devices');
       case BluetoothStatus.scanning:
-        return 'Scanning...';
+        return AppLocalizations().tr('scanning');
       case BluetoothStatus.available:
-        return '${_devices.length} Device${_devices.length > 1 ? 's' : ''}';
+        return '${_devices.length} ${AppLocalizations().tr('devices')}';
       case BluetoothStatus.connected:
-        return 'Connected';
+        return AppLocalizations().tr('connected');
     }
   }
 }

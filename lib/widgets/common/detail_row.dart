@@ -32,7 +32,7 @@ class DetailRow extends StatelessWidget {
           const SizedBox(width: 12),
           Text(
             '$label:',
-            style: TextStyle(fontSize: fontSize, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: fontSize, color: context.textSecondaryColor),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -41,7 +41,7 @@ class DetailRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: fontSize,
                 fontWeight: FontWeight.w500,
-                color: AppTheme.textPrimary,
+                color: context.textPrimaryColor,
               ),
               textAlign: TextAlign.right,
             ),

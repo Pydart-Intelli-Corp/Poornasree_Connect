@@ -6,3 +6,4 @@ export 'otp_verification_dialog.dart';
 export 'confirmation_dialog.dart';
 export 'selection_dialog.dart';
 export 'machine_selection_dialog.dart';
+export 'exit_confirmation_dialog.dart';

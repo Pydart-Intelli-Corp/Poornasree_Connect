@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../utils/utils.dart';
-import '../../models/models.dart';
-import '../../utils/config/theme.dart';
-import '../machine/bluetooth_status_button.dart';
-import 'flower_spinner.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../utils/utils.dart';
+import '../../../models/models.dart';
+import '../../../utils/config/theme.dart';
+import '../../../services/services.dart';
+import '../../machine/bluetooth_status_button.dart';
+import '../feedback/flower_spinner.dart';
 
 /// MachineCard - Google Material Design 3 Style
 /// Clean, minimal, elevated surfaces with proper visual hierarchy
@@ -48,6 +51,7 @@ class _MachineCardState extends State<MachineCard> {
   @override
   Widget build(BuildContext context) {
     final machine = Machine.fromJson(_machineData);
+    final isDark = context.isDarkMode;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -56,12 +60,13 @@ class _MachineCardState extends State<MachineCard> {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: AppTheme.cardDark,
+          color: context.cardColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: machine.isMasterMachine
                 ? AppTheme.primaryAmber.withOpacity(0.4)
-                : AppTheme.borderDark.withOpacity(0.3),
+                : (isDark ? AppTheme.borderDark : AppTheme.borderLight)
+                    .withOpacity(0.3),
             width: 1,
           ),
           boxShadow: [
@@ -174,51 +179,75 @@ class _MachineCardState extends State<MachineCard> {
     );
   }
 
-  /// Clean circular image with subtle border
+  /// Clean circular image with subtle border - supports cached images for offline
   Widget _buildImage(Machine machine, bool hasImage) {
     const double size = 72;
+    final isDark = context.isDarkMode;
 
     if (!hasImage) {
       return Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: AppTheme.cardDark2,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
           Icons.precision_manufacturing_outlined,
-          color: Colors.white.withOpacity(0.3),
+          color: (isDark ? Colors.white : Colors.black).withOpacity(0.3),
           size: 32,
         ),
       );
     }
+
+    final machineId = machine.id.toString();
+    final networkUrl = machine.imageUrl!.startsWith('http')
+        ? machine.imageUrl!
+        : '${const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://192.168.1.68:3000')}${machine.imageUrl}';
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: AppTheme.cardDark2,
+        color: context.surfaceColor,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          machine.imageUrl!.startsWith('http')
-              ? machine.imageUrl!
-              : '${const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://192.168.1.68:3000')}${machine.imageUrl}',
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.image_not_supported_outlined,
-            color: Colors.white.withOpacity(0.3),
-            size: 28,
-          ),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(child: FlowerSpinner(size: 20));
+        child: FutureBuilder<String?>(
+          future: OfflineCacheService().getCachedImagePath(machineId),
+          builder: (context, snapshot) {
+            // If we have a cached image, use it
+            if (snapshot.hasData && snapshot.data != null) {
+              final file = File(snapshot.data!);
+              return Image.file(
+                file,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _buildNetworkImage(networkUrl),
+              );
+            }
+            // Otherwise use network image
+            return _buildNetworkImage(networkUrl);
           },
         ),
       ),
+    );
+  }
+
+  /// Network image with loading and error handling
+  Widget _buildNetworkImage(String url) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Icon(
+        Icons.image_not_supported_outlined,
+        color: Colors.white.withOpacity(0.3),
+        size: 28,
+      ),
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(child: FlowerSpinner(size: 20));
+      },
     );
   }
 
@@ -236,7 +265,7 @@ class _MachineCardState extends State<MachineCard> {
           Icon(Icons.star_rounded, size: 12, color: AppTheme.primaryAmber),
           const SizedBox(width: 4),
           Text(
-            'Master',
+            AppLocalizations().tr('master'),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -277,17 +306,17 @@ class _MachineCardState extends State<MachineCard> {
     final userPwdStatus = machine.getUserPasswordStatus();
     final supervisorPwdStatus = machine.getSupervisorPasswordStatus();
     if (userPwdStatus.statusType == 'pending') {
-      pendingItems.add('User Password');
+      pendingItems.add(AppLocalizations().tr('user_password'));
     }
     if (supervisorPwdStatus.statusType == 'pending') {
-      pendingItems.add('Supervisor Password');
+      pendingItems.add(AppLocalizations().tr('supervisor_password'));
     }
 
     // Check chart status
     final chartInfo = machine.parseChartDetails();
     if (chartInfo.pending.isNotEmpty) {
       final chartTypes = chartInfo.pending.map((c) => c.channel).join(', ');
-      pendingItems.add('Rate Charts ($chartTypes)');
+      pendingItems.add('${AppLocalizations().tr('rate_charts')} ($chartTypes)');
     }
 
     // Check correction status
@@ -296,7 +325,7 @@ class _MachineCardState extends State<MachineCard> {
       final correctionTypes = correctionInfo.pending
           .map((c) => c.channel)
           .join(', ');
-      pendingItems.add('Corrections ($correctionTypes)');
+      pendingItems.add('${AppLocalizations().tr('corrections')} ($correctionTypes)');
     }
 
     return {'count': pendingItems.length, 'items': pendingItems};
@@ -326,7 +355,7 @@ class _MachineCardState extends State<MachineCard> {
             ),
             const SizedBox(width: 4),
             Text(
-              'Update Available',
+              AppLocalizations().tr('update_available'),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -348,7 +377,7 @@ class _MachineCardState extends State<MachineCard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardDark,
+        backgroundColor: context.cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -369,8 +398,8 @@ class _MachineCardState extends State<MachineCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Update Available',
+                  Text(
+                    AppLocalizations().tr('update_available'),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -378,7 +407,7 @@ class _MachineCardState extends State<MachineCard> {
                     ),
                   ),
                   Text(
-                    '${pendingItems.length} item${pendingItems.length > 1 ? 's' : ''} ready to download',
+                    '${pendingItems.length} ${AppLocalizations().tr('items_ready_download')}',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
@@ -405,7 +434,7 @@ class _MachineCardState extends State<MachineCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Pending Updates:',
+                    '${AppLocalizations().tr('pending_updates')}:',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -444,7 +473,7 @@ class _MachineCardState extends State<MachineCard> {
 
             // Instructions header
             Text(
-              'How to Update Machine:',
+              '${AppLocalizations().tr('how_to_update')}:',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -457,9 +486,8 @@ class _MachineCardState extends State<MachineCard> {
             _buildInstructionStep(
               stepNumber: 1,
               icon: Icons.wifi,
-              title: 'Check WiFi Connection',
-              description:
-                  'Ensure the machine is connected to the correct WiFi network.',
+              title: AppLocalizations().tr('wifi_instruction').split('.').first,
+              description: AppLocalizations().tr('wifi_instruction'),
             ),
             const SizedBox(height: 12),
 
@@ -467,9 +495,11 @@ class _MachineCardState extends State<MachineCard> {
             _buildInstructionStep(
               stepNumber: 2,
               icon: Icons.arrow_upward_rounded,
-              title: 'Find Update from Cloud',
-              description:
-                  'Press the UP arrow button on the machine and select "Update from Cloud".',
+              title: AppLocalizations()
+                  .tr('find_update_instruction')
+                  .split('.')
+                  .first,
+              description: AppLocalizations().tr('find_update_instruction'),
             ),
             const SizedBox(height: 12),
 
@@ -477,8 +507,11 @@ class _MachineCardState extends State<MachineCard> {
             _buildInstructionStep(
               stepNumber: 3,
               icon: Icons.check_circle_outline,
-              title: 'Confirm Update',
-              description: 'Press OK to start downloading the updates.',
+              title: AppLocalizations()
+                  .tr('confirm_update_instruction')
+                  .split('.')
+                  .first,
+              description: AppLocalizations().tr('confirm_update_instruction'),
             ),
           ],
         ),
@@ -486,7 +519,7 @@ class _MachineCardState extends State<MachineCard> {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(
-              'Got it',
+              AppLocalizations().tr('got_it'),
               style: TextStyle(
                 color: AppTheme.successColor,
                 fontWeight: FontWeight.w600,
@@ -538,7 +571,7 @@ class _MachineCardState extends State<MachineCard> {
                   Icon(
                     icon,
                     size: 16,
-                    color: AppTheme.textPrimary.withOpacity(0.8),
+                    color: context.textPrimaryColor.withOpacity(0.8),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -546,7 +579,7 @@ class _MachineCardState extends State<MachineCard> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                 ],
@@ -556,7 +589,7 @@ class _MachineCardState extends State<MachineCard> {
                 description,
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppTheme.textSecondary.withOpacity(0.8),
+                  color: context.textSecondaryColor.withOpacity(0.8),
                 ),
               ),
             ],
@@ -609,7 +642,7 @@ class _MachineCardState extends State<MachineCard> {
     details.add(
       _DetailItem(
         icon: Icons.science_outlined,
-        label: 'Total Tests',
+        label: AppLocalizations().tr('total_tests'),
         value: machine.totalTests.toString(),
       ),
     );
@@ -617,7 +650,7 @@ class _MachineCardState extends State<MachineCard> {
     details.add(
       _DetailItem(
         icon: Icons.cleaning_services_outlined,
-        label: 'Daily Clean',
+        label: AppLocalizations().tr('daily_clean'),
         value: machine.dailyCleaning.toString(),
       ),
     );
@@ -625,7 +658,7 @@ class _MachineCardState extends State<MachineCard> {
     details.add(
       _DetailItem(
         icon: Icons.event_repeat_outlined,
-        label: 'Weekly Clean',
+        label: AppLocalizations().tr('weekly_clean'),
         value: machine.weeklyCleaning.toString(),
       ),
     );
@@ -633,7 +666,7 @@ class _MachineCardState extends State<MachineCard> {
     details.add(
       _DetailItem(
         icon: Icons.skip_next_outlined,
-        label: 'Skip Clean',
+        label: AppLocalizations().tr('skip_clean'),
         value: machine.cleaningSkip.toString(),
       ),
     );
@@ -641,7 +674,7 @@ class _MachineCardState extends State<MachineCard> {
     details.add(
       _DetailItem(
         icon: Icons.tune_outlined,
-        label: 'Gain',
+        label: AppLocalizations().tr('gain'),
         value: machine.gain.toString(),
       ),
     );
@@ -651,7 +684,7 @@ class _MachineCardState extends State<MachineCard> {
       details.add(
         _DetailItem(
           icon: Icons.swap_horiz_outlined,
-          label: 'Auto Channel',
+          label: AppLocalizations().tr('auto_channel'),
           value: machine.autoChannel!,
         ),
       );
@@ -662,7 +695,7 @@ class _MachineCardState extends State<MachineCard> {
       details.add(
         _DetailItem(
           icon: Icons.info_outline,
-          label: 'Version',
+          label: AppLocalizations().tr('version'),
           value: machine.machineVersion!,
         ),
       );
@@ -677,7 +710,7 @@ class _MachineCardState extends State<MachineCard> {
       details.add(
         _DetailItem(
           icon: Icons.sync_outlined,
-          label: 'Last Sync',
+          label: AppLocalizations().tr('last_sync'),
           value: syncInfo,
         ),
       );
@@ -688,7 +721,12 @@ class _MachineCardState extends State<MachineCard> {
       child: Column(
         children: [
           // Divider
-          Container(height: 1, color: AppTheme.borderDark.withOpacity(0.3)),
+          Container(
+              height: 1,
+              color: (context.isDarkMode
+                      ? AppTheme.borderDark
+                      : AppTheme.borderLight)
+                  .withOpacity(0.3)),
           const SizedBox(height: 12),
 
           // Details grid - 2 columns
@@ -756,17 +794,17 @@ class _MachineCardState extends State<MachineCard> {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
+                  color: context.textSecondaryColor,
                   letterSpacing: 0.3,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 item.value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
-                  color: AppTheme.textPrimary,
+                  color: context.textPrimaryColor,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -778,81 +816,81 @@ class _MachineCardState extends State<MachineCard> {
     );
   }
 
-  /// Stats section - Google style metric cards
-  Widget _buildStats(Machine machine) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildStatItem(
-              value: machine.totalCollections30d.toString(),
-              label: 'Collections',
-              icon: Icons.receipt_long_outlined,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: Colors.white.withOpacity(0.08),
-          ),
-          Expanded(
-            child: _buildStatItem(
-              value: '${machine.totalQuantity30d.toStringAsFixed(1)}L',
-              label: 'Quantity',
-              icon: Icons.water_drop_outlined,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: Colors.white.withOpacity(0.08),
-          ),
-          Expanded(
-            child: _buildStatItem(
-              value: '${machine.avgFat30d.toStringAsFixed(1)}%',
-              label: 'Avg Fat',
-              icon: Icons.analytics_outlined,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  /// Stats section - Google style metric cards (unused)
+  // Widget _buildStats(Machine machine) {
+  //   return Container(
+  //     margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+  //     padding: const EdgeInsets.all(12),
+  //     decoration: BoxDecoration(
+  //       color: Colors.white.withOpacity(0.04),
+  //       borderRadius: BorderRadius.circular(8),
+  //     ),
+  //     child: Row(
+  //       children: [
+  //         Expanded(
+  //           child: _buildStatItem(
+  //             value: machine.totalCollections30d.toString(),
+  //             label: AppLocalizations().tr('collections_label'),
+  //             icon: Icons.receipt_long_outlined,
+  //           ),
+  //         ),
+  //         Container(
+  //           width: 1,
+  //           height: 40,
+  //           color: Colors.white.withOpacity(0.08),
+  //         ),
+  //         Expanded(
+  //           child: _buildStatItem(
+  //             value: '${machine.totalQuantity30d.toStringAsFixed(1)}L',
+  //             label: AppLocalizations().tr('quantity_label'),
+  //             icon: Icons.water_drop_outlined,
+  //           ),
+  //         ),
+  //         Container(
+  //           width: 1,
+  //           height: 40,
+  //           color: Colors.white.withOpacity(0.08),
+  //         ),
+  //         Expanded(
+  //           child: _buildStatItem(
+  //             value: '${machine.avgFat30d.toStringAsFixed(1)}%',
+  //             label: AppLocalizations().tr('avg_fat'),
+  //             icon: Icons.analytics_outlined,
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
-  /// Single stat item - Minimal
-  Widget _buildStatItem({
-    required String value,
-    required String label,
-    required IconData icon,
-  }) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w400,
-            color: Colors.white.withOpacity(0.5),
-          ),
-        ),
-      ],
-    );
-  }
+  /// Single stat item - Minimal (unused)
+  // Widget _buildStatItem({
+  //   required String value,
+  //   required String label,
+  //   required IconData icon,
+  // }) {
+  //   return Column(
+  //     children: [
+  //       Text(
+  //         value,
+  //         style: const TextStyle(
+  //           fontSize: 16,
+  //           fontWeight: FontWeight.w600,
+  //           color: Colors.white,
+  //         ),
+  //       ),
+  //       const SizedBox(height: 2),
+  //       Text(
+  //         label,
+  //         style: TextStyle(
+  //           fontSize: 11,
+  //           fontWeight: FontWeight.w400,
+  //           color: Colors.white.withOpacity(0.5),
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 
   /// Footer with 3 sections: Password, Rate Chart, Correction
   Widget _buildFooter(Machine machine) {
@@ -891,7 +929,7 @@ class _MachineCardState extends State<MachineCard> {
                 Expanded(
                   flex: 3,
                   child: _buildFooterSection(
-                    title: 'Password',
+                    title: AppLocalizations().tr('password'),
                     icon: Icons.lock_outline,
                     children: [
                       _buildMiniStatusDot(
@@ -1097,11 +1135,11 @@ class _MachineCardState extends State<MachineCard> {
   }) {
     if (!hasAnyCharts) {
       return _buildFooterSection(
-        title: 'Charts',
+        title: AppLocalizations().tr('charts'),
         icon: Icons.show_chart,
         children: [
           _buildSectionStatus(
-            label: 'None',
+            label: AppLocalizations().tr('none'),
             isActive: false,
             activeColor: AppTheme.primaryBlue,
           ),
@@ -1129,7 +1167,7 @@ class _MachineCardState extends State<MachineCard> {
             ),
             const SizedBox(width: 4),
             Text(
-              'Charts',
+              AppLocalizations().tr('charts'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
@@ -1237,11 +1275,11 @@ class _MachineCardState extends State<MachineCard> {
   }) {
     if (!hasAnyCorrections) {
       return _buildFooterSection(
-        title: 'Corrections',
+        title: AppLocalizations().tr('corrections'),
         icon: Icons.tune,
         children: [
           _buildSectionStatus(
-            label: 'None',
+            label: AppLocalizations().tr('none'),
             isActive: false,
             activeColor: AppTheme.primaryPurple,
           ),
@@ -1267,7 +1305,7 @@ class _MachineCardState extends State<MachineCard> {
             Icon(Icons.tune, size: 10, color: Colors.white.withOpacity(0.4)),
             const SizedBox(width: 4),
             Text(
-              'Corrections',
+              AppLocalizations().tr('corrections'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
@@ -1365,112 +1403,112 @@ class _MachineCardState extends State<MachineCard> {
     return types.isEmpty ? 'Correction' : types.join(', ');
   }
 
-  /// Password status pill with 3 states: Downloaded (green), Pending (yellow), None (red/gray)
-  Widget _buildPasswordStatusPill({
-    required IconData icon,
-    required String label,
-    required PasswordStatusType statusType,
-  }) {
-    late Color color;
-    switch (statusType) {
-      case PasswordStatusType.downloaded:
-      case PasswordStatusType.both:
-      case PasswordStatusType.userOnly:
-      case PasswordStatusType.supervisorOnly:
-        color = AppTheme.successColor; // Green - Downloaded
-        break;
-      case PasswordStatusType.pending:
-        color = AppTheme.primaryAmber; // Amber/Yellow - Pending
-        break;
-      case PasswordStatusType.none:
-        color = AppTheme.errorColor; // Red - Not set
-        break;
-    }
+  /// Password status pill with 3 states: Downloaded (green), Pending (yellow), None (red/gray) (unused)
+  // Widget _buildPasswordStatusPill({
+  //   required IconData icon,
+  //   required String label,
+  //   required PasswordStatusType statusType,
+  // }) {
+  //   late Color color;
+  //   switch (statusType) {
+  //     case PasswordStatusType.downloaded:
+  //     case PasswordStatusType.both:
+  //     case PasswordStatusType.userOnly:
+  //     case PasswordStatusType.supervisorOnly:
+  //       color = AppTheme.successColor; // Green - Downloaded
+  //       break;
+  //     case PasswordStatusType.pending:
+  //       color = AppTheme.primaryAmber; // Amber/Yellow - Pending
+  //       break;
+  //     case PasswordStatusType.none:
+  //       color = AppTheme.errorColor; // Red - Not set
+  //       break;
+  //   }
+  //
+  //   return Container(
+  //     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+  //     decoration: BoxDecoration(
+  //       color: color.withOpacity(0.12),
+  //       borderRadius: BorderRadius.circular(6),
+  //       border: Border.all(color: color.withOpacity(0.25), width: 1),
+  //     ),
+  //     child: Row(
+  //       mainAxisSize: MainAxisSize.min,
+  //       children: [
+  //         Icon(icon, size: 12, color: color),
+  //         const SizedBox(width: 4),
+  //         Text(
+  //           label,
+  //           style: TextStyle(
+  //             fontSize: 10,
+  //             fontWeight: FontWeight.w500,
+  //             color: color,
+  //             letterSpacing: 0.1,
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.25), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: color,
-              letterSpacing: 0.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  /// Extract chart types from chart info (Cow, Buffalo, Mix) (unused)
+  // String _getChartTypes(RateChartInfo chartInfo) {
+  //   final Set<String> types = {};
+  //
+  //   // Get types from both pending and downloaded charts
+  //   for (final chart in [...chartInfo.pending, ...chartInfo.downloaded]) {
+  //     final channel = chart.channel.toLowerCase();
+  //     if (channel.contains('cow') || channel == '1' || channel == 'c') {
+  //       types.add('Cow');
+  //     } else if (channel.contains('buf') || channel == '2' || channel == 'b') {
+  //       types.add('Buf');
+  //     } else if (channel.contains('mix') || channel == '3' || channel == 'm') {
+  //       types.add('Mix');
+  //     }
+  //   }
+  //
+  //   if (types.isEmpty) {
+  //     return 'Active';
+  //   }
+  //
+  //   return types.join(', ');
+  // }
 
-  /// Extract chart types from chart info (Cow, Buffalo, Mix)
-  String _getChartTypes(RateChartInfo chartInfo) {
-    final Set<String> types = {};
-
-    // Get types from both pending and downloaded charts
-    for (final chart in [...chartInfo.pending, ...chartInfo.downloaded]) {
-      final channel = chart.channel.toLowerCase();
-      if (channel.contains('cow') || channel == '1' || channel == 'c') {
-        types.add('Cow');
-      } else if (channel.contains('buf') || channel == '2' || channel == 'b') {
-        types.add('Buf');
-      } else if (channel.contains('mix') || channel == '3' || channel == 'm') {
-        types.add('Mix');
-      }
-    }
-
-    if (types.isEmpty) {
-      return 'Active';
-    }
-
-    return types.join(', ');
-  }
-
-  /// Status pill indicator - compact design
-  Widget _buildStatusPill({
-    required IconData icon,
-    required String label,
-    required bool isActive,
-    required Color activeColor,
-    required Color inactiveColor,
-  }) {
-    final color = isActive ? activeColor : inactiveColor;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.25), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: color,
-              letterSpacing: 0.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  /// Status pill indicator - compact design (unused)
+  // Widget _buildStatusPill({
+  //   required IconData icon,
+  //   required String label,
+  //   required bool isActive,
+  //   required Color activeColor,
+  //   required Color inactiveColor,
+  // }) {
+  //   final color = isActive ? activeColor : inactiveColor;
+  //
+  //   return Container(
+  //     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+  //     decoration: BoxDecoration(
+  //       color: color.withOpacity(0.12),
+  //       borderRadius: BorderRadius.circular(6),
+  //       border: Border.all(color: color.withOpacity(0.25), width: 1),
+  //     ),
+  //     child: Row(
+  //       mainAxisSize: MainAxisSize.min,
+  //       children: [
+  //         Icon(icon, size: 12, color: color),
+  //         const SizedBox(width: 4),
+  //         Text(
+  //           label,
+  //           style: TextStyle(
+  //             fontSize: 10,
+  //             fontWeight: FontWeight.w500,
+  //             color: color,
+  //             letterSpacing: 0.1,
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   /// Clean icon button
   Widget _buildIconButton({

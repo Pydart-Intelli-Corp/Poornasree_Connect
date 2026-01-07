@@ -175,14 +175,14 @@ class _ReadingCardState extends State<ReadingCard>
   }
 }
 
-class InfoCard extends StatefulWidget {
+class MachineInfoCard extends StatefulWidget {
   final String title;
   final String value;
   final IconData icon;
   final Color iconColor;
   final int animationDelay;
 
-  const InfoCard({
+  const MachineInfoCard({
     super.key,
     required this.title,
     required this.value,
@@ -192,10 +192,10 @@ class InfoCard extends StatefulWidget {
   });
 
   @override
-  State<InfoCard> createState() => _InfoCardState();
+  State<MachineInfoCard> createState() => _MachineInfoCardState();
 }
 
-class _InfoCardState extends State<InfoCard>
+class _MachineInfoCardState extends State<MachineInfoCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<Offset> _slideAnimation;

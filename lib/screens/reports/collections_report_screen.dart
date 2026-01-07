@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
 import '../../utils/utils.dart';
 
@@ -66,13 +67,13 @@ class _CollectionsReportScreenState extends State<CollectionsReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Collections Report'),
+        title: Text(AppLocalizations().tr('collections_report')),
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _fetchData,
-            tooltip: 'Refresh',
+            tooltip: AppLocalizations().tr('refresh'),
           ),
         ],
       ),
@@ -116,7 +117,7 @@ class _CollectionsReportScreenState extends State<CollectionsReportScreen> {
                         ElevatedButton.icon(
                           onPressed: _fetchData,
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
+                          label: Text(AppLocalizations().tr('retry')),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryGreen,
                             foregroundColor: Colors.white,
@@ -315,7 +316,7 @@ class _CollectionsReportScreenState extends State<CollectionsReportScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Close', style: TextStyle(color: AppTheme.primaryGreen)),
+            child: Text(AppLocalizations().tr('close'), style: TextStyle(color: AppTheme.primaryGreen)),
           ),
         ],
       ),

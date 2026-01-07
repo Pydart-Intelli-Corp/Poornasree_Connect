@@ -7,6 +7,7 @@ import 'dart:convert';
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final OfflineCacheService _cacheService = OfflineCacheService();
 
   UserModel? _user;
   bool _isLoading = false;
@@ -124,6 +125,20 @@ class AuthProvider with ChangeNotifier {
         await _storage.write(key: _tokenKey, value: _user!.token);
         await _storage.write(key: _refreshTokenKey, value: _user!.refreshToken);
 
+        // Cache society details for offline use
+        await _cacheService.cacheSocietyDetails({
+          'society_id': _user!.societyId ?? _user!.societyIdentifier,
+          'society_name': _user!.societyName ?? _user!.name,
+          'dairy_id': _user!.dairyId,
+          'dairy_name': _user!.dairyName,
+          'bmc_id': _user!.bmcId,
+          'bmc_name': _user!.bmcName,
+          'admin_name': _user!.adminName,
+          'admin_email': _user!.adminEmail,
+          'schema': _user!.schema,
+          'role': _user!.role,
+        });
+
         print('✅ Credentials stored in secure storage');
         _isAuthenticated = true;
 
@@ -161,8 +176,11 @@ class AuthProvider with ChangeNotifier {
       await _storage.delete(key: _userKey);
       await _storage.delete(key: _tokenKey);
       await _storage.delete(key: _refreshTokenKey);
+      
+      // Clear offline cache
+      await _cacheService.clearOnLogout();
 
-      print('🔓 Logout: Cleared all stored credentials');
+      print('🔓 Logout: Cleared all stored credentials and cache');
 
       _user = null;
       _isAuthenticated = false;

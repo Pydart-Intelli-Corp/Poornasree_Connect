@@ -26,7 +26,7 @@ class ProfileAvatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppTheme.cardDark,
+        color: context.cardColor,
         borderRadius: BorderRadius.circular(size * 0.2),
         border: Border.all(color: color.withOpacity(0.5), width: borderWidth),
         boxShadow: showShadow
