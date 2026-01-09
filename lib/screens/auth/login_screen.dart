@@ -110,9 +110,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations();
-    final horizontalPadding = ResponsiveHelper.getHorizontalPadding(context);
-    final verticalPadding = ResponsiveHelper.getVerticalPadding(context);
-    final maxWidth = ResponsiveHelper.getMaxContentWidth(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: PremiumGradientBackground(
@@ -120,74 +118,70 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           child: Center(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalPadding,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
               ),
               child: FadeTransition(
                 opacity: _fadeAnimation,
                 child: SlideTransition(
                   position: _slideAnimation,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: maxWidth,
+                    constraints: const BoxConstraints(
+                      maxWidth: 400,
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Logo
                         Container(
-                          width: ResponsiveHelper.getIconSize(context, 120),
-                          height: ResponsiveHelper.getIconSize(context, 120),
+                          width: 120,
+                          height: 120,
                           decoration: BoxDecoration(
-                            color: AppTheme.darkBg2,
-                            borderRadius: BorderRadius.circular(
-                              ResponsiveHelper.getSpacing(context, 20),
-                            ),
+                            color: isDark ? AppTheme.darkBg2 : AppTheme.cardLight,
+                            borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: AppTheme.primaryGreen.withOpacity(0.3),
                               width: 2,
                             ),
                           ),
-                          padding: EdgeInsets.all(
-                            ResponsiveHelper.getSpacing(context, 20),
-                          ),
+                          padding: const EdgeInsets.all(20),
                           child: Image.asset(
                             'assets/images/fulllogo.png',
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
-                              return Icon(
+                              return const Icon(
                                 Icons.agriculture_rounded,
-                                size: ResponsiveHelper.getIconSize(context, 60),
+                                size: 60,
                                 color: AppTheme.primaryGreen,
                               );
                             },
                           ),
                         ),
-                        SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
+                        const SizedBox(height: 40),
 
                         // Welcome Text
                         Text(
                           l10n.tr('welcome_back'),
                           style: TextStyle(
-                            fontSize: ResponsiveHelper.getFontSize(context, 32),
+                            fontSize: 28,
                             fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
+                            color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                             letterSpacing: 0.5,
                           ),
                         ),
-                        SizedBox(height: ResponsiveHelper.getSpacing(context, 8)),
+                        const SizedBox(height: 8),
                         Text(
                           l10n.tr('sign_in_to_continue'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: ResponsiveHelper.getFontSize(context, 15),
-                            color: AppTheme.textSecondary,
+                            fontSize: 15,
+                            color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
                             fontWeight: FontWeight.w400,
                             letterSpacing: 0.3,
                           ),
                         ),
-                        SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
+                        const SizedBox(height: 40),
 
                         // Premium Login Card
                         PremiumCard(
@@ -213,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     return null;
                                   },
                                 ),
-                                const SizedBox(height: UIConstants.spacingXL),
+                                const SizedBox(height: 24),
 
                                 // Premium Send OTP Button
                                 PremiumGradientButton(
@@ -226,7 +220,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                           ),
                         ),
-                        const SizedBox(height: UIConstants.spacingXL),
+                        const SizedBox(height: 24),
 
                         // Info Container
                         InfoContainer(

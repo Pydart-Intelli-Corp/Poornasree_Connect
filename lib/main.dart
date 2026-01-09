@@ -88,7 +88,7 @@ class _MyAppState extends State<MyApp> {
               // Lock text scale factor to 1.0 to prevent system font size from affecting layout
               return MediaQuery(
                 data: MediaQuery.of(context).copyWith(
-                  textScaleFactor: 1.0,
+                  textScaler: TextScaler.noScaling,
                   boldText: false,
                 ),
                 child: child!,

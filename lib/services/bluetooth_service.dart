@@ -216,6 +216,36 @@ class BluetoothService {
     }
   }
 
+  /// Check if Bluetooth adapter is turned on
+  Future<bool> isBluetoothEnabled() async {
+    try {
+      // Check if platform supports Bluetooth
+      if (await FlutterBluePlus.isSupported == false) {
+        print('❌ BluetoothService: Bluetooth not supported on this device');
+        return false;
+      }
+
+      // Get current adapter state
+      final adapterState = await FlutterBluePlus.adapterState.first;
+      final isEnabled = adapterState == BluetoothAdapterState.on;
+      
+      print('🔵 BluetoothService: Adapter state = $adapterState');
+      print('🔵 BluetoothService: Bluetooth enabled = $isEnabled');
+      
+      return isEnabled;
+    } catch (e) {
+      print('❌ BluetoothService: Error checking Bluetooth state: $e');
+      return false;
+    }
+  }
+
+  /// Listen to Bluetooth adapter state changes
+  Stream<bool> get bluetoothStateStream {
+    return FlutterBluePlus.adapterState.map(
+      (state) => state == BluetoothAdapterState.on,
+    );
+  }
+
   /// Start scanning for Lactosure-BLE devices (background scan)
   Future<void> startScan() async {
     if (_isScanning) return;

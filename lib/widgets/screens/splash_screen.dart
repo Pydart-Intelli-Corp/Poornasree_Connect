@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' hide BluetoothService;
 import '../../screens/screens.dart';
 import '../../utils/utils.dart';
 import '../../providers/providers.dart';
@@ -100,6 +101,13 @@ class _SplashScreenState extends State<SplashScreen>
       final bluetoothService = BluetoothService();
       await bluetoothService.requestPermissions();
       print('✅ SplashScreen: Permissions requested');
+
+      // Check if Bluetooth is enabled
+      final isBluetoothOn = await bluetoothService.isBluetoothEnabled();
+      if (!isBluetoothOn && mounted) {
+        print('📶 SplashScreen: Bluetooth is OFF, showing enable prompt...');
+        await _showBluetoothEnableDialog();
+      }
 
       // Navigate based on authentication status
       if (authProvider.isAuthenticated && authProvider.user != null) {
@@ -373,6 +381,136 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
       ),
+    );
+  }
+
+  /// Show dialog to prompt user to enable Bluetooth
+  Future<void> _showBluetoothEnableDialog() async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
+        return AlertDialog(
+          backgroundColor: isDark ? AppTheme.darkBg2 : AppTheme.cardLight,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.bluetooth_disabled,
+                  color: Colors.blue,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Enable Bluetooth',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Bluetooth is currently turned off. This app uses Bluetooth to connect with Lactosure milk testing machines.',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.blue.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Colors.blue,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Please enable Bluetooth from your device settings to use all features.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Later',
+                style: TextStyle(
+                  color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                // On Android, user needs to manually enable Bluetooth from settings
+                // We can't programmatically turn it on due to security restrictions
+                // The FlutterBluePlus package will show a system dialog on Android
+                try {
+                  // Request to turn on Bluetooth (will show system dialog on Android)
+                  if (Theme.of(context).platform == TargetPlatform.android) {
+                    await FlutterBluePlus.turnOn();
+                  }
+                } catch (e) {
+                  print('Error requesting Bluetooth enable: $e');
+                }
+              },
+              icon: const Icon(Icons.bluetooth, size: 18),
+              label: const Text('Enable Bluetooth'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

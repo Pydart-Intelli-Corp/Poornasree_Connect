@@ -260,8 +260,7 @@ class _OtpScreenState extends State<OtpScreen>
 
   @override
   Widget build(BuildContext context) {
-    final horizontalPadding = ResponsiveHelper.getHorizontalPadding(context);
-    final maxWidth = ResponsiveHelper.getMaxContentWidth(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: PremiumGradientBackground(
@@ -270,9 +269,7 @@ class _OtpScreenState extends State<OtpScreen>
             children: [
               // Premium App Bar
               Padding(
-                padding: EdgeInsets.all(
-                  ResponsiveHelper.getSpacing(context, 16),
-                ),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
                     TransparentBackButton(
@@ -287,64 +284,60 @@ class _OtpScreenState extends State<OtpScreen>
                 child: Center(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
-                      vertical: ResponsiveHelper.getSpacing(context, 24),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 24,
                     ),
                     child: FadeTransition(
                       opacity: _fadeAnimation,
                       child: SlideTransition(
                         position: _slideAnimation,
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: maxWidth,
+                          constraints: const BoxConstraints(
+                            maxWidth: 400,
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               // Icon
                               Container(
-                                width: ResponsiveHelper.getIconSize(context, 100),
-                                height: ResponsiveHelper.getIconSize(context, 100),
+                                width: 100,
+                                height: 100,
                                 decoration: BoxDecoration(
-                                  color: AppTheme.darkBg2,
-                                  borderRadius: BorderRadius.circular(
-                                    ResponsiveHelper.getSpacing(context, 20),
-                                  ),
+                                  color: isDark ? AppTheme.darkBg2 : AppTheme.cardLight,
+                                  borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: AppTheme.primaryGreen.withOpacity(0.3),
                                     width: 2,
                                   ),
                                 ),
-                                child: Icon(
+                                child: const Icon(
                                   Icons.mark_email_read_rounded,
-                                  size: ResponsiveHelper.getIconSize(context, 50),
+                                  size: 50,
                                   color: AppTheme.primaryGreen,
                                 ),
                               ),
-                              SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
+                              const SizedBox(height: 40),
 
                               // Title
                               Text(
                                 AppLocalizations().tr('verify_otp'),
                                 style: TextStyle(
-                                  fontSize: ResponsiveHelper.getFontSize(context, 32),
+                                  fontSize: 28,
                                   fontWeight: FontWeight.w700,
-                                  color: AppTheme.textPrimary,
+                                  color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                                   letterSpacing: 0.5,
                                 ),
                               ),
-                              SizedBox(height: ResponsiveHelper.getSpacing(context, 8)),
+                              const SizedBox(height: 8),
                               Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: ResponsiveHelper.getSpacing(context, 20),
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
                                 child: RichText(
                                   textAlign: TextAlign.center,
                                   text: TextSpan(
                                     style: TextStyle(
-                                      fontSize: ResponsiveHelper.getFontSize(context, 15),
-                                      color: AppTheme.textSecondary,
+                                      fontSize: 15,
+                                      color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
                                       fontWeight: FontWeight.w400,
                                       height: 1.4,
                                       letterSpacing: 0.3,
@@ -355,7 +348,7 @@ class _OtpScreenState extends State<OtpScreen>
                                       ),
                                       TextSpan(
                                         text: widget.email,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontWeight: FontWeight.w700,
                                           color: AppTheme.primaryGreen,
                                           letterSpacing: 0.3,
@@ -365,24 +358,28 @@ class _OtpScreenState extends State<OtpScreen>
                                   ),
                                 ),
                               ),
-                              SizedBox(height: ResponsiveHelper.getSpacing(context, 40)),
+                              const SizedBox(height: 40),
 
                               // Premium OTP Card
                               PremiumCard(
                                 child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: ResponsiveHelper.getSpacing(context, 8),
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
                                   child: Column(
                                     children: [
                                       // OTP Input
                                       LayoutBuilder(
                                         builder: (context, constraints) {
                                           final availableWidth = constraints.maxWidth;
-                                          final spacing = 8.0; // Space between boxes
-                                          final totalSpacing = spacing * 5; // 5 gaps for 6 fields
-                                          final fieldWidth = (availableWidth - totalSpacing) / 6;
-                                          final fieldHeight = fieldWidth * 1.2;
+                                          const spacing = 8.0;
+                                          const totalSpacing = spacing * 5;
+                                          final fieldWidth = ((availableWidth - totalSpacing) / 6).clamp(40.0, 52.0);
+                                          final fieldHeight = (fieldWidth * 1.2).clamp(50.0, 62.0);
+                                          
+                                          final fillColor = isDark ? AppTheme.darkBg2 : AppTheme.cardLight;
+                                          const textColor = AppTheme.primaryGreen;
+                                          final borderColor = isDark 
+                                              ? AppTheme.primaryGreen.withOpacity(0.2)
+                                              : AppTheme.borderLight;
                                           
                                           return PinCodeTextField(
                                             appContext: context,
@@ -391,42 +388,35 @@ class _OtpScreenState extends State<OtpScreen>
                                             keyboardType: TextInputType.number,
                                             animationType: AnimationType.scale,
                                             enabled: !_isDisposed && !_isNavigating,
-                                            animationDuration: const Duration(
-                                              milliseconds: 200,
-                                            ),
+                                            animationDuration: const Duration(milliseconds: 200),
                                             enableActiveFill: true,
                                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                            textStyle: TextStyle(
-                                              fontSize: fieldWidth * 0.4,
+                                            textStyle: const TextStyle(
+                                              fontSize: 20,
                                               fontWeight: FontWeight.w700,
-                                              color: AppTheme.primaryGreen,
+                                              color: textColor,
                                               letterSpacing: 0.5,
                                             ),
                                             pinTheme: PinTheme(
                                               shape: PinCodeFieldShape.box,
-                                              borderRadius: BorderRadius.circular(
-                                                ResponsiveHelper.getSpacing(context, 12),
-                                              ),
-                                              fieldHeight: fieldHeight.clamp(50.0, 70.0),
-                                              fieldWidth: fieldWidth.clamp(40.0, 60.0),
+                                              borderRadius: BorderRadius.circular(12),
+                                              fieldHeight: fieldHeight,
+                                              fieldWidth: fieldWidth,
                                               borderWidth: 1.5,
                                               activeColor: AppTheme.primaryGreen,
                                               selectedColor: AppTheme.primaryGreen.withOpacity(0.6),
-                                              inactiveColor: AppTheme.primaryGreen.withOpacity(0.2),
-                                              activeFillColor: AppTheme.darkBg2,
-                                              selectedFillColor: AppTheme.darkBg2,
-                                              inactiveFillColor: AppTheme.darkBg2,
+                                              inactiveColor: borderColor,
+                                              activeFillColor: fillColor,
+                                              selectedFillColor: fillColor,
+                                              inactiveFillColor: fillColor,
                                             ),
                                             onChanged: (value) {
-                                              // Prevent any state updates after disposal
                                               if (!mounted || _isDisposed) return;
                                             },
                                           );
                                         },
                                       ),
-                                      SizedBox(
-                                        height: ResponsiveHelper.getSpacing(context, 24),
-                                      ),
+                                      const SizedBox(height: 24),
 
                                       // Verify Button
                                       PremiumGradientButton(
@@ -435,21 +425,18 @@ class _OtpScreenState extends State<OtpScreen>
                                         onPressed: _verifyOtp,
                                         isLoading: _isLoading,
                                       ),
-                                      SizedBox(
-                                        height: ResponsiveHelper.getSpacing(context, 20),
-                                      ),
+                                      const SizedBox(height: 20),
 
                                       // Resend OTP
                                       Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                                        mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           Flexible(
                                             child: Text(
                                               '${AppLocalizations().tr('didnt_receive_code')} ',
                                               style: TextStyle(
-                                                color: AppTheme.textSecondary,
-                                                fontSize: ResponsiveHelper.getFontSize(context, 14),
+                                                color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                                                fontSize: 14,
                                                 fontWeight: FontWeight.w500,
                                                 letterSpacing: 0.2,
                                               ),
@@ -467,17 +454,17 @@ class _OtpScreenState extends State<OtpScreen>
                                                 child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    Icon(
+                                                    const Icon(
                                                       Icons.refresh_rounded,
-                                                      size: ResponsiveHelper.getIconSize(context, 16),
+                                                      size: 16,
                                                       color: AppTheme.primaryGreen,
                                                     ),
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       AppLocalizations().tr('resend'),
-                                                      style: TextStyle(
+                                                      style: const TextStyle(
                                                         color: AppTheme.primaryGreen,
-                                                        fontSize: ResponsiveHelper.getFontSize(context, 14),
+                                                        fontSize: 14,
                                                         fontWeight: FontWeight.w700,
                                                         letterSpacing: 0.3,
                                                       ),
@@ -497,15 +484,15 @@ class _OtpScreenState extends State<OtpScreen>
                                                 children: [
                                                   Icon(
                                                     Icons.timer_outlined,
-                                                    size: ResponsiveHelper.getIconSize(context, 16),
-                                                    color: AppTheme.textSecondary,
+                                                    size: 16,
+                                                    color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
                                                   ),
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     '${_resendTimer}s',
                                                     style: TextStyle(
-                                                      color: AppTheme.textSecondary,
-                                                      fontSize: ResponsiveHelper.getFontSize(context, 14),
+                                                      color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                                                      fontSize: 14,
                                                       fontWeight: FontWeight.w600,
                                                       letterSpacing: 0.2,
                                                     ),
@@ -519,7 +506,7 @@ class _OtpScreenState extends State<OtpScreen>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: UIConstants.spacingXL),
+                              const SizedBox(height: 24),
 
                               // Security Info
                               InfoContainer(

@@ -107,15 +107,31 @@ class _MachineCardState extends State<MachineCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Machine Image - Left side with master badge below
+          // Machine Image - Left side with update indicator, master badge and status below
           Column(
             children: [
-              _buildImage(machine, hasImage),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildImage(machine, hasImage),
+                  // Update Available indicator on right side of image
+                  if (_hasUpdateAvailable(machine)) ...[
+                    const SizedBox(width: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: _buildUpdateAvailableIndicator(machine),
+                    ),
+                  ],
+                ],
+              ),
               // Master badge under image
               if (machine.isMasterMachine) ...[
                 const SizedBox(height: 8),
                 _buildMasterChip(),
               ],
+              // Status chip always under image (or under master badge if present)
+              const SizedBox(height: 8),
+              _buildStatusChip(machine.status),
             ],
           ),
           const SizedBox(width: 16),
@@ -125,28 +141,17 @@ class _MachineCardState extends State<MachineCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title row with update indicator
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        machine.machineId,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          letterSpacing: -0.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    // Update Available indicator
-                    if (_hasUpdateAvailable(machine)) ...[
-                      const SizedBox(width: 8),
-                      _buildUpdateAvailableIndicator(machine),
-                    ],
-                  ],
+                // Title
+                Text(
+                  machine.machineId,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    letterSpacing: -0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
 
@@ -159,10 +164,6 @@ class _MachineCardState extends State<MachineCard> {
                     color: Colors.white.withOpacity(0.6),
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // Status chip
-                _buildStatusChip(machine.status),
               ],
             ),
           ),
@@ -376,157 +377,209 @@ class _MachineCardState extends State<MachineCard> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => Dialog(
         backgroundColor: context.cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryAmber.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.system_update_alt_rounded,
-                color: AppTheme.primaryAmber,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppLocalizations().tr('update_available'),
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Title section
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAmber.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.system_update_alt_rounded,
+                        color: AppTheme.primaryAmber,
+                        size: 24,
+                      ),
                     ),
-                  ),
-                  Text(
-                    '${pendingItems.length} ${AppLocalizations().tr('items_ready_download')}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white.withOpacity(0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Pending items list
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${AppLocalizations().tr('pending_updates')}:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...pendingItems.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.pending_outlined,
-                            size: 14,
-                            color: AppTheme.primaryAmber,
+                          Text(
+                            AppLocalizations().tr('update_available'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              item,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.white.withOpacity(0.9),
-                              ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${pendingItems.length} ${AppLocalizations().tr('items_ready_download')}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white.withOpacity(0.6),
                             ),
                           ),
                         ],
                       ),
                     ),
+                  ],
+                ),
+              ),
+
+              // Divider
+              Container(
+                height: 1,
+                color: Colors.white.withOpacity(0.1),
+              ),
+
+              // Content section - scrollable
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Pending items list
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${AppLocalizations().tr('pending_updates')}:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...pendingItems.map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Icon(
+                                        Icons.pending_outlined,
+                                        size: 14,
+                                        color: AppTheme.primaryAmber,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        item,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.white.withOpacity(0.9),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Instructions header
+                      Text(
+                        '${AppLocalizations().tr('how_to_update')}:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Step 1
+                      _buildInstructionStep(
+                        stepNumber: 1,
+                        icon: Icons.wifi,
+                        title: AppLocalizations().tr('wifi_instruction').split('.').first,
+                        description: AppLocalizations().tr('wifi_instruction'),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Step 2
+                      _buildInstructionStep(
+                        stepNumber: 2,
+                        icon: Icons.arrow_upward_rounded,
+                        title: AppLocalizations()
+                            .tr('find_update_instruction')
+                            .split('.')
+                            .first,
+                        description: AppLocalizations().tr('find_update_instruction'),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Step 3
+                      _buildInstructionStep(
+                        stepNumber: 3,
+                        icon: Icons.check_circle_outline,
+                        title: AppLocalizations()
+                            .tr('confirm_update_instruction')
+                            .split('.')
+                            .first,
+                        description: AppLocalizations().tr('confirm_update_instruction'),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
 
-            // Instructions header
-            Text(
-              '${AppLocalizations().tr('how_to_update')}:',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+              // Divider
+              Container(
+                height: 1,
+                color: Colors.white.withOpacity(0.1),
               ),
-            ),
-            const SizedBox(height: 12),
 
-            // Step 1
-            _buildInstructionStep(
-              stepNumber: 1,
-              icon: Icons.wifi,
-              title: AppLocalizations().tr('wifi_instruction').split('.').first,
-              description: AppLocalizations().tr('wifi_instruction'),
-            ),
-            const SizedBox(height: 12),
-
-            // Step 2
-            _buildInstructionStep(
-              stepNumber: 2,
-              icon: Icons.arrow_upward_rounded,
-              title: AppLocalizations()
-                  .tr('find_update_instruction')
-                  .split('.')
-                  .first,
-              description: AppLocalizations().tr('find_update_instruction'),
-            ),
-            const SizedBox(height: 12),
-
-            // Step 3
-            _buildInstructionStep(
-              stepNumber: 3,
-              icon: Icons.check_circle_outline,
-              title: AppLocalizations()
-                  .tr('confirm_update_instruction')
-                  .split('.')
-                  .first,
-              description: AppLocalizations().tr('confirm_update_instruction'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              AppLocalizations().tr('got_it'),
-              style: TextStyle(
-                color: AppTheme.successColor,
-                fontWeight: FontWeight.w600,
+              // Actions section
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Text(
+                        AppLocalizations().tr('got_it'),
+                        style: TextStyle(
+                          color: AppTheme.successColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -574,12 +627,14 @@ class _MachineCardState extends State<MachineCard> {
                     color: context.textPrimaryColor.withOpacity(0.8),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: context.textPrimaryColor,
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: context.textPrimaryColor,
+                      ),
                     ),
                   ),
                 ],
