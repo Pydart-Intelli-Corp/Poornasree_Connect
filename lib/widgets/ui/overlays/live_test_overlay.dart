@@ -284,14 +284,25 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
               ],
             ),
           ),
-          if (isComplete)
-            IconButton(
+          // Close button (always visible)
+          Container(
+            decoration: BoxDecoration(
+              color: isDark 
+                ? Colors.grey.shade800.withOpacity(0.5)
+                : Colors.grey.shade200.withOpacity(0.5),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
               icon: Icon(
                 Icons.close_rounded,
                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
               onPressed: _handleDismiss,
+              tooltip: AppLocalizations().tr('close'),
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
             ),
+          ),
         ],
       ),
     );

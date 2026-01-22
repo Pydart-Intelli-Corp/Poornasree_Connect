@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/services.dart';
 import '../../services/readings_storage_service.dart';
@@ -165,10 +167,26 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   bool _isViewingHistory = false;
   int _historyIndex = 0; // 0 = latest, 1 = previous, etc.
 
+  // Weighing scale mode per machine (true = Auto, false = Manual)
+  Map<String, bool> _machineWeighingScaleMode = {};
+  
+  // Farmer ID mode per machine (true = Auto, false = Manual) - Default: Manual
+  Map<String, bool> _machineFarmerIdMode = {};
+  
+  // Farmer ID per machine
+  Map<String, String> _machineFarmerIds = {};
+  
+  // Weight per machine
+  Map<String, String> _machineWeights = {};
+
+  // Selected channel filter (CH1=Cow, CH2=Buffalo, CH3=Mixed)
+  String _selectedChannel = 'CH1';
+
   @override
   void initState() {
     super.initState();
     _initializeMachineList();
+    _loadPreferences();
     _clearOldReadings(); // Clear readings from previous days
     _loadSavedReadings(); // Load today's saved readings from storage
     _loadExistingReadings(); // Load readings that were collected before opening this screen
@@ -550,6 +568,26 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     print('▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲\n');
   }
 
+  void _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      for (final machineId in _connectedMachineIds) {
+        _machineWeighingScaleMode[machineId] = prefs.getBool('weighing_$machineId') ?? true;
+        _machineFarmerIdMode[machineId] = prefs.getBool('farmerid_$machineId') ?? false; // Default: Manual
+      }
+    });
+  }
+
+  void _savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final entry in _machineWeighingScaleMode.entries) {
+      await prefs.setBool('weighing_${entry.key}', entry.value);
+    }
+    for (final entry in _machineFarmerIdMode.entries) {
+      await prefs.setBool('farmerid_${entry.key}', entry.value);
+    }
+  }
+
   void _initializeMachineList() {
     final connectedMachines = _bluetoothService.connectedMachines;
     _connectedMachineIds = connectedMachines.keys.toList();
@@ -641,6 +679,50 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       return;
     }
 
+    // Clear stored farmer IDs and weights for new test
+    _machineFarmerIds.clear();
+    _machineWeights.clear();
+
+    // Check which machines need manual farmer ID input (default is Manual = false)
+    final manualFarmerIdMachines = machinesToTest.where((id) => !(_machineFarmerIdMode[id] ?? false)).toList();
+    
+    // Check which machines need manual weight input
+    final manualWeightMachines = machinesToTest.where((id) => !(_machineWeighingScaleMode[id] ?? true)).toList();
+    final hasWeightDialog = manualWeightMachines.isNotEmpty;
+    
+    // Only show dialog if there are manual machines
+    if (manualFarmerIdMachines.isNotEmpty) {
+      final farmerIds = await _showFarmerIdDialog(manualFarmerIdMachines, showStartTest: !hasWeightDialog);
+      
+      if (farmerIds == null) {
+        print('❌ [Test] User cancelled farmer ID input');
+        return;
+      }
+
+      _machineFarmerIds.addAll(farmerIds);
+      print('✅ [Test] Farmer IDs stored: $farmerIds');
+    } else {
+      print('✅ [Test] All machines in Auto mode, skipping farmer ID dialog');
+    }
+    
+    if (hasWeightDialog) {
+      final weights = await _showWeightDialog(manualWeightMachines);
+      
+      if (weights == null) {
+        print('❌ [Test] User cancelled weight input');
+        return;
+      }
+
+      _machineWeights.addAll(weights);
+      print('✅ [Test] Weights stored: $weights');
+    } else {
+      print('✅ [Test] All machines in Auto weighing mode, skipping weight dialog');
+    }
+
+    _startTest(machinesToTest);
+  }
+
+  void _startTest(List<String> machinesToTest) async {
     // Reset all card values for all selected machines (same as clear button)
     setState(() {
       for (final machineId in machinesToTest) {
@@ -650,7 +732,6 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       _testElapsedSeconds = 0;
       _machinesWithDataReceived.clear();
       _currentTestMachines = List.from(machinesToTest);
-      // _isShowingResultSnackbar = false; // Commented - field unused
     });
 
     // Reset notifiers for live overlay
@@ -673,9 +754,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           // Auto-stop after 45 seconds
           if (_testElapsedSeconds >= 45) {
             timer.cancel();
-            // Dismiss loading snackbar if still showing
             CustomSnackbar.dismiss();
-            // Show overlay with results (even if no data received)
             if (_liveTestOverlay == null) {
               _showLiveTestOverlay();
             }
@@ -691,15 +770,15 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     // Send test command to all selected machines
     int successCount = 0;
     for (final machineId in machinesToTest) {
+      final command = _buildTestCommand(machineId);
       final success = await _bluetoothService.sendHexToMachine(
         machineId,
-        '40 04 07 00 00 43',
+        command,
       );
       if (success) successCount++;
     }
 
     if (successCount > 0) {
-      // Show loading snackbar - overlay will show when first data arrives
       CustomSnackbar.showLoading(
         context,
         message: machinesToTest.length > 1
@@ -917,33 +996,132 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
                 const Divider(),
 
-                // Individual machine checkboxes
+                // Individual machine checkboxes with weighing scale toggle
                 ..._connectedMachineIds.map((machineId) {
                   final isSelected =
                       _testAllMachines ||
                       _selectedTestMachines.contains(machineId);
-                  return CheckboxListTile(
-                    value: isSelected,
-                    onChanged: _testAllMachines
-                        ? null
-                        : (value) {
-                            setModalState(() {
-                              if (value == true) {
-                                _selectedTestMachines.add(machineId);
-                              } else {
-                                _selectedTestMachines.remove(machineId);
-                              }
-                            });
-                            setState(() {});
-                          },
-                    title: Text(
-                      '${AppLocalizations().tr('machine')} m${_formatMachineId(machineId)}',
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
+                  final isWeighingAuto = _machineWeighingScaleMode[machineId] ?? true;
+                  
+                  return Column(
+                    children: [
+                      CheckboxListTile(
+                        value: isSelected,
+                        onChanged: _testAllMachines
+                            ? null
+                            : (value) {
+                                setModalState(() {
+                                  if (value == true) {
+                                    _selectedTestMachines.add(machineId);
+                                  } else {
+                                    _selectedTestMachines.remove(machineId);
+                                  }
+                                });
+                                setState(() {});
+                              },
+                        title: Text(
+                          '${AppLocalizations().tr('machine')} m${_formatMachineId(machineId)}',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        activeColor: actionColor,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                    ),
-                    activeColor: actionColor,
-                    contentPadding: EdgeInsets.zero,
+                      // Weighing Scale & Farmer ID Toggles (only for Test)
+                      if (actionName == 'Test') ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 48, right: 16, bottom: 4, top: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.scale_rounded,
+                                size: 16,
+                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Weighing Scale:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                              _buildInlineToggle(
+                                label: 'Auto',
+                                isSelected: isWeighingAuto,
+                                onTap: () {
+                                  setModalState(() {
+                                    _machineWeighingScaleMode[machineId] = true;
+                                  });
+                                  setState(() {});
+                                  _savePreferences();
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              _buildInlineToggle(
+                                label: 'Manual',
+                                isSelected: !isWeighingAuto,
+                                onTap: () {
+                                  setModalState(() {
+                                    _machineWeighingScaleMode[machineId] = false;
+                                  });
+                                  setState(() {});
+                                  _savePreferences();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 48, right: 16, bottom: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.badge_rounded,
+                                size: 16,
+                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Farmer ID:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                              _buildInlineToggle(
+                                label: 'Auto',
+                                isSelected: _machineFarmerIdMode[machineId] ?? false,
+                                onTap: () {
+                                  setModalState(() {
+                                    _machineFarmerIdMode[machineId] = true;
+                                  });
+                                  setState(() {});
+                                  _savePreferences();
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              _buildInlineToggle(
+                                label: 'Manual',
+                                isSelected: !(_machineFarmerIdMode[machineId] ?? false),
+                                onTap: () {
+                                  setModalState(() {
+                                    _machineFarmerIdMode[machineId] = false;
+                                  });
+                                  setState(() {});
+                                  _savePreferences();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   );
                 }).toList(),
 
@@ -1509,6 +1687,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           label: AppLocalizations().tr('info'),
                         ),
                       ),
+                      // Channel dropdown
+                      ChannelDropdownButton(
+                        selectedChannel: _selectedChannel,
+                        onChannelChanged: (channel) {
+                          setState(() {
+                            _selectedChannel = channel;
+                          });
+                          print('📡 [Control Panel] Channel changed to: $channel');
+                        },
+                      ),
+                      const SizedBox(width: 8),
                       // Reports button
                       CompactActionButton(
                         icon: Icons.assessment_rounded,
@@ -1530,7 +1719,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       ),
                       const SizedBox(width: 8),
                       // History navigation
-                      if (_readingHistory.length > 1)
+                      if (_readingHistory.length > 1) ...[
                         HistoryNavigator(
                           historyCount: _readingHistory.length,
                           historyIndex: _historyIndex,
@@ -1556,8 +1745,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             });
                           },
                         ),
+                        const SizedBox(width: 8),
+                      ],
                       // Clear button
-                      const SizedBox(width: 8),
                       CompactActionButton(
                         icon: Icons.restart_alt_rounded,
                         label: AppLocalizations().tr('clear'),
@@ -2110,5 +2300,513 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           ? MilkTestAnimation(primaryColor: color, size: 44)
           : null,
     );
+  }
+
+  Widget _buildInlineToggle({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF10B981).withOpacity(0.15)
+              : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF10B981)
+                : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected
+                ? const Color(0xFF10B981)
+                : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, String>?> _showFarmerIdDialog(List<String> machines, {bool showStartTest = false}) async {
+    final controllers = <String, TextEditingController>{};
+    final focusNodes = <String, FocusNode>{};
+    
+    for (final machineId in machines) {
+      controllers[machineId] = TextEditingController(
+        text: _machineFarmerIds[machineId] ?? '',
+      );
+      focusNodes[machineId] = FocusNode();
+    }
+
+    // Auto-focus first field after dialog builds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (machines.isNotEmpty) {
+        focusNodes[machines.first]?.requestFocus();
+      }
+    });
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final allFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
+            
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.person_rounded,
+                    color: const Color(0xFF10B981),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Enter Farmer IDs',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: machines.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final machineId = entry.value;
+                    final isLast = index == machines.length - 1;
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Machine m${_formatMachineId(machineId)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: controllers[machineId],
+                            focusNode: focusNodes[machineId],
+                            keyboardType: TextInputType.number,
+                            textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (_) {
+                              if (!isLast) {
+                                // Move to next field
+                                final nextMachineId = machines[index + 1];
+                                focusNodes[nextMachineId]?.requestFocus();
+                              } else {
+                                // Last field - auto-submit if all filled
+                                final allCurrentlyFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
+                                if (allCurrentlyFilled) {
+                                  final farmerIds = <String, String>{};
+                                  for (final entry in controllers.entries) {
+                                    farmerIds[entry.key] = entry.value.text.trim();
+                                  }
+                                  // Don't dispose focus nodes - keep keyboard alive
+                                  Navigator.pop(context, farmerIds);
+                                }
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Enter Farmer ID',
+                              prefixIcon: Icon(
+                                Icons.badge_rounded,
+                                color: const Color(0xFF10B981),
+                                size: 20,
+                              ),
+                              filled: true,
+                              fillColor: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade700
+                                      : Colors.grey.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: const Color(0xFF10B981),
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    // Dispose focus nodes
+                    for (final node in focusNodes.values) {
+                      node.dispose();
+                    }
+                    Navigator.pop(context, null);
+                  },
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: allFilled ? () {
+                    final farmerIds = <String, String>{};
+                    for (final entry in controllers.entries) {
+                      farmerIds[entry.key] = entry.value.text.trim();
+                    }
+                    // Dispose focus nodes
+                    for (final node in focusNodes.values) {
+                      node.dispose();
+                    }
+                    Navigator.pop(context, farmerIds);
+                  } : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: Text(showStartTest ? 'Start Test' : 'Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    return result;
+  }
+
+  String _buildTestCommand(String machineId) {
+    // Get channel byte based on dropdown selection
+    // CH1 (Cow) = 0x00, CH2 (Buffalo) = 0x01, CH3 (Mixed) = 0x02
+    int channelByte;
+    switch (_selectedChannel) {
+      case 'CH1':
+        channelByte = 0x00; // Cow
+        break;
+      case 'CH2':
+        channelByte = 0x01; // Buffalo
+        break;
+      case 'CH3':
+        channelByte = 0x02; // Mixed
+        break;
+      default:
+        channelByte = 0x00; // Default to Cow
+    }
+    
+    // Get farmer ID (default 1 if not set or in Auto mode)
+    final farmerIdStr = _machineFarmerIds[machineId] ?? '1';
+    final farmerId = int.tryParse(farmerIdStr) ?? 1;
+    
+    // Convert farmer ID to 3 bytes (Big-Endian: MSB, MID, LSB)
+    final farmerIdMsb = (farmerId >> 16) & 0xFF; // Most significant byte
+    final farmerIdMid = (farmerId >> 8) & 0xFF;  // Middle byte
+    final farmerIdLsb = farmerId & 0xFF;         // Least significant byte
+    
+    // Get weight (default 1 if not set or in Auto mode)
+    final weightStr = _machineWeights[machineId] ?? '1';
+    final weightFloat = double.tryParse(weightStr) ?? 1.0;
+    
+    // Multiply weight by 100 (e.g., 2.55 → 255, 0.01 → 1)
+    final weightInt = (weightFloat * 100).round();
+    
+    // Convert weight to 4 bytes (Big-Endian: MSB first)
+    final weightByte3 = (weightInt >> 24) & 0xFF;   // Most significant byte
+    final weightByte2 = (weightInt >> 16) & 0xFF;   // Byte 2
+    final weightByte1 = (weightInt >> 8) & 0xFF;    // Byte 1
+    final weightByte0 = weightInt & 0xFF;           // Least significant byte
+    
+    // Cycle mode (default to 0x00)
+    final cycleMode = 0x00;
+    
+    // Build command bytes
+    // Format: 40 0B 07 [channel] [cycleMode] [farmerID_MSB] [farmerID_MID] [farmerID_LSB] [weight3] [weight2] [weight1] [weight0] [LRC]
+    final bytes = [
+      0x40,         // Header
+      0x0B,         // Number of bytes (11)
+      0x07,         // Command: Test
+      channelByte,  // Channel (00=Cow, 01=Buffalo, 02=Mixed)
+      cycleMode,    // Cycle mode (default 00)
+      farmerIdMsb,  // Farmer ID MSB
+      farmerIdMid,  // Farmer ID MID
+      farmerIdLsb,  // Farmer ID LSB
+      weightByte3,  // Weight byte 3 (MSB)
+      weightByte2,  // Weight byte 2
+      weightByte1,  // Weight byte 1
+      weightByte0,  // Weight byte 0 (LSB)
+    ];
+    
+    // Calculate LRC (XOR of all bytes)
+    int lrc = 0;
+    for (final byte in bytes) {
+      lrc ^= byte;
+    }
+    bytes.add(lrc);
+    
+    // Convert to hex string
+    final hexCommand = bytes.map((b) => b.toRadixString(16).toUpperCase().padLeft(2, '0')).join(' ');
+    
+    print('🔧 [Test Command] Machine: $machineId, Channel: $_selectedChannel, Farmer ID: $farmerId, Weight: ${weightFloat}kg');
+    print('🔧 [Test Command] Hex: $hexCommand');
+    
+    return hexCommand;
+  }
+
+  Future<Map<String, String>?> _showWeightDialog(List<String> machines) async {
+    final controllers = <String, TextEditingController>{};
+    final focusNodes = <String, FocusNode>{};
+    
+    for (final machineId in machines) {
+      controllers[machineId] = TextEditingController(
+        text: _machineWeights[machineId] ?? '',
+      );
+      focusNodes[machineId] = FocusNode();
+    }
+
+    // Auto-focus first field after dialog builds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (machines.isNotEmpty) {
+        focusNodes[machines.first]?.requestFocus();
+      }
+    });
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final allFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
+            
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.scale_rounded,
+                    color: const Color(0xFF10B981),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Enter Weights',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: machines.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final machineId = entry.value;
+                    final isLast = index == machines.length - 1;
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Machine m${_formatMachineId(machineId)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: controllers[machineId],
+                            focusNode: focusNodes[machineId],
+                            keyboardType: TextInputType.numberWithOptions(decimal: true),
+                            textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                            ],
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (_) {
+                              if (!isLast) {
+                                // Move to next field
+                                final nextMachineId = machines[index + 1];
+                                focusNodes[nextMachineId]?.requestFocus();
+                              } else {
+                                // Last field - auto-submit if all filled
+                                final allCurrentlyFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
+                                if (allCurrentlyFilled) {
+                                  final weights = <String, String>{};
+                                  for (final entry in controllers.entries) {
+                                    weights[entry.key] = entry.value.text.trim();
+                                  }
+                                  // Dispose focus nodes
+                                  for (final node in focusNodes.values) {
+                                    node.dispose();
+                                  }
+                                  Navigator.pop(context, weights);
+                                }
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Enter Weight (kg)',
+                              prefixIcon: Icon(
+                                Icons.monitor_weight_rounded,
+                                color: const Color(0xFF10B981),
+                                size: 20,
+                              ),
+                              suffixText: 'kg',
+                              filled: true,
+                              fillColor: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade700
+                                      : Colors.grey.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: const Color(0xFF10B981),
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    // Dispose focus nodes
+                    for (final node in focusNodes.values) {
+                      node.dispose();
+                    }
+                    Navigator.pop(context, null);
+                  },
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: allFilled ? () {
+                    final weights = <String, String>{};
+                    for (final entry in controllers.entries) {
+                      weights[entry.key] = entry.value.text.trim();
+                    }
+                    // Dispose focus nodes
+                    for (final node in focusNodes.values) {
+                      node.dispose();
+                    }
+                    Navigator.pop(context, weights);
+                  } : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Text('Start Test'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    return result;
   }
 }

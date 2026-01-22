@@ -334,6 +334,9 @@ class BluetoothService {
               print(
                 '🟢 [BLE] Machine Available: Serial $serialNumber from "$deviceName"',
               );
+              
+              // Auto-connect immediately when device found
+              _connectToDeviceImmediately(device, serialNumber);
             }
           }
 
@@ -458,6 +461,10 @@ class BluetoothService {
       _autoScanTimer?.cancel();
 
       print('✅ [BLE] Connected to $machineId');
+      
+      // Start data listener for this device
+      _startListenerForSingleDevice(numericId, device);
+      
       return true;
     } catch (e) {
       print('❌ [BLE] Connection failed for $machineId: $e');
@@ -510,6 +517,22 @@ class BluetoothService {
       _connectedMachines.remove(numericId);
       _connectedMachinesController.add(Map.from(_connectedMachines));
     }
+  }
+
+  /// Connect to a device immediately when found
+  Future<void> _connectToDeviceImmediately(BluetoothDevice device, String serialNumber) async {
+    // Avoid reconnecting if already connected
+    if (_connectedMachines.containsKey(serialNumber)) {
+      print('ℹ️ [BLE] Machine $serialNumber already connected, skipping');
+      return;
+    }
+
+    print('⚡ [BLE] Auto-connecting to machine $serialNumber immediately...');
+    
+    // Connect in background without blocking scan
+    Future.delayed(Duration.zero, () async {
+      await connectToMachine('m$serialNumber');
+    });
   }
 
   /// Connect to a device (placeholder for future implementation)
@@ -654,30 +677,43 @@ class BluetoothService {
       // Only listen to connected devices
       if (_connectedMachines[machineId] != true) continue;
 
-      try {
-        print('🔵 [BLE $machineId] Setting up global listener...');
-        final services = await device.discoverServices();
+      await _setupDeviceListener(machineId, device);
+    }
 
-        for (final service in services) {
-          for (final char in service.characteristics) {
-            if (char.properties.notify) {
-              await char.setNotifyValue(true);
-              print('✅ [BLE $machineId] Listening on ${char.uuid}');
+    print('✅ [BLE] Global data listener setup complete\n');
+  }
 
-              final sub = char.lastValueStream.listen((value) {
-                if (value.isNotEmpty) {
-                  final rawData = String.fromCharCodes(value);
-                  _processIncomingData(rawData, machineId);
-                }
-              });
-              _dataSubscriptions.add(sub);
-            }
+  /// Start listener for a single device after individual connection
+  Future<void> _startListenerForSingleDevice(String machineId, BluetoothDevice device) async {
+    print('🔵 [BLE $machineId] Starting data listener after connection...');
+    await _setupDeviceListener(machineId, device);
+  }
+
+  /// Setup listener for a specific device
+  Future<void> _setupDeviceListener(String machineId, BluetoothDevice device) async {
+    try {
+      print('🔵 [BLE $machineId] Setting up listener...');
+      final services = await device.discoverServices();
+
+      for (final service in services) {
+        for (final char in service.characteristics) {
+          if (char.properties.notify) {
+            await char.setNotifyValue(true);
+            print('✅ [BLE $machineId] Listening on ${char.uuid}');
+
+            final sub = char.lastValueStream.listen((value) {
+              if (value.isNotEmpty) {
+                final rawData = String.fromCharCodes(value);
+                _processIncomingData(rawData, machineId);
+              }
+            });
+            _dataSubscriptions.add(sub);
           }
         }
-        print('✅ [BLE $machineId] Global listener active');
-      } catch (e) {
-        print('❌ [BLE $machineId] Error setting up global listener: $e');
       }
+      print('✅ [BLE $machineId] Listener active');
+    } catch (e) {
+      print('❌ [BLE $machineId] Error setting up listener: $e');
     }
   }
 
