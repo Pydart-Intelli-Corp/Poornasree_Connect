@@ -155,9 +155,7 @@ class ChannelDropdownButton extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : const Color(0xFF6B7280),
+                          color: context.textSecondaryColor,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -245,7 +243,7 @@ class ChannelDropdownButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   const SizedBox(height: 2),

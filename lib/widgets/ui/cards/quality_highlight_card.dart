@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../stats/stat_widgets.dart';
+import '../../../utils/utils.dart';
 
 /// A card highlighting quality metrics (Best/Worst quality)
 /// Used in statistics summary to show top/bottom performers
@@ -32,8 +33,6 @@ class QualityHighlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final displayEmptyMessage = emptyMessage ?? AppLocalizations().tr('no_data_yet');
 
     return Expanded(
@@ -59,12 +58,16 @@ class QualityHighlightCard extends StatelessWidget {
                   child: Icon(icon, size: 14, color: color),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                Flexible(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               ],
@@ -77,7 +80,7 @@ class QualityHighlightCard extends StatelessWidget {
                   Icon(
                     Icons.person_rounded,
                     size: 12,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    color: context.textSecondaryColor,
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -86,7 +89,7 @@ class QualityHighlightCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black87,
+                        color: context.textPrimaryColor,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -118,14 +121,14 @@ class QualityHighlightCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   machineId!,
-                  style: TextStyle(fontSize: 9, color: Colors.grey.shade500),
+                  style: TextStyle(fontSize: 9, color: context.textSecondaryColor),
                 ),
               ],
             ] else ...[
               const SizedBox(height: 8),
               Text(
                 displayEmptyMessage,
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                style: TextStyle(fontSize: 10, color: context.textSecondaryColor),
               ),
             ],
           ],

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../utils/utils.dart';
 import '../../services/bluetooth_service.dart';
 import '../../l10n/l10n.dart';
 
@@ -244,20 +245,20 @@ class _BluetoothStatusButtonState extends State<BluetoothStatusButton> {
       return _StatusInfo(
         icon: Icons.bluetooth_searching,
         label: l10n.tr('offline_status'),
-        iconColor: Colors.grey.shade400,
-        textColor: Colors.grey.shade300,
-        bgColor: Colors.grey.withOpacity(0.1),
-        borderColor: Colors.grey.withOpacity(0.3),
+        iconColor: context.textSecondaryColor,
+        textColor: context.textSecondaryColor,
+        bgColor: context.borderColor,
+        borderColor: context.borderColor,
       );
     } else {
       // Machine not available - show "Offline" in grey
       return _StatusInfo(
         icon: Icons.bluetooth_disabled,
         label: l10n.tr('offline_status'),
-        iconColor: Colors.grey.shade400,
-        textColor: Colors.grey.shade300,
-        bgColor: Colors.grey.withOpacity(0.1),
-        borderColor: Colors.grey.withOpacity(0.3),
+        iconColor: context.textSecondaryColor,
+        textColor: context.textSecondaryColor,
+        bgColor: context.borderColor,
+        borderColor: context.borderColor,
       );
     }
   }

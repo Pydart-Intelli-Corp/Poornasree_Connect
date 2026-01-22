@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// Transaction card types for icon and max value determination
 enum TransactionType { quantity, rate }
@@ -133,23 +134,23 @@ class TransactionCard extends StatelessWidget {
                             size: 10,
                             color: isActive
                                 ? color
-                                : (isDark
-                                      ? Colors.grey.shade500
-                                      : Colors.grey.shade400),
+                                : context.textSecondaryColor,
                           ),
                         ),
                         const SizedBox(width: 3),
-                        Text(
-                          title.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
-                            color: isActive
-                                ? color
-                                : (isDark
-                                      ? Colors.grey.shade500
-                                      : Colors.grey.shade500),
-                            letterSpacing: 0.8,
+                        Flexible(
+                          child: Text(
+                            title.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                              color: isActive
+                                  ? color
+                                  : context.textSecondaryColor,
+                              letterSpacing: 0.8,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
                       ],
@@ -172,9 +173,7 @@ class TransactionCard extends StatelessWidget {
                               fontWeight: FontWeight.w900,
                               color: isActive
                                   ? (isDark ? Colors.white : color)
-                                  : (isDark
-                                        ? Colors.grey.shade600
-                                        : Colors.grey.shade400),
+                                  : context.textSecondaryColor,
                               letterSpacing: -0.5,
                               shadows: isActive
                                   ? [
@@ -193,9 +192,7 @@ class TransactionCard extends StatelessWidget {
                                 fontSize: 11,
                                 color: isActive
                                     ? color.withValues(alpha: 0.8)
-                                    : (isDark
-                                          ? Colors.grey.shade600
-                                          : Colors.grey.shade500),
+                                    : context.textSecondaryColor,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -210,9 +207,7 @@ class TransactionCard extends StatelessWidget {
                         Container(
                           height: 5,
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF374151)
-                                : Colors.grey.shade200,
+                            color: context.borderColor,
                             borderRadius: BorderRadius.circular(3),
                           ),
                           child: ClipRRect(

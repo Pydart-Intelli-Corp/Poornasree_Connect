@@ -93,7 +93,7 @@ class _CollectionsReportScreenState extends State<CollectionsReportScreen> {
                         Icon(
                           Icons.error_outline,
                           size: 64,
-                          color: Colors.red.shade300,
+                          color: AppTheme.errorColor,
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -193,7 +193,7 @@ class _CollectionsReportScreenState extends State<CollectionsReportScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      record['farmer_name'] ?? 'Unknown Farmer',
+                      record['farmer_name'] ?? AppLocalizations().tr('unknown_farmer'),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A container with gradient background commonly used for stats cards
 class GradientCard extends StatelessWidget {
@@ -26,11 +27,11 @@ class GradientCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: isDark
               ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-              : [Colors.white, Colors.grey.shade50],
+              : [Colors.white, context.surfaceColor],
         ),
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+          color: context.borderColor,
           width: 1,
         ),
       ),

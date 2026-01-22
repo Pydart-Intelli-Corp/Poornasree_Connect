@@ -194,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 PremiumTextField(
                                   controller: _emailController,
                                   labelText: l10n.tr('email_address'),
-                                  hintText: 'your.email@example.com',
+                                  hintText: l10n.tr('email_hint'),
                                   icon: Icons.email_rounded,
                                   keyboardType: TextInputType.emailAddress,
                                   validator: (value) {

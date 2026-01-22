@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A reusable action button for bottom navigation bars
 /// Supports icons, labels, disabled state, and "all machines" indicator
@@ -47,9 +48,7 @@ class ActionButton extends StatelessWidget {
                     height: 44,
                     decoration: BoxDecoration(
                       color: isDisabled
-                          ? (isDark
-                                ? Colors.grey.shade800
-                                : const Color(0xFFF3F4F6))
+                          ? context.surfaceColor
                           : (isDark ? color.withOpacity(0.12) : color.withOpacity(0.08)),
                       borderRadius: BorderRadius.circular(14),
                       border: !isDisabled && !isDark ? Border.all(
@@ -104,8 +103,8 @@ class ActionButton extends StatelessWidget {
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: isDisabled
-                      ? Colors.grey
-                      : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                      ? context.textSecondaryColor.withValues(alpha: 0.5)
+                      : context.textSecondaryColor,
                 ),
               ),
             ],

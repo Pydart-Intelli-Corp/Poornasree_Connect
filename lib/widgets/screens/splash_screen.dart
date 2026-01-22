@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' hide BluetoothService;
 import '../../screens/screens.dart';
 import '../../utils/utils.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/providers.dart';
 import '../../services/services.dart';
 import '../widgets.dart';
@@ -497,7 +498,7 @@ class _SplashScreenState extends State<SplashScreen>
                 }
               },
               icon: const Icon(Icons.bluetooth, size: 18),
-              label: const Text('Enable Bluetooth'),
+              label: Text(AppLocalizations().tr('enable_bluetooth')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,

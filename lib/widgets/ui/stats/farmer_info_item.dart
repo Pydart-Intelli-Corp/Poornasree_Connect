@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A single info item used in the farmer card row
 /// Shows an icon, label, and value with a vertical divider option
@@ -47,7 +48,7 @@ class FarmerInfoItem extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: 8,
-                      color: Colors.grey[600],
+                      color: context.textSecondaryColor,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,
                     ),

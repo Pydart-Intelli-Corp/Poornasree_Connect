@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/lactosure_reading.dart';
 import '../feedback/flower_spinner.dart';
@@ -278,7 +279,7 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
                   subText,
                   style: TextStyle(
                     fontSize: 13,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    color: context.textSecondaryColor,
                   ),
                 ),
               ],
@@ -287,15 +288,13 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
           // Close button (always visible)
           Container(
             decoration: BoxDecoration(
-              color: isDark 
-                ? Colors.grey.shade800.withOpacity(0.5)
-                : Colors.grey.shade200.withOpacity(0.5),
+              color: context.surfaceColor.withOpacity(0.5),
               shape: BoxShape.circle,
             ),
             child: IconButton(
               icon: Icon(
                 Icons.close_rounded,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                color: context.textSecondaryColor,
               ),
               onPressed: _handleDismiss,
               tooltip: AppLocalizations().tr('close'),
@@ -504,8 +503,6 @@ class _LiveMachineStatusRowState extends State<LiveMachineStatusRow>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -517,12 +514,12 @@ class _LiveMachineStatusRowState extends State<LiveMachineStatusRow>
             decoration: BoxDecoration(
               color: widget.received
                   ? const Color(0xFF10B981).withOpacity(0.15)
-                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
+                  : context.surfaceColor,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               Icons.precision_manufacturing_rounded,
-              color: widget.received ? const Color(0xFF10B981) : Colors.grey,
+              color: widget.received ? const Color(0xFF10B981) : context.textSecondaryColor,
               size: 20,
             ),
           ),
@@ -535,7 +532,7 @@ class _LiveMachineStatusRowState extends State<LiveMachineStatusRow>
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : Colors.black87,
+                color: context.textPrimaryColor,
               ),
             ),
           ),

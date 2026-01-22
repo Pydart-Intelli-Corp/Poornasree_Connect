@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../utils/utils.dart';
 
 /// A total amount card with animated value and status badge
 class TotalAmountCard extends StatelessWidget {
@@ -40,7 +41,7 @@ class TotalAmountCard extends StatelessWidget {
             border: Border.all(
               color: isActive
                   ? (isDark ? color.withValues(alpha: 0.6) : color.withValues(alpha: 0.4))
-                  : (isDark ? Colors.grey.shade700 : const Color(0xFFD1D8E0)),
+                  : context.borderColor,
               width: isActive ? 2 : 1,
             ),
             boxShadow: isActive
@@ -107,9 +108,7 @@ class TotalAmountCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isActive
                                 ? color.withValues(alpha: 0.2)
-                                : (isDark
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade200),
+                                : context.borderColor,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: AnimatedSwitcher(
@@ -119,9 +118,7 @@ class TotalAmountCard extends StatelessWidget {
                               key: ValueKey(isActive),
                               color: isActive
                                   ? color
-                                  : (isDark
-                                        ? Colors.grey.shade400
-                                        : Colors.grey.shade500),
+                                  : context.textSecondaryColor,
                               size: 12,
                             ),
                           ),
@@ -132,12 +129,8 @@ class TotalAmountCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 10,
                             color: isActive
-                                ? (isDark
-                                      ? Colors.grey.shade300
-                                      : Colors.grey.shade600)
-                                : (isDark
-                                      ? Colors.grey.shade500
-                                      : Colors.grey.shade400),
+                                ? context.textSecondaryColor
+                                : context.textSecondaryColor.withValues(alpha: 0.5),
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1,
                           ),
@@ -158,9 +151,7 @@ class TotalAmountCard extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                           color: isActive
                               ? color
-                              : (isDark
-                                    ? Colors.grey.shade500
-                                    : Colors.grey.shade400),
+                              : context.textSecondaryColor,
                         ),
                         child: Text('₹${animatedValue.toStringAsFixed(2)}'),
                       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/lactosure_reading.dart';
 import 'live_test_overlay.dart';
@@ -217,7 +218,7 @@ class _TestResultOverlayState extends State<TestResultOverlay>
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: isDark
-                                          ? Colors.white
+                                          ? context.textPrimaryColor
                                           : headerColor,
                                     ),
                                   ),
@@ -226,9 +227,7 @@ class _TestResultOverlayState extends State<TestResultOverlay>
                                     subText,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: isDark
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
+                                      color: context.textSecondaryColor,
                                     ),
                                   ),
                                 ],
@@ -238,9 +237,7 @@ class _TestResultOverlayState extends State<TestResultOverlay>
                               onPressed: _handleDismiss,
                               icon: Icon(
                                 Icons.close_rounded,
-                                color: isDark
-                                    ? Colors.grey.shade400
-                                    : Colors.grey.shade500,
+                                color: context.textSecondaryColor,
                                 size: 20,
                               ),
                               padding: EdgeInsets.zero,
@@ -340,9 +337,7 @@ class AnimatedMachineItem extends StatelessWidget {
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.grey.shade800.withOpacity(0.5)
-                    : Colors.grey.shade50,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: received
@@ -367,7 +362,7 @@ class AnimatedMachineItem extends StatelessWidget {
                       size: 20,
                       color: received
                           ? const Color(0xFF10B981)
-                          : Colors.grey.shade500,
+                          : context.textSecondaryColor,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -381,7 +376,7 @@ class AnimatedMachineItem extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : Colors.black87,
+                            color: context.textPrimaryColor,
                           ),
                         ),
                         if (received && reading != null)
@@ -389,9 +384,7 @@ class AnimatedMachineItem extends StatelessWidget {
                             '${AppLocalizations().tr('fat').toUpperCase()}: ${reading!.fat.toStringAsFixed(2)} | ${AppLocalizations().tr('snf').toUpperCase()}: ${reading!.snf.toStringAsFixed(2)} | ${AppLocalizations().tr('quantity').substring(0, 3)}: ${reading!.quantity.toStringAsFixed(1)}L',
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
+                              color: context.textSecondaryColor,
                             ),
                           )
                         else
@@ -401,7 +394,7 @@ class AnimatedMachineItem extends StatelessWidget {
                               fontSize: 11,
                               color: received
                                   ? const Color(0xFF10B981)
-                                  : Colors.grey.shade500,
+                                  : context.textSecondaryColor,
                             ),
                           ),
                       ],

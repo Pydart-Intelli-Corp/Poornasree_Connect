@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../utils/utils.dart';
 
 class CustomTextField extends StatefulWidget {
   final String? label;
@@ -137,14 +138,12 @@ class _CustomTextFieldState extends State<CustomTextField> {
             filled: true,
             fillColor: widget.enabled 
               ? (theme.brightness == Brightness.light ? Colors.white : theme.colorScheme.surface)
-              : (theme.brightness == Brightness.light ? Colors.grey.shade100 : theme.colorScheme.surface.withOpacity(0.5)),
+              : context.surfaceColor,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: theme.brightness == Brightness.light 
-                  ? Colors.grey.shade300 
-                  : Colors.grey.shade700,
+                color: context.borderColor,
               ),
             ),
             enabledBorder: OutlineInputBorder(
@@ -152,9 +151,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
               borderSide: BorderSide(
                 color: widget.errorText != null 
                   ? colorScheme.error 
-                  : (theme.brightness == Brightness.light 
-                    ? Colors.grey.shade300 
-                    : Colors.grey.shade700),
+                  : context.borderColor,
               ),
             ),
             focusedBorder: OutlineInputBorder(
@@ -177,9 +174,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
             disabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: theme.brightness == Brightness.light 
-                  ? Colors.grey.shade200 
-                  : Colors.grey.shade800,
+                color: context.borderColor,
               ),
             ),
           ),

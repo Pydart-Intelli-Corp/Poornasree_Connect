@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// Info chip types for value formatting determination
 enum InfoChipType { milkType, protein, lactose, salt, water, temp }
@@ -47,13 +48,13 @@ class InfoChip extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: isDark
                   ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                  : [const Color(0xFFF9FAFB), const Color(0xFFEFF6FF)],
+                  : [const Color(0xFFF9FAFB), context.surfaceColor],
             ),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isActive
                   ? (isDark ? color.withOpacity(0.3) : color.withOpacity(0.2))
-                  : (isDark ? Colors.grey.withOpacity(0.2) : const Color(0xFFDCE3EB)),
+                  : context.borderColor,
               width: 1,
             ),
             boxShadow: [
@@ -95,9 +96,7 @@ class InfoChip extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
+                          color: context.textSecondaryColor,
                           letterSpacing: 0.5,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -114,9 +113,7 @@ class InfoChip extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: isActive
                         ? color
-                        : (isDark
-                              ? Colors.grey.shade500
-                              : Colors.grey.shade400),
+                        : context.textSecondaryColor,
                   ),
                   child: Text(
                     type == InfoChipType.milkType
@@ -134,9 +131,7 @@ class InfoChip extends StatelessWidget {
                     Container(
                       height: 4,
                       decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF374151)
-                            : Colors.grey.shade200,
+                        color: context.borderColor,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),

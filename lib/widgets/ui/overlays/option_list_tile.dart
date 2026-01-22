@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A list tile option with icon container, used in bottom sheets
 class OptionListTile extends StatelessWidget {
@@ -21,9 +22,6 @@ class OptionListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -40,14 +38,14 @@ class OptionListTile extends StatelessWidget {
             title,
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black87,
+              color: context.textPrimaryColor,
             ),
           ),
           subtitle: subtitle != null
               ? Text(
                   subtitle!,
                   style: TextStyle(
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    color: context.textSecondaryColor,
                     fontSize: 12,
                   ),
                 )

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/utils.dart';
 
 class ReadingCard extends StatefulWidget {
   final String title;
@@ -64,14 +65,20 @@ class _ReadingCardState extends State<ReadingCard>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    
     return FadeTransition(
       opacity: _fadeAnimation,
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: Card(
-          elevation: 2,
+          elevation: isDark ? 2 : 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
+            side: isDark ? BorderSide.none : BorderSide(
+              color: widget.iconColor.withOpacity(0.15),
+              width: 1.5,
+            ),
           ),
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -80,10 +87,16 @@ class _ReadingCardState extends State<ReadingCard>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.white,
-                  widget.iconColor.withOpacity(0.05),
-                ],
+                colors: isDark 
+                  ? [
+                      Colors.white,
+                      widget.iconColor.withOpacity(0.05),
+                    ]
+                  : [
+                      widget.iconColor.withOpacity(0.08),
+                      widget.iconColor.withOpacity(0.03),
+                      Colors.white,
+                    ],
               ),
             ),
             child: Column(
@@ -94,8 +107,14 @@ class _ReadingCardState extends State<ReadingCard>
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: widget.iconColor.withOpacity(0.1),
+                        color: isDark 
+                          ? widget.iconColor.withOpacity(0.1)
+                          : widget.iconColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
+                        border: isDark ? null : Border.all(
+                          color: widget.iconColor.withOpacity(0.3),
+                          width: 1,
+                        ),
                       ),
                       child: Icon(
                         widget.icon,
@@ -110,7 +129,7 @@ class _ReadingCardState extends State<ReadingCard>
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey[700],
+                          color: context.textSecondaryColor,
                         ),
                       ),
                     ),
@@ -122,10 +141,10 @@ class _ReadingCardState extends State<ReadingCard>
                   children: [
                     Text(
                       widget.value,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: context.textPrimaryColor,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -136,7 +155,7 @@ class _ReadingCardState extends State<ReadingCard>
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey[600],
+                          color: context.textSecondaryColor,
                         ),
                       ),
                     ),
@@ -157,7 +176,9 @@ class _ReadingCardState extends State<ReadingCard>
                         return LinearProgressIndicator(
                           value: value,
                           minHeight: 6,
-                          backgroundColor: widget.progressColor.withOpacity(0.2),
+                          backgroundColor: isDark 
+                            ? widget.progressColor.withOpacity(0.2)
+                            : widget.progressColor.withOpacity(0.15),
                           valueColor: AlwaysStoppedAnimation<Color>(
                             widget.progressColor,
                           ),
@@ -233,14 +254,20 @@ class _MachineInfoCardState extends State<MachineInfoCard>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    
     return FadeTransition(
       opacity: _fadeAnimation,
       child: SlideTransition(
         position: _slideAnimation,
         child: Card(
-          elevation: 2,
+          elevation: isDark ? 2 : 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
+            side: isDark ? BorderSide.none : BorderSide(
+              color: widget.iconColor.withOpacity(0.2),
+              width: 1.5,
+            ),
           ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -249,10 +276,15 @@ class _MachineInfoCardState extends State<MachineInfoCard>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.white,
-                  widget.iconColor.withOpacity(0.05),
-                ],
+                colors: isDark
+                  ? [
+                      Colors.white.withOpacity(0.03),
+                      widget.iconColor.withOpacity(0.05),
+                    ]
+                  : [
+                      Colors.white,
+                      widget.iconColor.withOpacity(0.08),
+                    ],
               ),
             ),
             child: Row(
@@ -279,16 +311,16 @@ class _MachineInfoCardState extends State<MachineInfoCard>
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey[600],
+                          color: context.textSecondaryColor,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         widget.value,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: context.textPrimaryColor,
                         ),
                       ),
                     ],

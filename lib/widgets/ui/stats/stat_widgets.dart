@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A stat item widget used in statistics cards
 class StatItem extends StatelessWidget {
@@ -19,9 +20,6 @@ class StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Expanded(
       child: Column(
         children: [
@@ -39,7 +37,7 @@ class StatItem extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
+              color: context.textPrimaryColor,
             ),
           ),
           const SizedBox(height: 2),
@@ -47,7 +45,7 @@ class StatItem extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 10,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              color: context.textSecondaryColor,
             ),
           ),
           if (subtitle != null) ...[
@@ -73,11 +71,10 @@ class StatDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 1,
       height: 45,
-      color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+      color: context.borderColor,
     );
   }
 }
@@ -97,8 +94,6 @@ class MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -120,7 +115,7 @@ class MiniStat extends StatelessWidget {
             value,
             style: TextStyle(
               fontSize: 9,
-              color: isDark ? Colors.white : Colors.black87,
+              color: context.textPrimaryColor,
               fontWeight: FontWeight.bold,
             ),
           ),

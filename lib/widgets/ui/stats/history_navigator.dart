@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../utils/utils.dart';
 
 /// A history navigator widget with previous/next buttons and position indicator
 class HistoryNavigator extends StatelessWidget {
@@ -22,8 +23,6 @@ class HistoryNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final currentPosition =
         historyCount - historyIndex; // 1-based position from oldest
 
@@ -32,12 +31,12 @@ class HistoryNavigator extends StatelessWidget {
       decoration: BoxDecoration(
         color: isViewingHistory
             ? const Color(0xFF3b82f6).withOpacity(0.15)
-            : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
+            : context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isViewingHistory
               ? const Color(0xFF3b82f6).withOpacity(0.5)
-              : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+              : context.borderColor,
           width: 1,
         ),
       ),
@@ -60,7 +59,7 @@ class HistoryNavigator extends StatelessWidget {
                 size: 14,
                 color: historyIndex < historyCount - 1
                     ? const Color(0xFF3b82f6)
-                    : Colors.grey.shade400,
+                    : context.textSecondaryColor,
               ),
             ),
           ),
@@ -115,7 +114,7 @@ class HistoryNavigator extends StatelessWidget {
                 size: 14,
                 color: historyIndex > 0
                     ? const Color(0xFF3b82f6)
-                    : Colors.grey.shade400,
+                    : context.textSecondaryColor,
               ),
             ),
           ),

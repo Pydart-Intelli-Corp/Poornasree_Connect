@@ -25,6 +25,7 @@ class FarmerDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final l10n = AppLocalizations();
 
     return Scaffold(
       appBar: AppBar(
@@ -184,7 +185,7 @@ class FarmerDashboardScreen extends StatelessWidget {
                     'Your farmer dashboard is currently being set up. Check back soon for updates and features!',
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.grey.shade600,
+                      color: context.textSecondaryColor,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -197,36 +198,40 @@ class FarmerDashboardScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Coming Soon',
-                            style: TextStyle(
+                          Text(
+                            AppLocalizations().tr('coming_soon'),
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 16),
                           _buildFeatureItem(
+                            context,
                             Icons.trending_up,
-                            'Production Tracking',
-                            'Track your daily milk production',
+                            l10n.tr('production_tracking'),
+                            l10n.tr('track_daily_production'),
                           ),
                           const Divider(),
                           _buildFeatureItem(
+                            context,
                             Icons.account_balance_wallet,
-                            'Payment History',
-                            'View your payment records',
+                            l10n.tr('payment_history'),
+                            l10n.tr('view_payment_records'),
                           ),
                           const Divider(),
                           _buildFeatureItem(
+                            context,
                             Icons.analytics,
-                            'Analytics',
-                            'View insights and reports',
+                            l10n.tr('analytics'),
+                            l10n.tr('view_insights_reports'),
                           ),
                           const Divider(),
                           _buildFeatureItem(
+                            context,
                             Icons.notifications,
-                            'Notifications',
-                            'Stay updated with alerts',
+                            l10n.tr('notifications'),
+                            l10n.tr('stay_updated_alerts'),
                           ),
                         ],
                       ),
@@ -241,7 +246,7 @@ class FarmerDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatureItem(IconData icon, String title, String subtitle) {
+  Widget _buildFeatureItem(BuildContext context, IconData icon, String title, String subtitle) {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
@@ -263,13 +268,13 @@ class FarmerDashboardScreen extends StatelessWidget {
       subtitle: Text(
         subtitle,
         style: TextStyle(
-          color: Colors.grey.shade600,
+          color: context.textSecondaryColor,
           fontSize: 13,
         ),
       ),
-      trailing: const Icon(
+      trailing: Icon(
         Icons.lock_outline,
-        color: Colors.grey,
+        color: context.textSecondaryColor,
         size: 20,
       ),
     );

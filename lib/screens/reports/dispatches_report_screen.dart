@@ -104,7 +104,7 @@ class _DispatchesReportScreenState extends State<DispatchesReportScreen> {
     
     if (isNoInternet) {
       icon = Icons.cloud_off_rounded;
-      iconColor = Colors.orange;
+      iconColor = AppTheme.warningColor;
       title = 'No Internet Connection';
       message = 'Dispatches report requires an internet connection.\n\nPlease check your network and try again.';
     } else if (isTimeout) {
@@ -114,9 +114,9 @@ class _DispatchesReportScreenState extends State<DispatchesReportScreen> {
       message = 'The server took too long to respond.\nPlease check your connection and try again.';
     } else {
       icon = Icons.error_outline_rounded;
-      iconColor = Colors.red.shade300;
+      iconColor = AppTheme.errorColor;
       title = 'Error loading dispatches';
-      message = _errorMessage ?? 'Unknown error occurred';
+      message = _errorMessage ?? AppLocalizations().tr('unknown_error');
     }
     
     return Center(
@@ -172,11 +172,11 @@ class _DispatchesReportScreenState extends State<DispatchesReportScreen> {
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'completed':
-        return Colors.green;
+        return AppTheme.successColor;
       case 'in_transit':
-        return Colors.orange;
+        return AppTheme.warningColor;
       case 'pending':
-        return Colors.blue;
+        return AppTheme.infoColor;
       default:
         return AppTheme.textSecondary;
     }

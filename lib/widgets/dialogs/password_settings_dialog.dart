@@ -210,8 +210,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                 // Info Card
                 InfoContainer(
                   icon: Icons.info_outline,
-                  text:
-                      'View or change machine passwords. Passwords are 6 digits and will be synced to the machine.',
+                  text: AppLocalizations().tr('view_or_change_passwords'),
                   backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
                   iconColor: AppTheme.primaryBlue,
                   textColor: AppTheme.primaryBlue,
@@ -221,7 +220,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
 
                 // User Password Section
                 _buildSectionTitle(
-                  'User Password',
+                  AppLocalizations().tr('user_password'),
                   Icons.person_outline,
                   theme,
                   status: _userPasswordStatus,
@@ -238,7 +237,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
 
                 // Supervisor Password Section
                 _buildSectionTitle(
-                  'Supervisor Password',
+                  AppLocalizations().tr('supervisor_password'),
                   Icons.admin_panel_settings_outlined,
                   theme,
                   status: _supervisorPasswordStatus,
@@ -485,8 +484,8 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
       CustomSnackbar.show(
         context,
         message: AppLocalizations().tr('no_password_set'),
-        submessage:
-            'This machine does not have a ${widget.passwordType.toLowerCase()} password configured.',
+        submessage: AppLocalizations().tr('no_password_configured')
+            .replaceAll('{type}', widget.passwordType.toLowerCase()),
         isError: true,
       );
       return;
@@ -505,9 +504,9 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
     final verified = await OtpVerificationDialog.show(
       context,
       email: widget.userEmail!,
-      title: 'Verify Identity',
-      description:
-          'For security, please verify your identity with OTP to view the ${widget.passwordType.toLowerCase()} password.',
+      title: AppLocalizations().tr('verify_identity'),
+      description: AppLocalizations().tr('verify_identity_desc')
+          .replaceAll('{type}', widget.passwordType.toLowerCase()),
       onSendOtp: widget.onSendOtp!,
       onVerifyOtp: widget.onVerifyOtp!,
     );
@@ -520,9 +519,9 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
   void _showPasswordAlert() {
     PasswordRevealDialog.show(
       context,
-      title: '${widget.passwordType} Password',
+      title: '${AppLocalizations().tr(widget.passwordType == 'User' ? 'user_password' : 'supervisor_password')}',
       password: widget.currentPassword!,
-      label: 'Machine: ${widget.machineId}',
+      label: AppLocalizations().tr('machine_label').replaceAll('{id}', widget.machineId),
     );
   }
 

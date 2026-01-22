@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:poornasree_connect/l10n/app_localizations.dart';
+import '../../../utils/utils.dart';
 
 /// A primary reading card with circular progress indicator
 /// Used for displaying FAT, SNF, CLR values
@@ -63,7 +64,7 @@ class PrimaryReadingCard extends StatelessWidget {
             border: Border.all(
               color: isActive
                   ? (isDark ? color.withValues(alpha: 0.7) : color.withValues(alpha: 0.4))
-                  : (isDark ? color.withValues(alpha: 0.2) : const Color(0xFFCBD5E1)),
+                  : (isDark ? color.withValues(alpha: 0.2) : context.borderColor),
               width: isActive ? 2.5 : 1.5,
             ),
             boxShadow: isActive
@@ -132,14 +133,12 @@ class PrimaryReadingCard extends StatelessWidget {
                                     : const Color(0xFF374151))
                               : (isActive
                                     ? color.withValues(alpha: 0.2)
-                                    : Colors.grey.shade200),
+                                    : context.borderColor),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isActive
                                 ? color.withValues(alpha: 0.5)
-                                : (isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300),
+                                : context.borderColor,
                             width: 1,
                           ),
                         ),
@@ -151,9 +150,7 @@ class PrimaryReadingCard extends StatelessWidget {
                               size: 12,
                               color: isActive
                                   ? (isDark ? Colors.white : color)
-                                  : (isDark
-                                        ? Colors.grey.shade300
-                                        : Colors.grey.shade600),
+                                  : context.textSecondaryColor,
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -163,9 +160,7 @@ class PrimaryReadingCard extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                                 color: isActive
                                     ? (isDark ? Colors.white : color)
-                                    : (isDark
-                                          ? Colors.grey.shade300
-                                          : Colors.grey.shade600),
+                                    : context.textSecondaryColor,
                                 letterSpacing: 1,
                               ),
                             ),
@@ -200,13 +195,9 @@ class PrimaryReadingCard extends StatelessWidget {
                               child: CircularProgressIndicator(
                                 value: 1.0,
                                 strokeWidth: 6,
-                                backgroundColor: isDark
-                                    ? const Color(0xFF374151)
-                                    : Colors.grey.shade200,
+                                backgroundColor: context.borderColor,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  isDark
-                                      ? const Color(0xFF374151)
-                                      : Colors.grey.shade200,
+                                  context.borderColor,
                                 ),
                               ),
                             ),
@@ -235,9 +226,7 @@ class PrimaryReadingCard extends StatelessWidget {
                                     fontWeight: FontWeight.w900,
                                     color: isActive
                                         ? (isDark ? Colors.white : color)
-                                        : (isDark
-                                              ? Colors.grey.shade600
-                                              : Colors.grey.shade400),
+                                        : context.textSecondaryColor,
                                     letterSpacing: -1,
                                     shadows: isActive
                                         ? [

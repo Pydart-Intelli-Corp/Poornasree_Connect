@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A navigation button used in bottom navigation bar
 class NavButton extends StatelessWidget {
@@ -43,9 +44,7 @@ class NavButton extends StatelessWidget {
                     height: 44,
                     decoration: BoxDecoration(
                       color: isDisabled
-                          ? (isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade100)
+                          ? context.surfaceColor
                           : color.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -94,8 +93,8 @@ class NavButton extends StatelessWidget {
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: isDisabled
-                      ? Colors.grey
-                      : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                      ? context.textSecondaryColor.withValues(alpha: 0.5)
+                      : context.textSecondaryColor,
                 ),
               ),
             ],

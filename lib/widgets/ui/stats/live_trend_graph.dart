@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../utils/utils.dart';
 import '../../../models/lactosure_reading.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -32,7 +33,7 @@ class GraphLegendItem extends StatelessWidget {
           style: TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
+            color: context.textSecondaryColor,
           ),
         ),
       ],
@@ -130,11 +131,11 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-              : [Colors.white, Colors.grey.shade50],
+              : [context.cardColor, context.surfaceColor],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+          color: context.borderColor,
           width: 1,
         ),
         boxShadow: [
@@ -178,10 +179,8 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
                             Icons.chevron_left_rounded,
                             size: 18,
                             color: canGoBack
-                                ? (isDark
-                                      ? Colors.grey.shade400
-                                      : Colors.grey.shade700)
-                                : Colors.grey.shade600.withOpacity(0.3),
+                                ? context.textPrimaryColor
+                                : context.textSecondaryColor.withOpacity(0.3),
                           ),
                         ),
                       ),
@@ -265,10 +264,8 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
                             Icons.chevron_right_rounded,
                             size: 18,
                             color: canGoForward
-                                ? (isDark
-                                      ? Colors.grey.shade400
-                                      : Colors.grey.shade700)
-                                : Colors.grey.shade600.withOpacity(0.3),
+                                ? context.textPrimaryColor
+                                : context.textSecondaryColor.withOpacity(0.3),
                           ),
                         ),
                       ),
@@ -285,9 +282,7 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
                         drawVerticalLine: false,
                         horizontalInterval: interval,
                         getDrawingHorizontalLine: (value) => FlLine(
-                          color: isDark
-                              ? Colors.grey.shade800
-                              : Colors.grey.shade200,
+                          color: context.borderColor,
                           strokeWidth: 1,
                         ),
                       ),
@@ -318,9 +313,7 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
                                   child: Text(
                                     '$originalIndex',
                                     style: TextStyle(
-                                      color: isDark
-                                          ? Colors.grey.shade500
-                                          : Colors.grey.shade600,
+                                      color: context.textSecondaryColor,
                                       fontSize: 8,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -339,9 +332,7 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
                             getTitlesWidget: (value, meta) => Text(
                               value.toInt().toString(),
                               style: TextStyle(
-                                color: isDark
-                                    ? Colors.grey.shade500
-                                    : Colors.grey.shade600,
+                                color: context.textSecondaryColor,
                                 fontSize: 10,
                               ),
                             ),
@@ -378,11 +369,9 @@ class _LiveTrendGraphState extends State<LiveTrendGraph> {
                         enabled: true,
                         touchTooltipData: LineTouchTooltipData(
                           getTooltipColor: (touchedSpot) =>
-                              isDark ? const Color(0xFF1E293B) : Colors.white,
+                              context.cardColor,
                           tooltipBorder: BorderSide(
-                            color: isDark
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
+                            color: context.borderColor,
                           ),
                           getTooltipItems: (touchedSpots) {
                             return touchedSpots.map((spot) {

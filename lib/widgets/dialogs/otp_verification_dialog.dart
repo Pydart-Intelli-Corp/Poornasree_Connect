@@ -946,11 +946,11 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 const SizedBox(height: 24),
 
                 // New Password Field
-                _buildLabel('New Password'),
+                _buildLabel(AppLocalizations().tr('new_password')),
                 const SizedBox(height: 8),
                 _buildPasswordField(
                   controller: _passwordController,
-                  hintText: 'Enter 6-digit password',
+                  hintText: AppLocalizations().tr('enter_6_digit_password'),
                   obscure: _obscurePassword,
                   onToggleObscure: () =>
                       setState(() => _obscurePassword = !_obscurePassword),
@@ -965,11 +965,11 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 const SizedBox(height: 16),
 
                 // Confirm Password Field
-                _buildLabel('Confirm Password'),
+                _buildLabel(AppLocalizations().tr('confirm_password')),
                 const SizedBox(height: 8),
                 _buildPasswordField(
                   controller: _confirmPasswordController,
-                  hintText: 'Re-enter 6-digit password',
+                  hintText: AppLocalizations().tr('reenter_6_digit_password'),
                   obscure: _obscureConfirmPassword,
                   onToggleObscure: () => setState(
                     () => _obscureConfirmPassword = !_obscureConfirmPassword,

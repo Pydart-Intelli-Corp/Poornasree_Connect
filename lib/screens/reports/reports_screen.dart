@@ -331,7 +331,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       icon = Icons.error_outline_rounded;
       iconColor = Colors.red.shade300;
       title = 'Error loading $_selectedReport';
-      message = _errorMessage ?? 'Unknown error occurred';
+      message = _errorMessage ?? AppLocalizations().tr('unknown_error');
       buttonText = 'Retry';
     }
     
@@ -2694,7 +2694,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('ID: ${record['machine_id']?.toString() ?? '-'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                Text('${record['machine_type']?.toString() ?? 'Unknown'}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                Text('${record['machine_type']?.toString() ?? AppLocalizations().tr('unknown')}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           ),
@@ -3042,6 +3042,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   void _showColumnSelectionDialog(BuildContext context, List<String> currentSelection, Function(List<String>) onSelectionChanged) {
     List<String> tempSelection = List.from(currentSelection);
+    final l10n = AppLocalizations();
     
     showDialog(
       context: context,
@@ -3222,7 +3223,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Text('Cancel', style: TextStyle(color: context.textSecondaryColor, fontSize: 11)),
+              child: Text(l10n.tr('cancel'), style: TextStyle(color: context.textSecondaryColor, fontSize: 11)),
             ),
             ElevatedButton(
               onPressed: () {

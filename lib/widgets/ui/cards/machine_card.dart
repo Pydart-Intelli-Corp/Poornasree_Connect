@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/utils.dart';
@@ -41,11 +42,39 @@ class MachineCard extends StatefulWidget {
 class _MachineCardState extends State<MachineCard> {
   bool _isHovered = false;
   late Map<String, dynamic> _machineData;
+  double? _distance;
+  StreamSubscription<Map<String, double>>? _rssiSubscription;
+  final BluetoothService _bluetoothService = BluetoothService();
 
   @override
   void initState() {
     super.initState();
     _machineData = Map<String, dynamic>.from(widget.machineData);
+    _listenToRssiDistance();
+  }
+
+  @override
+  void dispose() {
+    _rssiSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Listen to RSSI distance updates
+  void _listenToRssiDistance() {
+    _rssiSubscription = _bluetoothService.rssiDistanceStream.listen((
+      distances,
+    ) {
+      final machine = Machine.fromJson(_machineData);
+      final numericId = machine.machineId.replaceAll(RegExp(r'[^0-9]'), '');
+
+      if (distances.containsKey(numericId)) {
+        if (mounted) {
+          setState(() {
+            _distance = distances[numericId];
+          });
+        }
+      }
+    });
   }
 
   @override
@@ -66,7 +95,7 @@ class _MachineCardState extends State<MachineCard> {
             color: machine.isMasterMachine
                 ? AppTheme.primaryAmber.withOpacity(0.4)
                 : (isDark ? AppTheme.borderDark : AppTheme.borderLight)
-                    .withOpacity(0.3),
+                      .withOpacity(0.3),
             width: 1,
           ),
           boxShadow: [
@@ -107,23 +136,10 @@ class _MachineCardState extends State<MachineCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Machine Image - Left side with update indicator, master badge and status below
+          // Machine Image - Left side with master badge and status below
           Column(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildImage(machine, hasImage),
-                  // Update Available indicator on right side of image
-                  if (_hasUpdateAvailable(machine)) ...[
-                    const SizedBox(width: 6),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: _buildUpdateAvailableIndicator(machine),
-                    ),
-                  ],
-                ],
-              ),
+              _buildImage(machine, hasImage),
               // Master badge under image
               if (machine.isMasterMachine) ...[
                 const SizedBox(height: 8),
@@ -141,17 +157,29 @@ class _MachineCardState extends State<MachineCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title
-                Text(
-                  machine.machineId,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    letterSpacing: -0.2,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                // Title with signal indicator
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        machine.machineId,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimaryColor,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // Signal strength indicator after machine ID
+                    const SizedBox(width: 8),
+                    _buildSignalStrengthIndicator(
+                      _distance,
+                      _bluetoothService.isMachineConnected(machine.machineId),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
 
@@ -161,9 +189,15 @@ class _MachineCardState extends State<MachineCard> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
-                    color: Colors.white.withOpacity(0.6),
+                    color: context.textSecondaryColor,
                   ),
                 ),
+
+                // Update Available indicator below machine ID and model
+                if (_hasUpdateAvailable(machine)) ...[
+                  const SizedBox(height: 8),
+                  _buildUpdateAvailableIndicator(machine),
+                ],
               ],
             ),
           ),
@@ -183,10 +217,11 @@ class _MachineCardState extends State<MachineCard> {
   /// Clean circular image with subtle border - supports cached images for offline
   Widget _buildImage(Machine machine, bool hasImage) {
     const double size = 72;
-    final isDark = context.isDarkMode;
+
+    Widget imageWidget;
 
     if (!hasImage) {
-      return Container(
+      imageWidget = Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
@@ -195,44 +230,47 @@ class _MachineCardState extends State<MachineCard> {
         ),
         child: Icon(
           Icons.precision_manufacturing_outlined,
-          color: (isDark ? Colors.white : Colors.black).withOpacity(0.3),
+          color: context.textSecondaryColor.withOpacity(0.3),
           size: 32,
+        ),
+      );
+    } else {
+      final machineId = machine.id.toString();
+      final networkUrl = machine.imageUrl!.startsWith('http')
+          ? machine.imageUrl!
+          : '${const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://192.168.1.68:3000')}${machine.imageUrl}';
+
+      imageWidget = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: context.surfaceColor,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: FutureBuilder<String?>(
+            future: OfflineCacheService().getCachedImagePath(machineId),
+            builder: (context, snapshot) {
+              // If we have a cached image, use it
+              if (snapshot.hasData && snapshot.data != null) {
+                final file = File(snapshot.data!);
+                return Image.file(
+                  file,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _buildNetworkImage(networkUrl),
+                );
+              }
+              // Otherwise use network image
+              return _buildNetworkImage(networkUrl);
+            },
+          ),
         ),
       );
     }
 
-    final machineId = machine.id.toString();
-    final networkUrl = machine.imageUrl!.startsWith('http')
-        ? machine.imageUrl!
-        : '${const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://192.168.1.68:3000')}${machine.imageUrl}';
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: context.surfaceColor,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: FutureBuilder<String?>(
-          future: OfflineCacheService().getCachedImagePath(machineId),
-          builder: (context, snapshot) {
-            // If we have a cached image, use it
-            if (snapshot.hasData && snapshot.data != null) {
-              final file = File(snapshot.data!);
-              return Image.file(
-                file,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildNetworkImage(networkUrl),
-              );
-            }
-            // Otherwise use network image
-            return _buildNetworkImage(networkUrl);
-          },
-        ),
-      ),
-    );
+    // Return simple image without overlay
+    return imageWidget;
   }
 
   /// Network image with loading and error handling
@@ -242,7 +280,7 @@ class _MachineCardState extends State<MachineCard> {
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Icon(
         Icons.image_not_supported_outlined,
-        color: Colors.white.withOpacity(0.3),
+        color: context.textSecondaryColor.withOpacity(0.4),
         size: 28,
       ),
       loadingBuilder: (context, child, loadingProgress) {
@@ -326,7 +364,9 @@ class _MachineCardState extends State<MachineCard> {
       final correctionTypes = correctionInfo.pending
           .map((c) => c.channel)
           .join(', ');
-      pendingItems.add('${AppLocalizations().tr('corrections')} ($correctionTypes)');
+      pendingItems.add(
+        '${AppLocalizations().tr('corrections')} ($correctionTypes)',
+      );
     }
 
     return {'count': pendingItems.length, 'items': pendingItems};
@@ -365,6 +405,57 @@ class _MachineCardState extends State<MachineCard> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Build WiFi-style signal strength indicator overlay
+  Widget _buildSignalStrengthIndicator(double? distance, bool isConnected) {
+    // Determine signal strength (0-4) and color based on distance
+    int signalBars;
+    Color signalColor;
+
+    if (!isConnected || distance == null) {
+      // Offline - 0 bars - gray
+      signalBars = 0;
+      signalColor = Colors.grey;
+    } else if (distance < 2.0) {
+      // Excellent signal - 4 bars (all bars) - green
+      signalBars = 4;
+      signalColor = AppTheme.primaryGreen;
+    } else if (distance < 5.0) {
+      // Good signal - 2 bars - amber
+      signalBars = 2;
+      signalColor = AppTheme.primaryAmber;
+    } else if (distance < 10.0) {
+      // Weak signal - 1 bar - red
+      signalBars = 1;
+      signalColor = Colors.redAccent;
+    } else {
+      // Very weak/no signal - 0 bars - red
+      signalBars = 0;
+      signalColor = Colors.red;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.cardColor.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: CustomPaint(
+        size: const Size(20, 14),
+        painter: _SignalBarsPainter(
+          signalBars: signalBars,
+          signalColor: signalColor,
         ),
       ),
     );
@@ -413,7 +504,7 @@ class _MachineCardState extends State<MachineCard> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: context.textPrimaryColor,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -422,7 +513,7 @@ class _MachineCardState extends State<MachineCard> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w400,
-                              color: Colors.white.withOpacity(0.6),
+                              color: context.textSecondaryColor,
                             ),
                           ),
                         ],
@@ -433,10 +524,7 @@ class _MachineCardState extends State<MachineCard> {
               ),
 
               // Divider
-              Container(
-                height: 1,
-                color: Colors.white.withOpacity(0.1),
-              ),
+              Container(height: 1, color: context.borderColor.withOpacity(0.3)),
 
               // Content section - scrollable
               Flexible(
@@ -450,7 +538,7 @@ class _MachineCardState extends State<MachineCard> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: context.surfaceColor.withOpacity(0.5),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(
@@ -461,7 +549,7 @@ class _MachineCardState extends State<MachineCard> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white.withOpacity(0.7),
+                                color: context.textSecondaryColor,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -485,7 +573,7 @@ class _MachineCardState extends State<MachineCard> {
                                         item,
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.white.withOpacity(0.9),
+                                          color: context.textPrimaryColor,
                                         ),
                                       ),
                                     ),
@@ -504,7 +592,7 @@ class _MachineCardState extends State<MachineCard> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: context.textPrimaryColor,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -513,7 +601,10 @@ class _MachineCardState extends State<MachineCard> {
                       _buildInstructionStep(
                         stepNumber: 1,
                         icon: Icons.wifi,
-                        title: AppLocalizations().tr('wifi_instruction').split('.').first,
+                        title: AppLocalizations()
+                            .tr('wifi_instruction')
+                            .split('.')
+                            .first,
                         description: AppLocalizations().tr('wifi_instruction'),
                       ),
                       const SizedBox(height: 12),
@@ -526,7 +617,9 @@ class _MachineCardState extends State<MachineCard> {
                             .tr('find_update_instruction')
                             .split('.')
                             .first,
-                        description: AppLocalizations().tr('find_update_instruction'),
+                        description: AppLocalizations().tr(
+                          'find_update_instruction',
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -538,7 +631,9 @@ class _MachineCardState extends State<MachineCard> {
                             .tr('confirm_update_instruction')
                             .split('.')
                             .first,
-                        description: AppLocalizations().tr('confirm_update_instruction'),
+                        description: AppLocalizations().tr(
+                          'confirm_update_instruction',
+                        ),
                       ),
                     ],
                   ),
@@ -546,10 +641,7 @@ class _MachineCardState extends State<MachineCard> {
               ),
 
               // Divider
-              Container(
-                height: 1,
-                color: Colors.white.withOpacity(0.1),
-              ),
+              Container(height: 1, color: context.borderColor.withOpacity(0.3)),
 
               // Actions section
               Padding(
@@ -704,11 +796,30 @@ class _MachineCardState extends State<MachineCard> {
 
     details.add(
       _DetailItem(
+        icon: Icons.tune_outlined,
+        label: AppLocalizations().tr('gain'),
+        value: machine.gain.toString(),
+      ),
+    );
+
+    details.add(
+      _DetailItem(
         icon: Icons.cleaning_services_outlined,
         label: AppLocalizations().tr('daily_clean'),
         value: machine.dailyCleaning.toString(),
       ),
     );
+
+    // Machine Version if available
+    if (machine.machineVersion != null && machine.machineVersion!.isNotEmpty) {
+      details.add(
+        _DetailItem(
+          icon: Icons.info_outline,
+          label: AppLocalizations().tr('version'),
+          value: machine.machineVersion!,
+        ),
+      );
+    }
 
     details.add(
       _DetailItem(
@@ -726,14 +837,6 @@ class _MachineCardState extends State<MachineCard> {
       ),
     );
 
-    details.add(
-      _DetailItem(
-        icon: Icons.tune_outlined,
-        label: AppLocalizations().tr('gain'),
-        value: machine.gain.toString(),
-      ),
-    );
-
     // Auto Channel if available
     if (machine.autoChannel != null && machine.autoChannel!.isNotEmpty) {
       details.add(
@@ -741,17 +844,6 @@ class _MachineCardState extends State<MachineCard> {
           icon: Icons.swap_horiz_outlined,
           label: AppLocalizations().tr('auto_channel'),
           value: machine.autoChannel!,
-        ),
-      );
-    }
-
-    // Machine Version if available
-    if (machine.machineVersion != null && machine.machineVersion!.isNotEmpty) {
-      details.add(
-        _DetailItem(
-          icon: Icons.info_outline,
-          label: AppLocalizations().tr('version'),
-          value: machine.machineVersion!,
         ),
       );
     }
@@ -777,11 +869,13 @@ class _MachineCardState extends State<MachineCard> {
         children: [
           // Divider
           Container(
-              height: 1,
-              color: (context.isDarkMode
-                      ? AppTheme.borderDark
-                      : AppTheme.borderLight)
-                  .withOpacity(0.3)),
+            height: 1,
+            color:
+                (context.isDarkMode
+                        ? AppTheme.borderDark
+                        : AppTheme.borderLight)
+                    .withOpacity(0.3),
+          ),
           const SizedBox(height: 12),
 
           // Details grid - 2 columns
@@ -841,30 +935,26 @@ class _MachineCardState extends State<MachineCard> {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: context.textSecondaryColor,
-                  letterSpacing: 0.3,
+          child: RichText(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: TextStyle(fontSize: 12, color: context.textPrimaryColor),
+              children: [
+                TextSpan(
+                  text: item.label,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                item.value,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: context.textPrimaryColor,
+                const TextSpan(
+                  text: ' : ',
+                  style: TextStyle(fontWeight: FontWeight.w400),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                TextSpan(
+                  text: item.value,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -968,10 +1058,13 @@ class _MachineCardState extends State<MachineCard> {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
+        color: context.borderColor.withOpacity(0.05),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
         border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.06), width: 1),
+          top: BorderSide(
+            color: context.borderColor.withOpacity(0.15),
+            width: 1,
+          ),
         ),
       ),
       child: Row(
@@ -988,13 +1081,15 @@ class _MachineCardState extends State<MachineCard> {
                     icon: Icons.lock_outline,
                     children: [
                       _buildMiniStatusDot(
-                        label: 'U',
+                        label: AppLocalizations().tr('user_password_short'),
                         statusType: userPwdStatus.statusType,
                         tooltip: userPwdStatus.text,
                       ),
                       const SizedBox(width: 6),
                       _buildMiniStatusDot(
-                        label: 'S',
+                        label: AppLocalizations().tr(
+                          'supervisor_password_short',
+                        ),
                         statusType: supervisorPwdStatus.statusType,
                         tooltip: supervisorPwdStatus.text,
                       ),
@@ -1058,14 +1153,18 @@ class _MachineCardState extends State<MachineCard> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 10, color: Colors.white.withOpacity(0.4)),
+            Icon(
+              icon,
+              size: 10,
+              color: context.textSecondaryColor.withOpacity(0.6),
+            ),
             const SizedBox(width: 4),
             Text(
               title,
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
-                color: Colors.white.withOpacity(0.4),
+                color: context.textSecondaryColor.withOpacity(0.6),
                 letterSpacing: 0.3,
               ),
             ),
@@ -1142,7 +1241,9 @@ class _MachineCardState extends State<MachineCard> {
     required bool isActive,
     required Color activeColor,
   }) {
-    final color = isActive ? activeColor : Colors.white.withOpacity(0.35);
+    final color = isActive
+        ? activeColor
+        : context.textSecondaryColor.withOpacity(0.5);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -1174,9 +1275,9 @@ class _MachineCardState extends State<MachineCard> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.white.withOpacity(0.0),
-            Colors.white.withOpacity(0.1),
-            Colors.white.withOpacity(0.0),
+            context.borderColor.withOpacity(0.0),
+            context.borderColor.withOpacity(0.2),
+            context.borderColor.withOpacity(0.0),
           ],
         ),
       ),
@@ -1218,7 +1319,7 @@ class _MachineCardState extends State<MachineCard> {
             Icon(
               Icons.show_chart,
               size: 10,
-              color: Colors.white.withOpacity(0.4),
+              color: context.textSecondaryColor.withOpacity(0.6),
             ),
             const SizedBox(width: 4),
             Text(
@@ -1226,7 +1327,7 @@ class _MachineCardState extends State<MachineCard> {
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
-                color: Colors.white.withOpacity(0.4),
+                color: context.textSecondaryColor.withOpacity(0.6),
                 letterSpacing: 0.3,
               ),
             ),
@@ -1357,14 +1458,18 @@ class _MachineCardState extends State<MachineCard> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.tune, size: 10, color: Colors.white.withOpacity(0.4)),
+            Icon(
+              Icons.tune,
+              size: 10,
+              color: context.textSecondaryColor.withOpacity(0.6),
+            ),
             const SizedBox(width: 4),
             Text(
               AppLocalizations().tr('corrections'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
-                color: Colors.white.withOpacity(0.4),
+                color: context.textSecondaryColor.withOpacity(0.6),
                 letterSpacing: 0.3,
               ),
             ),
@@ -1600,7 +1705,9 @@ class _MachineCardState extends State<MachineCard> {
       case 'maintenance':
         return _StatusConfig(color: AppTheme.primaryAmber);
       default:
-        return _StatusConfig(color: Colors.white.withOpacity(0.5));
+        return _StatusConfig(
+          color: context.textSecondaryColor.withOpacity(0.6),
+        );
     }
   }
 }
@@ -1617,4 +1724,53 @@ class _DetailItem {
 class _StatusConfig {
   final Color color;
   _StatusConfig({required this.color});
+}
+
+/// Custom painter for WiFi-style signal strength arcs
+/// Cellular-style signal bars painter
+class _SignalBarsPainter extends CustomPainter {
+  final int signalBars; // 0-3
+  final Color signalColor;
+
+  _SignalBarsPainter({required this.signalBars, required this.signalColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..strokeCap = StrokeCap.round;
+
+    const barCount = 4; // Total number of bars
+    const barWidth = 3.0;
+    const spacing = 2.0;
+    final totalWidth = (barCount * barWidth) + ((barCount - 1) * spacing);
+    final startX = (size.width - totalWidth) / 2;
+
+    // Draw each bar with increasing height
+    for (int i = 0; i < barCount; i++) {
+      // Calculate bar height (proportional: 25%, 50%, 75%, 100%)
+      final barHeight = size.height * ((i + 1) / barCount);
+      final x = startX + (i * (barWidth + spacing));
+      final y = size.height - barHeight;
+
+      // Determine opacity based on signal strength
+      final isActive = i < signalBars;
+      final opacity = isActive ? 1.0 : 0.25;
+
+      paint.color = signalColor.withOpacity(opacity);
+
+      // Draw rounded rectangle bar
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, y, barWidth, barHeight),
+        const Radius.circular(1.5),
+      );
+      canvas.drawRRect(rect, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SignalBarsPainter oldDelegate) {
+    return oldDelegate.signalBars != signalBars ||
+        oldDelegate.signalColor != signalColor;
+  }
 }

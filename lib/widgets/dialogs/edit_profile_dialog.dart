@@ -123,7 +123,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) {
-      _showSnackBar('Name is required', isError: true);
+      _showSnackBar(AppLocalizations().tr('name_required'), isError: true);
       return;
     }
 
@@ -137,11 +137,11 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
     if (success && mounted) {
       Navigator.pop(context);
-      _showSnackBar('Profile updated successfully');
+      _showSnackBar(AppLocalizations().tr('profile_updated'));
       widget.onSuccess?.call();
     } else if (mounted) {
       _showSnackBar(
-        authProvider.errorMessage ?? 'Failed to update profile',
+        authProvider.errorMessage ?? AppLocalizations().tr('failed_update_profile'),
         isError: true,
       );
     }
@@ -203,13 +203,13 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
               // Email (Read-only)
               FormFieldWidget(
-                label: 'Email',
+                label: AppLocalizations().tr('email'),
                 controller: TextEditingController(
                   text: widget.user?.email ?? '',
                 ),
                 icon: Icons.email_outlined,
                 enabled: false,
-                hint: 'Email cannot be changed',
+                hint: AppLocalizations().tr('cannot_change_email'),
               ),
               const SizedBox(height: 16),
 
@@ -225,7 +225,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               // Location (for society, bmc, dairy)
               if (_showLocationField) ...[
                 FormFieldWidget(
-                  label: 'Location',
+                  label: AppLocalizations().tr('location'),
                   controller: _locationController,
                   icon: Icons.location_on_outlined,
                   enabled: !_isLoading,
@@ -235,7 +235,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
               // Phone
               FormFieldWidget(
-                label: 'Phone',
+                label: AppLocalizations().tr('phone'),
                 controller: _phoneController,
                 icon: Icons.phone_outlined,
                 enabled: !_isLoading,
@@ -246,7 +246,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               if (_showPresidentField) ...[
                 const SizedBox(height: 16),
                 FormFieldWidget(
-                  label: 'President Name',
+                  label: AppLocalizations().tr('president_name'),
                   controller: _presidentController,
                   icon: Icons.person_pin_outlined,
                   enabled: !_isLoading,
@@ -257,7 +257,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
               if (_showFarmerFields) ...[
                 const SizedBox(height: 16),
                 FormFieldWidget(
-                  label: 'Address',
+                  label: AppLocalizations().tr('address'),
                   controller: _addressController,
                   icon: Icons.home_outlined,
                   enabled: !_isLoading,
@@ -265,14 +265,14 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 ),
                 const SizedBox(height: 16),
                 FormFieldWidget(
-                  label: 'Bank Name',
+                  label: AppLocalizations().tr('bank_name'),
                   controller: _bankNameController,
                   icon: Icons.account_balance_outlined,
                   enabled: !_isLoading,
                 ),
                 const SizedBox(height: 16),
                 FormFieldWidget(
-                  label: 'Account Number',
+                  label: AppLocalizations().tr('account_number'),
                   controller: _accountNumberController,
                   icon: Icons.credit_card_outlined,
                   enabled: !_isLoading,
@@ -280,7 +280,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 ),
                 const SizedBox(height: 16),
                 FormFieldWidget(
-                  label: 'IFSC Code',
+                  label: AppLocalizations().tr('ifsc_code'),
                   controller: _ifscController,
                   icon: Icons.pin_outlined,
                   enabled: !_isLoading,

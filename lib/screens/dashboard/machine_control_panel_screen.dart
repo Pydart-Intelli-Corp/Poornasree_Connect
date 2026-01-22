@@ -141,6 +141,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   // BLE data subscription
   StreamSubscription? _bleDataSubscription;
   StreamSubscription? _rawDataSubscription;
+  StreamSubscription<Map<String, double>>? _rssiSubscription;
+  double? _currentMachineDistance;
 
   // Storage service
   final ReadingsStorageService _storageService = ReadingsStorageService();
@@ -169,13 +171,13 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
   // Weighing scale mode per machine (true = Auto, false = Manual)
   Map<String, bool> _machineWeighingScaleMode = {};
-  
+
   // Farmer ID mode per machine (true = Auto, false = Manual) - Default: Manual
   Map<String, bool> _machineFarmerIdMode = {};
-  
+
   // Farmer ID per machine
   Map<String, String> _machineFarmerIds = {};
-  
+
   // Weight per machine
   Map<String, String> _machineWeights = {};
 
@@ -191,6 +193,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     _loadSavedReadings(); // Load today's saved readings from storage
     _loadExistingReadings(); // Load readings that were collected before opening this screen
     _setupBLEDataListener();
+    _listenToRssiDistance(); // Listen to RSSI distance updates
     _calculateTodayStatistics(); // Calculate statistics from all machines
   }
 
@@ -198,11 +201,28 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   void dispose() {
     _bleDataSubscription?.cancel();
     _rawDataSubscription?.cancel();
+    _rssiSubscription?.cancel();
     _testTimer?.cancel();
     _liveTestOverlay?.remove();
     _receivedMachinesNotifier.dispose();
     _testCompleteNotifier.dispose();
     super.dispose();
+  }
+
+  /// Listen to RSSI distance updates
+  void _listenToRssiDistance() {
+    _rssiSubscription = _bluetoothService.rssiDistanceStream.listen((
+      distances,
+    ) {
+      if (_currentMachineId != null && mounted) {
+        final numericId = _currentMachineId!.replaceAll(RegExp(r'[^0-9]'), '');
+        if (distances.containsKey(numericId)) {
+          setState(() {
+            _currentMachineDistance = distances[numericId];
+          });
+        }
+      }
+    });
   }
 
   /// Calculate today's statistics across all machines
@@ -572,8 +592,10 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       for (final machineId in _connectedMachineIds) {
-        _machineWeighingScaleMode[machineId] = prefs.getBool('weighing_$machineId') ?? true;
-        _machineFarmerIdMode[machineId] = prefs.getBool('farmerid_$machineId') ?? false; // Default: Manual
+        _machineWeighingScaleMode[machineId] =
+            prefs.getBool('weighing_$machineId') ?? true;
+        _machineFarmerIdMode[machineId] =
+            prefs.getBool('farmerid_$machineId') ?? false; // Default: Manual
       }
     });
   }
@@ -684,16 +706,23 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     _machineWeights.clear();
 
     // Check which machines need manual farmer ID input (default is Manual = false)
-    final manualFarmerIdMachines = machinesToTest.where((id) => !(_machineFarmerIdMode[id] ?? false)).toList();
-    
+    final manualFarmerIdMachines = machinesToTest
+        .where((id) => !(_machineFarmerIdMode[id] ?? false))
+        .toList();
+
     // Check which machines need manual weight input
-    final manualWeightMachines = machinesToTest.where((id) => !(_machineWeighingScaleMode[id] ?? true)).toList();
+    final manualWeightMachines = machinesToTest
+        .where((id) => !(_machineWeighingScaleMode[id] ?? true))
+        .toList();
     final hasWeightDialog = manualWeightMachines.isNotEmpty;
-    
+
     // Only show dialog if there are manual machines
     if (manualFarmerIdMachines.isNotEmpty) {
-      final farmerIds = await _showFarmerIdDialog(manualFarmerIdMachines, showStartTest: !hasWeightDialog);
-      
+      final farmerIds = await _showFarmerIdDialog(
+        manualFarmerIdMachines,
+        showStartTest: !hasWeightDialog,
+      );
+
       if (farmerIds == null) {
         print('❌ [Test] User cancelled farmer ID input');
         return;
@@ -704,10 +733,10 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     } else {
       print('✅ [Test] All machines in Auto mode, skipping farmer ID dialog');
     }
-    
+
     if (hasWeightDialog) {
       final weights = await _showWeightDialog(manualWeightMachines);
-      
+
       if (weights == null) {
         print('❌ [Test] User cancelled weight input');
         return;
@@ -716,7 +745,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       _machineWeights.addAll(weights);
       print('✅ [Test] Weights stored: $weights');
     } else {
-      print('✅ [Test] All machines in Auto weighing mode, skipping weight dialog');
+      print(
+        '✅ [Test] All machines in Auto weighing mode, skipping weight dialog',
+      );
     }
 
     _startTest(machinesToTest);
@@ -913,36 +944,36 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   }
 
   void _showMachineSelector(String actionName) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations();
 
     // Get color and icon based on action
     Color actionColor;
     IconData actionIcon;
     switch (actionName) {
       case 'Test':
-        actionColor = const Color(0xFF10B981);
+        actionColor = AppTheme.successColor;
         actionIcon = Icons.science_rounded;
         break;
       case 'OK':
-        actionColor = const Color(0xFF3b82f6);
+        actionColor = AppTheme.primaryBlue;
         actionIcon = Icons.done_rounded;
         break;
       case 'Cancel':
-        actionColor = const Color(0xFFf59e0b);
+        actionColor = AppTheme.warningColor;
         actionIcon = Icons.close_rounded;
         break;
       case 'Clean':
-        actionColor = const Color(0xFF8b5cf6);
+        actionColor = AppTheme.primaryPurple;
         actionIcon = Icons.opacity_rounded;
         break;
       default:
-        actionColor = const Color(0xFF10B981);
+        actionColor = AppTheme.successColor;
         actionIcon = Icons.settings_rounded;
     }
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+      backgroundColor: context.cardColor,
       elevation: 8,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -979,16 +1010,12 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     AppLocalizations().tr('all_machines'),
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   subtitle: Text(
                     '${_connectedMachineIds.length} ${AppLocalizations().tr('machines_connected')}',
-                    style: TextStyle(
-                      color: isDark
-                          ? Colors.grey.shade400
-                          : const Color(0xFF6B7280),
-                    ),
+                    style: TextStyle(color: context.textSecondaryColor),
                   ),
                   activeColor: actionColor,
                   contentPadding: EdgeInsets.zero,
@@ -1001,8 +1028,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   final isSelected =
                       _testAllMachines ||
                       _selectedTestMachines.contains(machineId);
-                  final isWeighingAuto = _machineWeighingScaleMode[machineId] ?? true;
-                  
+                  final isWeighingAuto =
+                      _machineWeighingScaleMode[machineId] ?? true;
+
                   return Column(
                     children: [
                       CheckboxListTile(
@@ -1021,9 +1049,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               },
                         title: Text(
                           '${AppLocalizations().tr('machine')} m${_formatMachineId(machineId)}',
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
+                          style: TextStyle(color: context.textPrimaryColor),
                         ),
                         activeColor: actionColor,
                         contentPadding: EdgeInsets.zero,
@@ -1031,13 +1057,18 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       // Weighing Scale & Farmer ID Toggles (only for Test)
                       if (actionName == 'Test') ...[
                         Padding(
-                          padding: const EdgeInsets.only(left: 48, right: 16, bottom: 4, top: 4),
+                          padding: const EdgeInsets.only(
+                            left: 48,
+                            right: 16,
+                            bottom: 4,
+                            top: 4,
+                          ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.scale_rounded,
                                 size: 16,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                color: context.textSecondaryColor,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -1045,12 +1076,12 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                   'Weighing Scale:',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                    color: context.textSecondaryColor,
                                   ),
                                 ),
                               ),
                               _buildInlineToggle(
-                                label: 'Auto',
+                                label: l10n.tr('auto'),
                                 isSelected: isWeighingAuto,
                                 onTap: () {
                                   setModalState(() {
@@ -1062,11 +1093,12 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               ),
                               const SizedBox(width: 8),
                               _buildInlineToggle(
-                                label: 'Manual',
+                                label: l10n.tr('manual'),
                                 isSelected: !isWeighingAuto,
                                 onTap: () {
                                   setModalState(() {
-                                    _machineWeighingScaleMode[machineId] = false;
+                                    _machineWeighingScaleMode[machineId] =
+                                        false;
                                   });
                                   setState(() {});
                                   _savePreferences();
@@ -1076,13 +1108,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(left: 48, right: 16, bottom: 8),
+                          padding: const EdgeInsets.only(
+                            left: 48,
+                            right: 16,
+                            bottom: 8,
+                          ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.badge_rounded,
                                 size: 16,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                color: context.textSecondaryColor,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -1090,13 +1126,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                   'Farmer ID:',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                    color: context.textSecondaryColor,
                                   ),
                                 ),
                               ),
                               _buildInlineToggle(
-                                label: 'Auto',
-                                isSelected: _machineFarmerIdMode[machineId] ?? false,
+                                label: l10n.tr('auto'),
+                                isSelected:
+                                    _machineFarmerIdMode[machineId] ?? false,
                                 onTap: () {
                                   setModalState(() {
                                     _machineFarmerIdMode[machineId] = true;
@@ -1107,8 +1144,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               ),
                               const SizedBox(width: 8),
                               _buildInlineToggle(
-                                label: 'Manual',
-                                isSelected: !(_machineFarmerIdMode[machineId] ?? false),
+                                label: l10n.tr('manual'),
+                                isSelected:
+                                    !(_machineFarmerIdMode[machineId] ?? false),
                                 onTap: () {
                                   setModalState(() {
                                     _machineFarmerIdMode[machineId] = false;
@@ -1386,11 +1424,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
   }
 
   void _showClearOptions() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+      backgroundColor: context.cardColor,
       elevation: 8,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1404,7 +1440,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             BottomSheetHeader(
               title: AppLocalizations().tr('clear_options'),
               icon: Icons.delete_sweep_rounded,
-              color: const Color(0xFFef4444),
+              color: AppTheme.errorColor,
             ),
             const SizedBox(height: 20),
 
@@ -1413,7 +1449,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               title: AppLocalizations().tr('clear_trend_only'),
               subtitle: AppLocalizations().tr('clear_trend_desc'),
               icon: Icons.show_chart_rounded,
-              color: const Color(0xFFf59e0b),
+              color: AppTheme.primaryAmber,
               showDividerAfter: true,
               onTap: () {
                 Navigator.pop(context);
@@ -1426,7 +1462,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               title: AppLocalizations().tr('clear_all'),
               subtitle: AppLocalizations().tr('clear_all_desc'),
               icon: Icons.delete_forever_rounded,
-              color: const Color(0xFFef4444),
+              color: AppTheme.errorColor,
               onTap: () {
                 Navigator.pop(context);
                 _clearAllReadings();
@@ -1465,9 +1501,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xFF1E293B)
-                  : const Color(0xFFFFFFFF),
+              color: context.cardColor,
               elevation: 8,
               offset: const Offset(0, 50),
               child: Container(
@@ -1477,32 +1511,29 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                 ),
                 decoration: BoxDecoration(
                   color: isConnected
-                      ? (Theme.of(context).brightness == Brightness.dark 
-                          ? AppTheme.primaryGreen.withOpacity(0.15) 
-                          : const Color(0xFFE8F5F1))
-                      : (Theme.of(context).brightness == Brightness.dark 
-                          ? Colors.red.withOpacity(0.15) 
-                          : const Color(0xFFFEE9E7)),
+                      ? AppTheme.primaryGreen.withOpacity(context.isDarkMode ? 0.15 : 0.08)
+                      : AppTheme.errorColor.withOpacity(context.isDarkMode ? 0.15 : 0.08),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isConnected
-                        ? (Theme.of(context).brightness == Brightness.dark 
-                            ? AppTheme.primaryGreen.withOpacity(0.4) 
-                            : const Color(0xFF10B981))
-                        : (Theme.of(context).brightness == Brightness.dark 
-                            ? Colors.red.withOpacity(0.4) 
-                            : const Color(0xFFEF4444)),
+                        ? AppTheme.primaryGreen.withOpacity(context.isDarkMode ? 0.4 : 0.6)
+                        : AppTheme.errorColor.withOpacity(context.isDarkMode ? 0.4 : 0.6),
                     width: 1.5,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Bluetooth icon colored by RSSI signal strength
                     Icon(
                       isConnected
                           ? Icons.bluetooth_connected_rounded
                           : Icons.bluetooth_disabled_rounded,
-                      color: isConnected ? AppTheme.primaryGreen : Colors.red,
+                      color: isConnected && _currentMachineDistance != null
+                          ? _getSignalColor(_currentMachineDistance!)
+                          : (isConnected
+                                ? AppTheme.primaryGreen
+                                : AppTheme.errorColor),
                       size: 16,
                     ),
                     const SizedBox(width: 6),
@@ -1511,14 +1542,18 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: isConnected ? AppTheme.primaryGreen : Colors.red,
+                        color: isConnected
+                            ? AppTheme.primaryGreen
+                            : AppTheme.errorColor,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Icon(
                       Icons.expand_more_rounded,
                       size: 16,
-                      color: isConnected ? AppTheme.primaryGreen : Colors.red,
+                      color: isConnected
+                          ? AppTheme.primaryGreen
+                          : AppTheme.errorColor,
                     ),
                   ],
                 ),
@@ -1532,7 +1567,6 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                 });
               },
               itemBuilder: (context) {
-                final isDark = Theme.of(context).brightness == Brightness.dark;
                 return List.generate(_connectedMachineIds.length, (index) {
                   final machineId = _connectedMachineIds[index];
                   final machineConnected = _bluetoothService.isMachineConnected(
@@ -1569,12 +1603,16 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             decoration: BoxDecoration(
                               color: machineConnected
                                   ? AppTheme.primaryGreen.withOpacity(0.15)
-                                  : Colors.grey.withOpacity(0.15),
+                                  : context.textSecondaryColor.withOpacity(
+                                      0.15,
+                                    ),
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: machineConnected
                                     ? AppTheme.primaryGreen.withOpacity(0.4)
-                                    : Colors.grey.withOpacity(0.4),
+                                    : context.textSecondaryColor.withOpacity(
+                                        0.4,
+                                      ),
                                 width: 1.5,
                               ),
                             ),
@@ -1586,7 +1624,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                   fontWeight: FontWeight.w700,
                                   color: machineConnected
                                       ? AppTheme.primaryGreen
-                                      : Colors.grey,
+                                      : context.textSecondaryColor,
                                 ),
                               ),
                             ),
@@ -1598,15 +1636,40 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  '${AppLocalizations().tr('machine')} $machineId',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? Colors.white
-                                        : Colors.black87,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${AppLocalizations().tr('machine')} $machineId',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textPrimaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Bluetooth icon with signal strength color
+                                    Icon(
+                                      machineConnected
+                                          ? Icons.bluetooth_connected_rounded
+                                          : Icons.bluetooth_disabled_rounded,
+                                      color: () {
+                                        if (!machineConnected) {
+                                          return AppTheme.errorColor;
+                                        }
+                                        final numericId = machineId.replaceAll(
+                                          RegExp(r'[^0-9]'),
+                                          '',
+                                        );
+                                        final distance = _bluetoothService
+                                            .getMachineDistance(numericId);
+                                        if (distance != null) {
+                                          return _getSignalColor(distance);
+                                        }
+                                        return AppTheme.primaryGreen;
+                                      }(),
+                                      size: 14,
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 2),
                                 Row(
@@ -1617,7 +1680,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                       decoration: BoxDecoration(
                                         color: machineConnected
                                             ? AppTheme.primaryGreen
-                                            : Colors.red,
+                                            : AppTheme.errorColor,
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -1631,7 +1694,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                         fontWeight: FontWeight.w500,
                                         color: machineConnected
                                             ? AppTheme.primaryGreen
-                                            : Colors.red,
+                                            : AppTheme.errorColor,
                                       ),
                                     ),
                                   ],
@@ -1694,7 +1757,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           setState(() {
                             _selectedChannel = channel;
                           });
-                          print('📡 [Control Panel] Channel changed to: $channel');
+                          print(
+                            '📡 [Control Panel] Channel changed to: $channel',
+                          );
                         },
                       ),
                       const SizedBox(width: 8),
@@ -1702,7 +1767,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       CompactActionButton(
                         icon: Icons.assessment_rounded,
                         label: AppLocalizations().tr('reports'),
-                        color: const Color(0xFF8B5CF6),
+                        color: AppTheme.primaryPurple,
                         onTap: () {
                           // Set machine type for local reports
                           LocalReportsService().setMachineType(
@@ -1751,7 +1816,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       CompactActionButton(
                         icon: Icons.restart_alt_rounded,
                         label: AppLocalizations().tr('clear'),
-                        color: const Color(0xFFef4444),
+                        color: AppTheme.errorColor,
                         onTap: _clearCurrentReading,
                         onLongPress: _showClearOptions,
                       ),
@@ -1775,8 +1840,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                           color: _isViewingHistory
-                              ? Colors.orange[700]
-                              : Colors.grey[500],
+                              ? AppTheme.warningColor
+                              : context.textSecondaryColor,
                         ),
                       ),
                     ],
@@ -1791,7 +1856,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             title: AppLocalizations().tr('fat').toUpperCase(),
                             value: _currentReading.fat.toStringAsFixed(2),
                             unit: '%',
-                            color: const Color(0xFFf59e0b),
+                            color: AppTheme.primaryAmber,
                             isViewingHistory: _isViewingHistory,
                           ),
                         ),
@@ -1801,7 +1866,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             title: AppLocalizations().tr('snf').toUpperCase(),
                             value: _currentReading.snf.toStringAsFixed(2),
                             unit: '%',
-                            color: const Color(0xFF3b82f6),
+                            color: AppTheme.primaryBlue,
                             isViewingHistory: _isViewingHistory,
                           ),
                         ),
@@ -1811,7 +1876,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             title: AppLocalizations().tr('clr').toUpperCase(),
                             value: _currentReading.clr.toStringAsFixed(1),
                             unit: '',
-                            color: const Color(0xFF8b5cf6),
+                            color: AppTheme.primaryPurple,
                             isViewingHistory: _isViewingHistory,
                           ),
                         ),
@@ -1832,7 +1897,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             title: AppLocalizations().tr('quantity'),
                             value: _currentReading.quantity.toStringAsFixed(2),
                             unit: 'L',
-                            color: const Color(0xFF3b82f6),
+                            color: AppTheme.primaryBlue,
                             type: TransactionType.quantity,
                           ),
                         ),
@@ -1843,9 +1908,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).brightness == Brightness.dark 
-                                  ? Colors.grey.shade500 
-                                  : const Color(0xFF9CA3AF),
+                              color: context.textSecondaryColor,
                             ),
                           ),
                         ),
@@ -1855,7 +1918,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             value:
                                 '₹${_currentReading.rate.toStringAsFixed(2)}',
                             unit: '/L',
-                            color: const Color(0xFFf59e0b),
+                            color: AppTheme.primaryAmber,
                             type: TransactionType.rate,
                           ),
                         ),
@@ -1866,9 +1929,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).brightness == Brightness.dark 
-                                  ? Colors.grey.shade500 
-                                  : const Color(0xFF9CA3AF),
+                              color: context.textSecondaryColor,
                             ),
                           ),
                         ),
@@ -1897,7 +1958,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             title: AppLocalizations().tr('milk_type'),
                             value: _currentReading.milkTypeName,
                             icon: Icons.category,
-                            color: const Color(0xFF10B981),
+                            color: AppTheme.primaryGreen,
                             type: InfoChipType.milkType,
                           ),
                         ),
@@ -1908,7 +1969,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             value:
                                 '${_currentReading.protein.toStringAsFixed(2)}%',
                             icon: Icons.fitness_center,
-                            color: const Color(0xFFef4444),
+                            color: AppTheme.errorColor,
                             maxValue: 6.0,
                             type: InfoChipType.protein,
                           ),
@@ -1920,7 +1981,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             value:
                                 '${_currentReading.lactose.toStringAsFixed(2)}%',
                             icon: Icons.science,
-                            color: const Color(0xFFec4899),
+                            color: AppTheme.primaryPink,
                             maxValue: 8.0,
                             type: InfoChipType.lactose,
                           ),
@@ -1939,7 +2000,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             value:
                                 '${_currentReading.salt.toStringAsFixed(2)}%',
                             icon: Icons.grain,
-                            color: Colors.white,
+                            color: AppTheme.primarySlate,
                             maxValue: 2.0,
                             type: InfoChipType.salt,
                           ),
@@ -1951,7 +2012,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             value:
                                 '${_currentReading.water.toStringAsFixed(2)}%',
                             icon: Icons.water_drop,
-                            color: const Color(0xFF14B8A6),
+                            color: AppTheme.primaryTeal,
                             maxValue: 10.0,
                             type: InfoChipType.water,
                           ),
@@ -1963,7 +2024,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             value:
                                 '${_currentReading.temperature.toStringAsFixed(1)}°C',
                             icon: Icons.thermostat,
-                            color: const Color(0xFFf97316),
+                            color: AppTheme.primaryOrange,
                             maxValue: 50.0,
                             type: InfoChipType.temp,
                           ),
@@ -2079,21 +2140,21 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                 label: AppLocalizations().tr('tests'),
                 value: '$_todayTestCount',
                 icon: Icons.assignment_rounded,
-                color: const Color(0xFF3b82f6),
+                color: AppTheme.primaryBlue,
               ),
               const StatDivider(),
               StatItem(
                 label: AppLocalizations().tr('quantity'),
                 value: '${_totalQuantity.toStringAsFixed(1)}L',
                 icon: Icons.water_drop_rounded,
-                color: const Color(0xFF06b6d4),
+                color: AppTheme.primaryTeal,
               ),
               const StatDivider(),
               StatItem(
                 label: AppLocalizations().tr('amount'),
                 value: '₹${_totalAmount.toStringAsFixed(0)}',
                 icon: Icons.currency_rupee_rounded,
-                color: const Color(0xFF10B981),
+                color: AppTheme.primaryGreen,
               ),
             ],
           ),
@@ -2109,7 +2170,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                 label: AppLocalizations().tr('avg_fat'),
                 value: _avgFat.toStringAsFixed(2),
                 icon: Icons.opacity_rounded,
-                color: const Color(0xFFf59e0b),
+                color: AppTheme.primaryAmber,
                 subtitle:
                     '${_lowestFat.toStringAsFixed(1)} - ${_highestFat.toStringAsFixed(1)}',
               ),
@@ -2118,7 +2179,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                 label: AppLocalizations().tr('avg_snf'),
                 value: _avgSnf.toStringAsFixed(2),
                 icon: Icons.grain_rounded,
-                color: const Color(0xFF8b5cf6),
+                color: AppTheme.primaryPurple,
                 subtitle:
                     '${_lowestSnf.toStringAsFixed(1)} - ${_highestSnf.toStringAsFixed(1)}',
               ),
@@ -2135,7 +2196,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               QualityHighlightCard(
                 title: AppLocalizations().tr('best_quality'),
                 icon: Icons.emoji_events_rounded,
-                color: const Color(0xFF10B981),
+                color: AppTheme.primaryGreen,
                 farmerLabel: _bestReading != null
                     ? '${AppLocalizations().tr('farmer')} ${_formatFarmerId(_bestReading!.farmerId)}'
                     : null,
@@ -2150,7 +2211,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
               QualityHighlightCard(
                 title: AppLocalizations().tr('needs_improvement'),
                 icon: Icons.trending_down_rounded,
-                color: const Color(0xFFef4444),
+                color: AppTheme.errorColor,
                 farmerLabel: _worstReading != null
                     ? '${AppLocalizations().tr('farmer')} ${_formatFarmerId(_worstReading!.farmerId)}'
                     : null,
@@ -2172,14 +2233,10 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: isDark 
-            ? const Color(0xFF3b82f6).withOpacity(0.08)
-            : const Color(0xFFEFF6FF),
+        color: AppTheme.primaryBlue.withOpacity(isDark ? 0.08 : 0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark 
-              ? const Color(0xFF3b82f6).withOpacity(0.3)
-              : const Color(0xFFBFDBFE),
+          color: AppTheme.primaryBlue.withOpacity(isDark ? 0.3 : 0.2),
           width: 1,
         ),
       ),
@@ -2191,26 +2248,26 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             value:
                 '${_currentMachineId != null ? (_machineTestCounts[_currentMachineId] ?? 0) : 0}',
             icon: Icons.assignment_rounded,
-            color: const Color(0xFF3b82f6),
+            color: AppTheme.primaryBlue,
             showDivider: false,
           ),
           FarmerInfoItem(
             label: AppLocalizations().tr('machine').toUpperCase(),
             value: _formatMachineId(_currentReading.machineId),
             icon: Icons.precision_manufacturing,
-            color: Colors.indigo,
+            color: AppTheme.primaryBlue,
           ),
           FarmerInfoItem(
             label: AppLocalizations().tr('farmer').toUpperCase(),
             value: _formatFarmerId(_currentReading.farmerId),
             icon: Icons.person,
-            color: Colors.teal,
+            color: AppTheme.primaryTeal,
           ),
           FarmerInfoItem(
             label: AppLocalizations().tr('bonus').toUpperCase(),
             value: '₹${_currentReading.incentive.toStringAsFixed(2)}',
             icon: Icons.card_giftcard,
-            color: Colors.purple,
+            color: AppTheme.primaryPurple,
           ),
           const SizedBox(width: 12),
         ],
@@ -2226,20 +2283,19 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        color: context.cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF000000).withOpacity(0.08),
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.08),
             blurRadius: isDark ? 20 : 12,
             offset: isDark ? const Offset(0, 4) : const Offset(0, 2),
             spreadRadius: isDark ? 0 : -2,
           ),
         ],
-        border: Border.all(
-          color: isDark ? Colors.grey.shade800 : const Color(0xFFE5E7EB),
-          width: 1,
-        ),
+        border: Border.all(color: context.borderColor, width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -2248,7 +2304,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           ActionButton(
             label: AppLocalizations().tr('ok'),
             icon: Icons.done_rounded,
-            color: const Color(0xFF3b82f6),
+            color: AppTheme.primaryBlue,
             onTap: _handleOk,
             onLongPress: () => _showMachineSelector('OK'),
             showAllIndicator: _connectedMachineIds.length > 1,
@@ -2257,7 +2313,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           ActionButton(
             label: AppLocalizations().tr('cancel'),
             icon: Icons.close_rounded,
-            color: const Color(0xFFf59e0b),
+            color: AppTheme.primaryAmber,
             onTap: _handleCancel,
             onLongPress: () => _showMachineSelector('Cancel'),
             showAllIndicator: _connectedMachineIds.length > 1,
@@ -2266,7 +2322,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           ActionButton(
             label: AppLocalizations().tr('clean'),
             icon: Icons.opacity_rounded,
-            color: const Color(0xFF8b5cf6),
+            color: AppTheme.primaryPurple,
             onTap: _handleClean,
             onLongPress: () => _showMachineSelector('Clean'),
             showAllIndicator: _connectedMachineIds.length > 1,
@@ -2279,8 +2335,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
   Widget _buildTestButton() {
     final color = _isTestRunning
-        ? const Color(0xFFf59e0b)
-        : const Color(0xFF10B981);
+        ? AppTheme.primaryAmber
+        : AppTheme.primaryGreen;
     final label = _isTestRunning
         ? '${_testElapsedSeconds}s'
         : AppLocalizations().tr('test');
@@ -2307,20 +2363,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF10B981).withOpacity(0.15)
-              : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
+              ? AppTheme.successColor.withOpacity(0.15)
+              : context.surfaceColor,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected
-                ? const Color(0xFF10B981)
-                : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+            color: isSelected ? AppTheme.successColor : context.borderColor,
             width: 1,
           ),
         ),
@@ -2330,18 +2383,21 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             color: isSelected
-                ? const Color(0xFF10B981)
-                : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                ? AppTheme.primaryGreen
+                : context.textSecondaryColor,
           ),
         ),
       ),
     );
   }
 
-  Future<Map<String, String>?> _showFarmerIdDialog(List<String> machines, {bool showStartTest = false}) async {
+  Future<Map<String, String>?> _showFarmerIdDialog(
+    List<String> machines, {
+    bool showStartTest = false,
+  }) async {
     final controllers = <String, TextEditingController>{};
     final focusNodes = <String, FocusNode>{};
-    
+
     for (final machineId in machines) {
       controllers[machineId] = TextEditingController(
         text: _machineFarmerIds[machineId] ?? '',
@@ -2359,27 +2415,31 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     final result = await showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+      builder: (dialogContext) {
+        final l10n = AppLocalizations();
         return StatefulBuilder(
           builder: (context, setState) {
-            final allFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
-            
+            final allFilled = controllers.values.every(
+              (c) => c.text.trim().isNotEmpty,
+            );
+
             return AlertDialog(
-              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: Row(
                 children: [
                   Icon(
                     Icons.person_rounded,
-                    color: const Color(0xFF10B981),
+                    color: AppTheme.successColor,
                     size: 24,
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Enter Farmer IDs',
+                    l10n.tr('enter_farmer_ids'),
                     style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: context.textPrimaryColor,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -2393,18 +2453,23 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     final index = entry.key;
                     final machineId = entry.value;
                     final isLast = index == machines.length - 1;
-                    
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Machine m${_formatMachineId(machineId)}',
+                            l10n
+                                .tr('machine_m')
+                                .replaceAll(
+                                  '{id}',
+                                  _formatMachineId(machineId),
+                                ),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                              color: context.textPrimaryColor,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -2412,7 +2477,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             controller: controllers[machineId],
                             focusNode: focusNodes[machineId],
                             keyboardType: TextInputType.number,
-                            textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+                            textInputAction: isLast
+                                ? TextInputAction.done
+                                : TextInputAction.next,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                             ],
@@ -2424,11 +2491,13 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                 focusNodes[nextMachineId]?.requestFocus();
                               } else {
                                 // Last field - auto-submit if all filled
-                                final allCurrentlyFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
+                                final allCurrentlyFilled = controllers.values
+                                    .every((c) => c.text.trim().isNotEmpty);
                                 if (allCurrentlyFilled) {
                                   final farmerIds = <String, String>{};
                                   for (final entry in controllers.entries) {
-                                    farmerIds[entry.key] = entry.value.text.trim();
+                                    farmerIds[entry.key] = entry.value.text
+                                        .trim();
                                   }
                                   // Don't dispose focus nodes - keep keyboard alive
                                   Navigator.pop(context, farmerIds);
@@ -2436,16 +2505,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               }
                             },
                             decoration: InputDecoration(
-                              hintText: 'Enter Farmer ID',
+                              hintText: l10n.tr('enter_farmer_id'),
                               prefixIcon: Icon(
                                 Icons.badge_rounded,
-                                color: const Color(0xFF10B981),
+                                color: AppTheme.primaryGreen,
                                 size: 20,
                               ),
                               filled: true,
-                              fillColor: isDark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade100,
+                              fillColor: context.surfaceColor,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -2453,16 +2520,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
+                                  color: context.borderColor,
                                   width: 1,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: const Color(0xFF10B981),
+                                  color: AppTheme.primaryGreen,
                                   width: 2,
                                 ),
                               ),
@@ -2472,7 +2537,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               ),
                             ),
                             style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
+                              color: context.textPrimaryColor,
                               fontSize: 14,
                             ),
                           ),
@@ -2492,28 +2557,28 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     Navigator.pop(context, null);
                   },
                   child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                    ),
+                    l10n.tr('cancel'),
+                    style: TextStyle(color: context.textSecondaryColor),
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: allFilled ? () {
-                    final farmerIds = <String, String>{};
-                    for (final entry in controllers.entries) {
-                      farmerIds[entry.key] = entry.value.text.trim();
-                    }
-                    // Dispose focus nodes
-                    for (final node in focusNodes.values) {
-                      node.dispose();
-                    }
-                    Navigator.pop(context, farmerIds);
-                  } : null,
+                  onPressed: allFilled
+                      ? () {
+                          final farmerIds = <String, String>{};
+                          for (final entry in controllers.entries) {
+                            farmerIds[entry.key] = entry.value.text.trim();
+                          }
+                          // Dispose focus nodes
+                          for (final node in focusNodes.values) {
+                            node.dispose();
+                          }
+                          Navigator.pop(context, farmerIds);
+                        }
+                      : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    disabledBackgroundColor: context.borderColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -2522,7 +2587,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       vertical: 12,
                     ),
                   ),
-                  child: Text(showStartTest ? 'Start Test' : 'Continue'),
+                  child: Text(
+                    showStartTest ? l10n.tr('start_test') : l10n.tr('continue'),
+                  ),
                 ),
               ],
             );
@@ -2551,69 +2618,73 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       default:
         channelByte = 0x00; // Default to Cow
     }
-    
+
     // Get farmer ID (default 1 if not set or in Auto mode)
     final farmerIdStr = _machineFarmerIds[machineId] ?? '1';
     final farmerId = int.tryParse(farmerIdStr) ?? 1;
-    
+
     // Convert farmer ID to 3 bytes (Big-Endian: MSB, MID, LSB)
     final farmerIdMsb = (farmerId >> 16) & 0xFF; // Most significant byte
-    final farmerIdMid = (farmerId >> 8) & 0xFF;  // Middle byte
-    final farmerIdLsb = farmerId & 0xFF;         // Least significant byte
-    
+    final farmerIdMid = (farmerId >> 8) & 0xFF; // Middle byte
+    final farmerIdLsb = farmerId & 0xFF; // Least significant byte
+
     // Get weight (default 1 if not set or in Auto mode)
     final weightStr = _machineWeights[machineId] ?? '1';
     final weightFloat = double.tryParse(weightStr) ?? 1.0;
-    
+
     // Multiply weight by 100 (e.g., 2.55 → 255, 0.01 → 1)
     final weightInt = (weightFloat * 100).round();
-    
+
     // Convert weight to 4 bytes (Big-Endian: MSB first)
-    final weightByte3 = (weightInt >> 24) & 0xFF;   // Most significant byte
-    final weightByte2 = (weightInt >> 16) & 0xFF;   // Byte 2
-    final weightByte1 = (weightInt >> 8) & 0xFF;    // Byte 1
-    final weightByte0 = weightInt & 0xFF;           // Least significant byte
-    
+    final weightByte3 = (weightInt >> 24) & 0xFF; // Most significant byte
+    final weightByte2 = (weightInt >> 16) & 0xFF; // Byte 2
+    final weightByte1 = (weightInt >> 8) & 0xFF; // Byte 1
+    final weightByte0 = weightInt & 0xFF; // Least significant byte
+
     // Cycle mode (default to 0x00)
     final cycleMode = 0x00;
-    
+
     // Build command bytes
     // Format: 40 0B 07 [channel] [cycleMode] [farmerID_MSB] [farmerID_MID] [farmerID_LSB] [weight3] [weight2] [weight1] [weight0] [LRC]
     final bytes = [
-      0x40,         // Header
-      0x0B,         // Number of bytes (11)
-      0x07,         // Command: Test
-      channelByte,  // Channel (00=Cow, 01=Buffalo, 02=Mixed)
-      cycleMode,    // Cycle mode (default 00)
-      farmerIdMsb,  // Farmer ID MSB
-      farmerIdMid,  // Farmer ID MID
-      farmerIdLsb,  // Farmer ID LSB
-      weightByte3,  // Weight byte 3 (MSB)
-      weightByte2,  // Weight byte 2
-      weightByte1,  // Weight byte 1
-      weightByte0,  // Weight byte 0 (LSB)
+      0x40, // Header
+      0x0B, // Number of bytes (11)
+      0x07, // Command: Test
+      channelByte, // Channel (00=Cow, 01=Buffalo, 02=Mixed)
+      cycleMode, // Cycle mode (default 00)
+      farmerIdMsb, // Farmer ID MSB
+      farmerIdMid, // Farmer ID MID
+      farmerIdLsb, // Farmer ID LSB
+      weightByte3, // Weight byte 3 (MSB)
+      weightByte2, // Weight byte 2
+      weightByte1, // Weight byte 1
+      weightByte0, // Weight byte 0 (LSB)
     ];
-    
+
     // Calculate LRC (XOR of all bytes)
     int lrc = 0;
     for (final byte in bytes) {
       lrc ^= byte;
     }
     bytes.add(lrc);
-    
+
     // Convert to hex string
-    final hexCommand = bytes.map((b) => b.toRadixString(16).toUpperCase().padLeft(2, '0')).join(' ');
-    
-    print('🔧 [Test Command] Machine: $machineId, Channel: $_selectedChannel, Farmer ID: $farmerId, Weight: ${weightFloat}kg');
+    final hexCommand = bytes
+        .map((b) => b.toRadixString(16).toUpperCase().padLeft(2, '0'))
+        .join(' ');
+
+    print(
+      '🔧 [Test Command] Machine: $machineId, Channel: $_selectedChannel, Farmer ID: $farmerId, Weight: ${weightFloat}kg',
+    );
     print('🔧 [Test Command] Hex: $hexCommand');
-    
+
     return hexCommand;
   }
 
   Future<Map<String, String>?> _showWeightDialog(List<String> machines) async {
     final controllers = <String, TextEditingController>{};
     final focusNodes = <String, FocusNode>{};
-    
+
     for (final machineId in machines) {
       controllers[machineId] = TextEditingController(
         text: _machineWeights[machineId] ?? '',
@@ -2632,26 +2703,30 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final l10n = AppLocalizations();
         return StatefulBuilder(
           builder: (context, setState) {
-            final allFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
-            
+            final allFilled = controllers.values.every(
+              (c) => c.text.trim().isNotEmpty,
+            );
+
             return AlertDialog(
-              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: Row(
                 children: [
                   Icon(
                     Icons.scale_rounded,
-                    color: const Color(0xFF10B981),
+                    color: AppTheme.primaryGreen,
                     size: 24,
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Enter Weights',
+                    l10n.tr('enter_weights'),
                     style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: context.textPrimaryColor,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -2665,7 +2740,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     final index = entry.key;
                     final machineId = entry.value;
                     final isLast = index == machines.length - 1;
-                    
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Column(
@@ -2676,17 +2751,23 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                              color: context.textSecondaryColor,
                             ),
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: controllers[machineId],
                             focusNode: focusNodes[machineId],
-                            keyboardType: TextInputType.numberWithOptions(decimal: true),
-                            textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+                            keyboardType: TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            textInputAction: isLast
+                                ? TextInputAction.done
+                                : TextInputAction.next,
                             inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d*'),
+                              ),
                             ],
                             onChanged: (_) => setState(() {}),
                             onSubmitted: (_) {
@@ -2696,11 +2777,13 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                 focusNodes[nextMachineId]?.requestFocus();
                               } else {
                                 // Last field - auto-submit if all filled
-                                final allCurrentlyFilled = controllers.values.every((c) => c.text.trim().isNotEmpty);
+                                final allCurrentlyFilled = controllers.values
+                                    .every((c) => c.text.trim().isNotEmpty);
                                 if (allCurrentlyFilled) {
                                   final weights = <String, String>{};
                                   for (final entry in controllers.entries) {
-                                    weights[entry.key] = entry.value.text.trim();
+                                    weights[entry.key] = entry.value.text
+                                        .trim();
                                   }
                                   // Dispose focus nodes
                                   for (final node in focusNodes.values) {
@@ -2711,17 +2794,15 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               }
                             },
                             decoration: InputDecoration(
-                              hintText: 'Enter Weight (kg)',
+                              hintText: l10n.tr('enter_weight_kg'),
                               prefixIcon: Icon(
                                 Icons.monitor_weight_rounded,
-                                color: const Color(0xFF10B981),
+                                color: AppTheme.primaryGreen,
                                 size: 20,
                               ),
                               suffixText: 'kg',
                               filled: true,
-                              fillColor: isDark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade100,
+                              fillColor: context.surfaceColor,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -2729,16 +2810,14 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
+                                  color: context.borderColor,
                                   width: 1,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: const Color(0xFF10B981),
+                                  color: AppTheme.successColor,
                                   width: 2,
                                 ),
                               ),
@@ -2748,7 +2827,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               ),
                             ),
                             style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
+                              color: context.textPrimaryColor,
                               fontSize: 14,
                             ),
                           ),
@@ -2768,28 +2847,28 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     Navigator.pop(context, null);
                   },
                   child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                    ),
+                    l10n.tr('cancel'),
+                    style: TextStyle(color: context.textSecondaryColor),
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: allFilled ? () {
-                    final weights = <String, String>{};
-                    for (final entry in controllers.entries) {
-                      weights[entry.key] = entry.value.text.trim();
-                    }
-                    // Dispose focus nodes
-                    for (final node in focusNodes.values) {
-                      node.dispose();
-                    }
-                    Navigator.pop(context, weights);
-                  } : null,
+                  onPressed: allFilled
+                      ? () {
+                          final weights = <String, String>{};
+                          for (final entry in controllers.entries) {
+                            weights[entry.key] = entry.value.text.trim();
+                          }
+                          // Dispose focus nodes
+                          for (final node in focusNodes.values) {
+                            node.dispose();
+                          }
+                          Navigator.pop(context, weights);
+                        }
+                      : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                    disabledBackgroundColor: context.borderColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -2798,7 +2877,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       vertical: 12,
                     ),
                   ),
-                  child: const Text('Start Test'),
+                  child: Text(l10n.tr('start_test')),
                 ),
               ],
             );
@@ -2808,5 +2887,18 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     );
 
     return result;
+  }
+
+  /// Get signal color based on distance
+  Color _getSignalColor(double distance) {
+    if (distance < 2.0) {
+      return AppTheme.primaryGreen; // Excellent
+    } else if (distance < 5.0) {
+      return AppTheme.primaryAmber; // Good
+    } else if (distance < 10.0) {
+      return Colors.redAccent; // Weak
+    } else {
+      return Colors.red; // Very weak
+    }
   }
 }

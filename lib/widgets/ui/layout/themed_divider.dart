@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/utils.dart';
 
 /// A divider that automatically adapts to dark/light theme
 class ThemedDivider extends StatelessWidget {
@@ -15,13 +16,11 @@ class ThemedDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Divider(
       height: height,
       indent: indent,
       endIndent: endIndent,
-      color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+      color: context.borderColor,
     );
   }
 }

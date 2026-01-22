@@ -7,6 +7,9 @@ class AppTheme {
   static const Color primaryBlue = Color(0xFF3b82f6);
   static const Color primaryPurple = Color(0xFF8b5cf6);
   static const Color primaryAmber = Color(0xFFf59e0b);
+  static const Color primaryPink = Color(0xFFec4899); // For lactose reading
+  static const Color primaryOrange = Color(0xFFf97316); // For temperature reading
+  static const Color primarySlate = Color(0xFF94a3b8); // For salt reading
 
   // ============ DARK THEME COLORS ============
   // Dark Tech Background Colors
@@ -40,9 +43,11 @@ class AppTheme {
   // Border Colors light
   static const Color borderLight = Color(0xFFE5E7EB);
 
-  // Error & Success
+  // Status Colors
   static const Color errorColor = Color(0xFFEF4444);
   static const Color successColor = Color(0xFF10B981);
+  static const Color warningColor = Color(0xFFF59E0B);
+  static const Color infoColor = Color(0xFF3B82F6);
 
   // ============ LIGHT THEME ============
   static ThemeData lightTheme = ThemeData(

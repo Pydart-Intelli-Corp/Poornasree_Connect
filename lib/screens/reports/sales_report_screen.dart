@@ -104,7 +104,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     
     if (isNoInternet) {
       icon = Icons.cloud_off_rounded;
-      iconColor = Colors.orange;
+      iconColor = AppTheme.warningColor;
       title = 'No Internet Connection';
       message = 'Sales report requires an internet connection.\n\nPlease check your network and try again.';
     } else if (isTimeout) {
@@ -114,9 +114,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       message = 'The server took too long to respond.\nPlease check your connection and try again.';
     } else {
       icon = Icons.error_outline_rounded;
-      iconColor = Colors.red.shade300;
+      iconColor = AppTheme.errorColor;
       title = 'Error loading sales';
-      message = _errorMessage ?? 'Unknown error occurred';
+      message = _errorMessage ?? AppLocalizations().tr('unknown_error');
     }
     
     return Center(
@@ -172,11 +172,11 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   Color _getPaymentStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'paid':
-        return Colors.green;
+        return AppTheme.successColor;
       case 'pending':
-        return Colors.orange;
+        return AppTheme.warningColor;
       case 'cancelled':
-        return Colors.red;
+        return AppTheme.errorColor;
       default:
         return AppTheme.textSecondary;
     }
@@ -282,7 +282,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            record['product_name'] ?? 'Unknown Product',
+                            record['product_name'] ?? AppLocalizations().tr('unknown_product'),
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,

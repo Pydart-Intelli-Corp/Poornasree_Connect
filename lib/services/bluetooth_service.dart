@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as dart_math;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,12 +36,21 @@ class BluetoothService {
       StreamController.broadcast();
   final StreamController<String> _rawDataController =
       StreamController.broadcast(); // Broadcasts ANY incoming BLE data
+  final StreamController<Map<String, double>> _rssiDistanceController =
+      StreamController.broadcast(); // Broadcasts RSSI-based distance for each machine
 
   // Global readings storage - stores latest reading for each machine
   final Map<String, LactosureReading> _machineReadings = {};
   // History of readings per machine (for graphs)
   final Map<String, List<LactosureReading>> _machineReadingHistory = {};
   static const int _maxHistoryPoints = 20;
+
+  // RSSI and distance storage
+  final Map<String, int> _machineRssi =
+      {}; // Stores latest RSSI for each machine
+  final Map<String, double> _machineDistance =
+      {}; // Stores calculated distance for each machine
+  Timer? _rssiMonitorTimer;
 
   // BLE data subscriptions
   final List<StreamSubscription> _dataSubscriptions = [];
@@ -57,12 +67,15 @@ class BluetoothService {
       {}; // Map machine serial to device
   final Map<String, bool> _connectedMachines =
       {}; // Track connected machines by serial
+  final Map<String, StreamSubscription<BluetoothConnectionState>> _connectionStateSubscriptions =
+      {}; // Monitor connection state for each device
   BluetoothStatus _status = BluetoothStatus.offline;
   BluetoothDevice? _connectedDevice;
   bool _isScanning = false;
   bool _autoScanEnabled = true;
   bool _permissionsGranted = false;
   bool _autoConnectEnabled = false; // Auto-connect toggle state
+  bool _hasCompletedInitialScan = false; // Track if initial scan has completed
 
   // SharedPreferences key for auto-connect
   static const String _autoConnectKey = 'bluetooth_auto_connect';
@@ -83,6 +96,8 @@ class BluetoothService {
       _connectedMachinesController.stream;
   Stream<LactosureReading> get readingsStream => _readingsController.stream;
   Stream<String> get rawDataStream => _rawDataController.stream;
+  Stream<Map<String, double>> get rssiDistanceStream =>
+      _rssiDistanceController.stream;
 
   // Public getters
   List<BluetoothDevice> get devices => List.unmodifiable(_lactosureDevices);
@@ -98,6 +113,8 @@ class BluetoothService {
   // Readings getters
   Map<String, LactosureReading> get machineReadings =>
       Map.unmodifiable(_machineReadings);
+  Map<String, int> get machineRssi => Map.unmodifiable(_machineRssi);
+  Map<String, double> get machineDistance => Map.unmodifiable(_machineDistance);
   Map<String, List<LactosureReading>> get machineReadingHistory =>
       Map.unmodifiable(_machineReadingHistory);
 
@@ -155,6 +172,79 @@ class BluetoothService {
   bool isMachineConnected(String machineId) {
     final numericId = machineId.replaceAll(RegExp(r'[^0-9]'), '');
     return _connectedMachines[numericId] == true;
+  }
+
+  /// Calculate distance from RSSI value
+  /// Returns distance in meters using path loss formula
+  /// Formula: distance = 10 ^ ((measuredPower - RSSI) / (10 * pathLossExponent))
+  /// measuredPower: RSSI at 1 meter (typically -59 to -69)
+  /// pathLossExponent: 2.0 for free space, 3-4 for indoor environments
+  double _calculateDistance(int rssi) {
+    const double measuredPower = -59.0; // RSSI at 1 meter
+    const double pathLossExponent = 2.5; // Indoor environment
+
+    if (rssi == 0) return -1.0; // Unknown distance
+
+    final double ratio = (measuredPower - rssi) / (10 * pathLossExponent);
+    final double distance = dart_math.pow(10, ratio).toDouble();
+
+    return distance;
+  }
+
+  /// Get distance for a specific machine
+  double? getMachineDistance(String machineId) {
+    final numericId = machineId.replaceAll(RegExp(r'[^0-9]'), '');
+    return _machineDistance[numericId];
+  }
+
+  /// Get RSSI for a specific machine
+  int? getMachineRssi(String machineId) {
+    final numericId = machineId.replaceAll(RegExp(r'[^0-9]'), '');
+    return _machineRssi[numericId];
+  }
+
+  /// Start RSSI monitoring for connected devices
+  void _startRssiMonitoring() {
+    _rssiMonitorTimer?.cancel();
+
+    _rssiMonitorTimer = Timer.periodic(const Duration(seconds: 2), (
+      timer,
+    ) async {
+      for (final entry in _machineDeviceMap.entries) {
+        final machineId = entry.key;
+        final device = entry.value;
+
+        // Only monitor connected devices
+        if (_connectedMachines[machineId] != true) continue;
+
+        try {
+          // Read RSSI from connected device
+          final rssi = await device.readRssi();
+          _machineRssi[machineId] = rssi;
+
+          // Calculate distance
+          final distance = _calculateDistance(rssi);
+          _machineDistance[machineId] = distance;
+
+          print(
+            '📡 [BLE $machineId] RSSI: $rssi dBm, Distance: ${distance.toStringAsFixed(2)}m',
+          );
+        } catch (e) {
+          print('⚠️ [BLE $machineId] Failed to read RSSI: $e');
+        }
+      }
+
+      // Broadcast updated distances
+      if (_machineDistance.isNotEmpty) {
+        _rssiDistanceController.add(Map.from(_machineDistance));
+      }
+    });
+  }
+
+  /// Stop RSSI monitoring
+  void _stopRssiMonitoring() {
+    _rssiMonitorTimer?.cancel();
+    _rssiMonitorTimer = null;
   }
 
   /// Initialize the service (permissions must be requested separately)
@@ -228,10 +318,10 @@ class BluetoothService {
       // Get current adapter state
       final adapterState = await FlutterBluePlus.adapterState.first;
       final isEnabled = adapterState == BluetoothAdapterState.on;
-      
+
       print('🔵 BluetoothService: Adapter state = $adapterState');
       print('🔵 BluetoothService: Bluetooth enabled = $isEnabled');
-      
+
       return isEnabled;
     } catch (e) {
       print('❌ BluetoothService: Error checking Bluetooth state: $e');
@@ -281,7 +371,13 @@ class BluetoothService {
       // Auto-stop after scan duration
       Future.delayed(scanDuration, () {
         stopScan();
-        _scheduleNextScan();
+        // Only schedule next scan if initial scan hasn't completed yet
+        if (!_hasCompletedInitialScan) {
+          _hasCompletedInitialScan = true;
+          print('✅ [BLE] Initial scan completed. Auto-scan disabled - use manual scan from now on.');
+        }
+        // Don't schedule auto-scan after first scan
+        // _scheduleNextScan(); // Removed - only manual scans after initial
       });
     } catch (e) {
       print('🔴 [BLE] Scan error: $e');
@@ -334,7 +430,7 @@ class BluetoothService {
               print(
                 '🟢 [BLE] Machine Available: Serial $serialNumber from "$deviceName"',
               );
-              
+
               // Auto-connect immediately when device found
               _connectToDeviceImmediately(device, serialNumber);
             }
@@ -381,6 +477,9 @@ class BluetoothService {
       // Ignore stop scan errors
     }
 
+    // Clean up devices that are no longer visible and not connected
+    _cleanupStaleDevices();
+
     // Update status based on devices found
     if (_lactosureDevices.isEmpty) {
       _updateStatus(BluetoothStatus.offline);
@@ -389,13 +488,55 @@ class BluetoothService {
     }
   }
 
+  /// Clean up devices that are no longer visible during scanning
+  /// Only removes devices that are NOT currently connected
+  void _cleanupStaleDevices() {
+    final currentScanDeviceIds = _lactosureDevices
+        .map((d) => d.remoteId.toString())
+        .toSet();
+
+    // Check each available machine ID
+    final staleIds = <String>[];
+    for (final machineId in _availableMachineIds) {
+      // Skip if currently connected - don't remove connected devices
+      if (_connectedMachines[machineId] == true) {
+        continue;
+      }
+
+      // Check if the device is still in the current scan results
+      final device = _machineDeviceMap[machineId];
+      if (device != null && !currentScanDeviceIds.contains(device.remoteId.toString())) {
+        // Device not seen in recent scan and not connected - mark as stale
+        staleIds.add(machineId);
+      }
+    }
+
+    // Remove stale devices
+    if (staleIds.isNotEmpty) {
+      print('🧹 [BLE] Removing ${staleIds.length} stale devices: $staleIds');
+      for (final id in staleIds) {
+        _availableMachineIds.remove(id);
+        _machineDeviceMap.remove(id);
+      }
+      _availableMachineIdsController.add(Set.from(_availableMachineIds));
+      
+      // Also clean up the lactosure devices list
+      _lactosureDevices.removeWhere((d) {
+        final serial = _extractSerialNumber(d.platformName);
+        return serial != null && staleIds.contains(serial);
+      });
+      _devicesController.add(List.from(_lactosureDevices));
+    }
+  }
+
   /// Schedule next auto-scan
   void _scheduleNextScan() {
-    if (!_autoScanEnabled) return;
+    // Don't auto-scan if initial scan has completed
+    if (!_autoScanEnabled || _hasCompletedInitialScan) return;
 
     _autoScanTimer?.cancel();
     _autoScanTimer = Timer(autoScanInterval, () {
-      if (_autoScanEnabled && _status != BluetoothStatus.connected) {
+      if (_autoScanEnabled && _status != BluetoothStatus.connected && !_hasCompletedInitialScan) {
         startScan();
       }
     });
@@ -461,10 +602,18 @@ class BluetoothService {
       _autoScanTimer?.cancel();
 
       print('✅ [BLE] Connected to $machineId');
-      
+
+      // Monitor connection state for automatic disconnection detection
+      _startConnectionStateMonitoring(numericId, device);
+
       // Start data listener for this device
       _startListenerForSingleDevice(numericId, device);
-      
+
+      // Start RSSI monitoring if this is the first connection
+      if (_connectedMachines.length == 1) {
+        _startRssiMonitoring();
+      }
+
       return true;
     } catch (e) {
       print('❌ [BLE] Connection failed for $machineId: $e');
@@ -494,9 +643,19 @@ class BluetoothService {
       print('🔵 [BLE] Disconnecting from $machineId...');
       await device.disconnect();
 
+      // Stop monitoring connection state
+      await _connectionStateSubscriptions[numericId]?.cancel();
+      _connectionStateSubscriptions.remove(numericId);
+
       // Mark as disconnected
       _connectedMachines.remove(numericId);
+      _machineRssi.remove(numericId);
+      _machineDistance.remove(numericId);
       _connectedMachinesController.add(Map.from(_connectedMachines));
+
+      // Remove from available list since we lost connection
+      _availableMachineIds.remove(numericId);
+      _availableMachineIdsController.add(Set.from(_availableMachineIds));
 
       // If no more connected machines, update status
       if (_connectedMachines.isEmpty) {
@@ -504,10 +663,14 @@ class BluetoothService {
         _connectedDeviceController.add(null);
         _updateStatus(BluetoothStatus.available);
 
-        // Resume auto-scanning
-        if (_autoScanEnabled) {
-          _scheduleNextScan();
-        }
+        // Stop RSSI monitoring
+        _stopRssiMonitoring();
+
+        // Don't resume auto-scanning after disconnect
+        // User must scan manually
+        // if (_autoScanEnabled) {
+        //   _scheduleNextScan();
+        // }
       }
 
       print('✅ [BLE] Disconnected from $machineId');
@@ -520,7 +683,10 @@ class BluetoothService {
   }
 
   /// Connect to a device immediately when found
-  Future<void> _connectToDeviceImmediately(BluetoothDevice device, String serialNumber) async {
+  Future<void> _connectToDeviceImmediately(
+    BluetoothDevice device,
+    String serialNumber,
+  ) async {
     // Avoid reconnecting if already connected
     if (_connectedMachines.containsKey(serialNumber)) {
       print('ℹ️ [BLE] Machine $serialNumber already connected, skipping');
@@ -528,7 +694,7 @@ class BluetoothService {
     }
 
     print('⚡ [BLE] Auto-connecting to machine $serialNumber immediately...');
-    
+
     // Connect in background without blocking scan
     Future.delayed(Duration.zero, () async {
       await connectToMachine('m$serialNumber');
@@ -567,17 +733,19 @@ class BluetoothService {
       _connectedDeviceController.add(null);
       _updateStatus(BluetoothStatus.available);
 
-      // Resume auto-scanning
-      if (_autoScanEnabled) {
-        _scheduleNextScan();
-      }
+      // Don't resume auto-scanning after disconnect
+      // User must scan manually
+      // if (_autoScanEnabled) {
+      //   _scheduleNextScan();
+      // }
     }
   }
 
   /// Enable/disable auto-scan
   void setAutoScan(bool enabled) {
     _autoScanEnabled = enabled;
-    if (enabled && !_isScanning && _status != BluetoothStatus.connected) {
+    // Only start scan if initial scan hasn't completed
+    if (enabled && !_isScanning && _status != BluetoothStatus.connected && !_hasCompletedInitialScan) {
       startScan();
     } else if (!enabled) {
       _autoScanTimer?.cancel();
@@ -650,6 +818,9 @@ class BluetoothService {
 
       // AUTO-START listening to all connected devices for data
       _startGlobalDataListener();
+
+      // Start RSSI monitoring for distance calculation
+      _startRssiMonitoring();
     }
 
     print(
@@ -684,13 +855,19 @@ class BluetoothService {
   }
 
   /// Start listener for a single device after individual connection
-  Future<void> _startListenerForSingleDevice(String machineId, BluetoothDevice device) async {
+  Future<void> _startListenerForSingleDevice(
+    String machineId,
+    BluetoothDevice device,
+  ) async {
     print('🔵 [BLE $machineId] Starting data listener after connection...');
     await _setupDeviceListener(machineId, device);
   }
 
   /// Setup listener for a specific device
-  Future<void> _setupDeviceListener(String machineId, BluetoothDevice device) async {
+  Future<void> _setupDeviceListener(
+    String machineId,
+    BluetoothDevice device,
+  ) async {
     try {
       print('🔵 [BLE $machineId] Setting up listener...');
       final services = await device.discoverServices();
@@ -858,7 +1035,14 @@ class BluetoothService {
       '🔵 [BLE] Disconnecting from all ${_connectedMachines.length} devices...',
     );
 
-    // Stop all data listeners first
+    // Stop all connection state monitoring subscriptions
+    for (final subscription in _connectionStateSubscriptions.values) {
+      await subscription.cancel();
+    }
+    _connectionStateSubscriptions.clear();
+    print('🔵 [BLE] Stopped all connection state monitors');
+
+    // Stop all data listeners
     for (final sub in _dataSubscriptions) {
       await sub.cancel();
     }
@@ -881,10 +1065,12 @@ class BluetoothService {
       }
 
       _connectedMachines.remove(serialNumber);
+      _availableMachineIds.remove(serialNumber);
     }
 
     // Update streams
     _connectedMachinesController.add(Map.from(_connectedMachines));
+    _availableMachineIdsController.add(Set.from(_availableMachineIds));
     _connectedDevice = null;
     _connectedDeviceController.add(null);
 
@@ -895,10 +1081,11 @@ class BluetoothService {
       _updateStatus(BluetoothStatus.offline);
     }
 
-    // Resume auto-scanning
-    if (_autoScanEnabled) {
-      _scheduleNextScan();
-    }
+    // Don't resume auto-scanning after disconnect all
+    // User must scan manually
+    // if (_autoScanEnabled) {
+    //   _scheduleNextScan();
+    // }
 
     print('✅ [BLE] Disconnect all completed');
   }
@@ -1158,14 +1345,105 @@ class BluetoothService {
     }
   }
 
+  /// Start monitoring connection state for a device to detect automatic disconnections
+  void _startConnectionStateMonitoring(String machineId, BluetoothDevice device) {
+    // Cancel existing subscription if any
+    _connectionStateSubscriptions[machineId]?.cancel();
+
+    print('🔵 [BLE Monitor] Starting connection state monitoring for $machineId');
+
+    // Listen to connection state changes
+    _connectionStateSubscriptions[machineId] = device.connectionState.listen(
+      (BluetoothConnectionState state) {
+        print('🔵 [BLE Monitor] $machineId connection state: $state');
+
+        if (state == BluetoothConnectionState.disconnected) {
+          print('⚠️ [BLE Monitor] $machineId DISCONNECTED (signal lost or device powered off)');
+          
+          // Device disconnected automatically - clean up
+          _handleAutomaticDisconnection(machineId, device);
+        }
+      },
+      onError: (error) {
+        print('❌ [BLE Monitor] Error monitoring $machineId: $error');
+      },
+    );
+  }
+
+  /// Handle automatic disconnection when signal is lost
+  void _handleAutomaticDisconnection(String machineId, BluetoothDevice device) {
+    print('🔴 [BLE] Handling automatic disconnection for $machineId');
+
+    // Stop monitoring this device's connection state
+    _connectionStateSubscriptions[machineId]?.cancel();
+    _connectionStateSubscriptions.remove(machineId);
+
+    // Mark as disconnected
+    _connectedMachines.remove(machineId);
+    _machineRssi.remove(machineId);
+    _machineDistance.remove(machineId);
+
+    // Remove from available devices list
+    _availableMachineIds.remove(machineId);
+
+    // Update streams to notify UI
+    _connectedMachinesController.add(Map.from(_connectedMachines));
+    _availableMachineIdsController.add(Set.from(_availableMachineIds));
+
+    print('🔴 [BLE] $machineId marked as OFFLINE');
+    print('🔴 [BLE] Remaining connected: ${_connectedMachines.keys.toList()}');
+    print('🔴 [BLE] Remaining available: ${_availableMachineIds.toList()}');
+
+    // If no more connected machines, update global status
+    if (_connectedMachines.isEmpty) {
+      _connectedDevice = null;
+      _connectedDeviceController.add(null);
+      
+      // Update status based on remaining available devices
+      if (_availableMachineIds.isNotEmpty) {
+        _updateStatus(BluetoothStatus.available);
+      } else {
+        _updateStatus(BluetoothStatus.offline);
+      }
+
+      // Stop RSSI monitoring
+      _stopRssiMonitoring();
+
+      // Don't resume auto-scanning after disconnection
+      // User must scan manually
+      // if (_autoScanEnabled) {
+      //   print('🔵 [BLE] Resuming auto-scan after disconnection');
+      //   _scheduleNextScan();
+      // }
+    }
+  }
+
   /// Dispose service and clean up resources
   void dispose() {
     _autoScanTimer?.cancel();
     _scanSubscription?.cancel();
+    _rssiMonitorTimer?.cancel();
+    
+    // Cancel all connection state monitoring subscriptions
+    for (final subscription in _connectionStateSubscriptions.values) {
+      subscription.cancel();
+    }
+    _connectionStateSubscriptions.clear();
+    
+    // Cancel all data subscriptions
+    // Cancel all data subscriptions
+    for (final subscription in _dataSubscriptions) {
+      subscription.cancel();
+    }
+    _dataSubscriptions.clear();
+    
     _devicesController.close();
     _statusController.close();
     _connectedDeviceController.close();
     _availableMachineIdsController.close();
     _connectedMachinesController.close();
+    _readingsController.close();
+    _rawDataController.close();
+    _rssiDistanceController.close();
   }
 }
