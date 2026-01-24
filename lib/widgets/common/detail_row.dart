@@ -7,9 +7,9 @@ class DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? iconColor;
-  final double iconSize;
-  final double fontSize;
-  final EdgeInsets padding;
+  final double? iconSize;
+  final double? fontSize;
+  final EdgeInsets? padding;
 
   const DetailRow({
     super.key,
@@ -17,29 +17,37 @@ class DetailRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.iconColor,
-    this.iconSize = 18,
-    this.fontSize = 13,
-    this.padding = const EdgeInsets.only(bottom: 12),
+    this.iconSize,
+    this.fontSize,
+    this.padding,
   });
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     return Padding(
-      padding: padding,
+      padding: padding ?? EdgeInsets.only(bottom: SizeConfig.spaceMedium),
       child: Row(
         children: [
-          Icon(icon, size: iconSize, color: iconColor ?? AppTheme.primaryGreen),
-          const SizedBox(width: 12),
+          Icon(
+            icon,
+            size: iconSize ?? SizeConfig.iconSizeMedium,
+            color: iconColor ?? AppTheme.primaryGreen,
+          ),
+          SizedBox(width: SizeConfig.spaceMedium),
           Text(
             '$label:',
-            style: TextStyle(fontSize: fontSize, color: context.textSecondaryColor),
+            style: TextStyle(
+              fontSize: fontSize ?? SizeConfig.fontSizeRegular,
+              color: context.textSecondaryColor,
+            ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: SizeConfig.spaceSmall),
           Expanded(
             child: Text(
               value,
               style: TextStyle(
-                fontSize: fontSize,
+                fontSize: fontSize ?? SizeConfig.fontSizeRegular,
                 fontWeight: FontWeight.w500,
                 color: context.textPrimaryColor,
               ),

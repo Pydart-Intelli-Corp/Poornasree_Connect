@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// Info chip types for value formatting determination
 enum InfoChipType { milkType, protein, lactose, salt, water, temp }
@@ -68,7 +69,7 @@ class InfoChip extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(SizeConfig.spaceSmall),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -78,28 +79,29 @@ class InfoChip extends StatelessWidget {
                     // Animated icon container
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.all(6),
+                      padding: EdgeInsets.all(SizeConfig.spaceXSmall),
                       decoration: BoxDecoration(
                         color: color.withOpacity(isActive ? 0.15 : 0.08),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                       ),
                       child: Icon(
                         icon,
                         color: isActive ? color : color.withOpacity(0.5),
-                        size: 14,
+                        size: SizeConfig.iconSizeSmall,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: SizeConfig.spaceXSmall),
                     Expanded(
                       child: Text(
                         title,
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: SizeConfig.fontSizeXSmall,
                           fontWeight: FontWeight.w600,
                           color: context.textSecondaryColor,
                           letterSpacing: 0.5,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
+                        maxLines: 2,
                       ),
                     ),
                   ],
@@ -109,7 +111,7 @@ class InfoChip extends StatelessWidget {
                 AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 200),
                   style: TextStyle(
-                    fontSize: isActive ? 16 : 14,
+                    fontSize: isActive ? SizeConfig.fontSizeMedium : SizeConfig.fontSizeRegular,
                     fontWeight: FontWeight.w800,
                     color: isActive
                         ? color
@@ -123,7 +125,7 @@ class InfoChip extends StatelessWidget {
                               : '${animatedValue.toStringAsFixed(2)}%'),
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: SizeConfig.spaceXSmall),
                 // Animated line progress indicator
                 Stack(
                   children: [

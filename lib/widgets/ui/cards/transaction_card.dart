@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// Transaction card types for icon and max value determination
 enum TransactionType { quantity, rate }
@@ -117,7 +118,7 @@ class TransactionCard extends StatelessWidget {
               ),
               // Main content
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: EdgeInsets.symmetric(horizontal: SizeConfig.spaceSmall, vertical: SizeConfig.spaceXSmall),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -131,26 +132,26 @@ class TransactionCard extends StatelessWidget {
                           child: Icon(
                             icon,
                             key: ValueKey(isActive),
-                            size: 10,
+                            size: SizeConfig.iconSizeXSmall,
                             color: isActive
                                 ? color
                                 : context.textSecondaryColor,
                           ),
                         ),
-                        const SizedBox(width: 3),
+                        SizedBox(width: SizeConfig.spaceTiny),
                         Flexible(
                           child: Text(
                             title.toUpperCase(),
                             style: TextStyle(
-                              fontSize: 8,
+                              fontSize: SizeConfig.fontSizeXSmall,
                               fontWeight: FontWeight.w700,
                               color: isActive
                                   ? color
                                   : context.textSecondaryColor,
                               letterSpacing: 0.8,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
+                            softWrap: true,
+                            maxLines: 2,
                           ),
                         ),
                       ],
@@ -169,7 +170,7 @@ class TransactionCard extends StatelessWidget {
                                 ? '₹${animatedValue.toStringAsFixed(2)}'
                                 : animatedValue.toStringAsFixed(2),
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: SizeConfig.fontSizeLarge,
                               fontWeight: FontWeight.w900,
                               color: isActive
                                   ? (isDark ? Colors.white : color)
@@ -189,7 +190,7 @@ class TransactionCard extends StatelessWidget {
                             Text(
                               unit,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: SizeConfig.fontSizeSmall,
                                 color: isActive
                                     ? color.withValues(alpha: 0.8)
                                     : context.textSecondaryColor,

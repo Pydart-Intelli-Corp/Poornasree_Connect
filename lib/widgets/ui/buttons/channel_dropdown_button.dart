@@ -64,17 +64,20 @@ class ChannelDropdownButton extends StatelessWidget {
     if (compact) {
       return PopupMenuButton<String>(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
         ),
         color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
         elevation: 8,
-        offset: const Offset(0, 45),
+        offset: Offset(0, SizeConfig.spaceXLarge + SizeConfig.spaceXSmall),
         onSelected: onChannelChanged,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          padding: EdgeInsets.symmetric(
+            horizontal: SizeConfig.spaceXSmall,
+            vertical: SizeConfig.spaceTiny,
+          ),
           decoration: BoxDecoration(
             color: color.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
             border: Border.all(
               color: color.withOpacity(0.5),
               width: 1,
@@ -84,23 +87,26 @@ class ChannelDropdownButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(3),
+                padding: EdgeInsets.all(SizeConfig.spaceTiny),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                 ),
                 child: Icon(
                   _getChannelIcon(selectedChannel),
-                  size: 14,
+                  size: SizeConfig.iconSizeSmall,
                   color: color,
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                padding: EdgeInsets.symmetric(
+                  horizontal: SizeConfig.spaceXSmall,
+                  vertical: 1,
+                ),
                 child: Text(
                   selectedChannel,
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: SizeConfig.fontSizeXSmall,
                     fontWeight: FontWeight.bold,
                     color: color,
                     letterSpacing: 0.5,
@@ -120,17 +126,20 @@ class ChannelDropdownButton extends StatelessWidget {
       // Full-width button version
       return PopupMenuButton<String>(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
         ),
         color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
         elevation: 8,
-        offset: const Offset(0, 50),
+        offset: Offset(0, SizeConfig.spaceHuge + SizeConfig.spaceXSmall),
         onSelected: onChannelChanged,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: SizeConfig.spaceMedium + 4,
+            vertical: SizeConfig.spaceMedium,
+          ),
           decoration: BoxDecoration(
             color: color.withOpacity(isDark ? 0.15 : 0.1),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
             border: Border.all(
               color: color.withOpacity(isDark ? 0.4 : 0.3),
               width: 1.5,
@@ -144,25 +153,25 @@ class ChannelDropdownButton extends StatelessWidget {
                   Icon(
                     _getChannelIcon(selectedChannel),
                     color: color,
-                    size: 20,
+                    size: SizeConfig.iconSizeMedium,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: SizeConfig.spaceMedium),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         AppLocalizations().tr('milk_type'),
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: SizeConfig.fontSizeSmall,
                           fontWeight: FontWeight.w500,
                           color: context.textSecondaryColor,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: SizeConfig.spaceTiny),
                       Text(
                         _getChannelName(selectedChannel),
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: SizeConfig.fontSizeMedium,
                           fontWeight: FontWeight.w600,
                           color: color,
                         ),
@@ -174,7 +183,7 @@ class ChannelDropdownButton extends StatelessWidget {
               Icon(
                 Icons.expand_more_rounded,
                 color: color,
-                size: 20,
+                size: SizeConfig.iconSizeMedium,
               ),
             ],
           ),
@@ -198,14 +207,17 @@ class ChannelDropdownButton extends StatelessWidget {
 
     return PopupMenuItem<String>(
       value: channel,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceMedium + 4,
+        vertical: SizeConfig.spaceSmall,
+      ),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(SizeConfig.spaceMedium),
         decoration: BoxDecoration(
           color: isSelected
               ? color.withOpacity(0.1)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
           border: Border.all(
             color: isSelected
                 ? color.withOpacity(0.3)
@@ -216,8 +228,8 @@ class ChannelDropdownButton extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: SizeConfig.iconSizeLarge + 8,
+              height: SizeConfig.iconSizeLarge + 8,
               decoration: BoxDecoration(
                 color: color.withOpacity(0.15),
                 shape: BoxShape.circle,
@@ -229,10 +241,10 @@ class ChannelDropdownButton extends StatelessWidget {
               child: Icon(
                 _getChannelIcon(channel),
                 color: color,
-                size: 16,
+                size: SizeConfig.iconSizeSmall + 4,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: SizeConfig.spaceMedium),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,16 +253,16 @@ class ChannelDropdownButton extends StatelessWidget {
                   Text(
                     _getChannelName(channel),
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: SizeConfig.fontSizeMedium,
                       fontWeight: FontWeight.w600,
                       color: context.textPrimaryColor,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: SizeConfig.spaceTiny),
                   Text(
                     channel,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: SizeConfig.fontSizeSmall,
                       fontWeight: FontWeight.w500,
                       color: color,
                     ),
@@ -260,7 +272,7 @@ class ChannelDropdownButton extends StatelessWidget {
             ),
             if (isSelected)
               Container(
-                padding: const EdgeInsets.all(4),
+                padding: EdgeInsets.all(SizeConfig.spaceXSmall),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   shape: BoxShape.circle,
@@ -268,7 +280,7 @@ class ChannelDropdownButton extends StatelessWidget {
                 child: Icon(
                   Icons.check_rounded,
                   color: color,
-                  size: 16,
+                  size: SizeConfig.iconSizeSmall + 4,
                 ),
               ),
           ],

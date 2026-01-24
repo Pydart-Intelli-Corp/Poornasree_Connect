@@ -23,27 +23,28 @@ class SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final bgColor =
         iconBackgroundColor ?? AppTheme.primaryBlue.withOpacity(0.15);
     final iColor = iconColor ?? AppTheme.primaryBlue;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(SizeConfig.spaceMedium),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(SizeConfig.spaceSmall),
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
             ),
-            child: Icon(icon, color: iColor, size: 20),
+            child: Icon(icon, color: iColor, size: SizeConfig.iconSizeMedium),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceMedium),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,17 +52,21 @@ class SettingsTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: SizeConfig.fontSizeRegular,
                     fontWeight: FontWeight.w500,
                     color: context.textPrimaryColor,
                   ),
+                  softWrap: true,
+                  maxLines: 2,
                 ),
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: SizeConfig.fontSizeXSmall,
                     color: context.textSecondaryColor,
                   ),
+                  softWrap: true,
+                  maxLines: 2,
                 ),
               ],
             ),
@@ -77,10 +82,7 @@ class SettingsTile extends StatelessWidget {
 class LanguageSelector extends StatefulWidget {
   final ValueChanged<AppLocale>? onLocaleChanged;
 
-  const LanguageSelector({
-    super.key,
-    this.onLocaleChanged,
-  });
+  const LanguageSelector({super.key, this.onLocaleChanged});
 
   @override
   State<LanguageSelector> createState() => _LanguageSelectorState();
@@ -98,7 +100,7 @@ class _LanguageSelectorState extends State<LanguageSelector> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations();
-    
+
     return SettingsTile(
       icon: Icons.language,
       title: l10n.tr('language'),
@@ -106,10 +108,13 @@ class _LanguageSelectorState extends State<LanguageSelector> {
       iconBackgroundColor: AppTheme.primaryBlue.withOpacity(0.15),
       iconColor: AppTheme.primaryBlue,
       trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: SizeConfig.spaceMedium,
+          vertical: SizeConfig.spaceXSmall + 2,
+        ),
         decoration: BoxDecoration(
           color: context.cardColor,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
           border: Border.all(color: context.borderColor),
         ),
         child: DropdownButtonHideUnderline(
@@ -117,32 +122,39 @@ class _LanguageSelectorState extends State<LanguageSelector> {
             value: _selectedLocale,
             isDense: true,
             dropdownColor: context.cardColor,
-            style: TextStyle(fontSize: 13, color: context.textPrimaryColor),
-            items: AppLocale.values.map((locale) => DropdownMenuItem(
-              value: locale,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    locale.nativeName,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: context.textPrimaryColor,
+            style: TextStyle(
+              fontSize: SizeConfig.fontSizeSmall,
+              color: context.textPrimaryColor,
+            ),
+            items: AppLocale.values
+                .map(
+                  (locale) => DropdownMenuItem(
+                    value: locale,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          locale.nativeName,
+                          style: TextStyle(
+                            fontSize: SizeConfig.fontSizeSmall,
+                            color: context.textPrimaryColor,
+                          ),
+                        ),
+                        if (locale != AppLocale.english) ...[
+                          SizedBox(width: SizeConfig.spaceXSmall + 2),
+                          Text(
+                            '(${locale.englishName})',
+                            style: TextStyle(
+                              fontSize: SizeConfig.fontSizeXSmall,
+                              color: context.textSecondaryColor,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (locale != AppLocale.english) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      '(${locale.englishName})',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: context.textSecondaryColor,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            )).toList(),
+                )
+                .toList(),
             onChanged: (locale) async {
               if (locale != null) {
                 await AppLocalizations().setLocale(locale);
@@ -170,19 +182,24 @@ class ThemeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final l10n = AppLocalizations();
-    
+
     return SettingsTile(
       icon: isDarkMode ? Icons.dark_mode : Icons.light_mode,
       title: l10n.tr('theme'),
       subtitle: isDarkMode ? l10n.tr('dark_mode') : l10n.tr('light_mode'),
       iconBackgroundColor: AppTheme.primaryAmber.withOpacity(0.15),
       iconColor: AppTheme.primaryAmber,
-      trailing: Switch(
-        value: isDarkMode,
-        onChanged: onChanged,
-        activeColor: AppTheme.primaryGreen,
-        activeTrackColor: AppTheme.primaryGreen.withOpacity(0.3),
+      trailing: Transform.scale(
+        scale: SizeConfig.userScale * 0.7,
+        child: Switch(
+          value: isDarkMode,
+          onChanged: onChanged,
+          activeColor: AppTheme.primaryGreen,
+          activeTrackColor: AppTheme.primaryGreen.withOpacity(0.3),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
       ),
     );
   }
@@ -201,8 +218,9 @@ class AutoConnectToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final l10n = AppLocalizations();
-    
+
     return SettingsTile(
       icon: Icons.bluetooth_connected,
       title: l10n.tr('auto_connect'),
@@ -211,11 +229,15 @@ class AutoConnectToggle extends StatelessWidget {
           : l10n.tr('auto_connect_desc'),
       iconBackgroundColor: AppTheme.primaryBlue.withOpacity(0.15),
       iconColor: AppTheme.primaryBlue,
-      trailing: Switch(
-        value: isAutoConnectEnabled,
-        onChanged: onChanged,
-        activeColor: AppTheme.primaryGreen,
-        activeTrackColor: AppTheme.primaryGreen.withOpacity(0.3),
+      trailing: Transform.scale(
+        scale: SizeConfig.userScale * 0.7,
+        child: Switch(
+          value: isAutoConnectEnabled,
+          onChanged: onChanged,
+          activeColor: AppTheme.primaryGreen,
+          activeTrackColor: AppTheme.primaryGreen.withOpacity(0.3),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
       ),
     );
   }

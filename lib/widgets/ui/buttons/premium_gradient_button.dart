@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 import '../feedback/flower_spinner.dart';
 
 class PremiumGradientButton extends StatelessWidget {
@@ -24,21 +25,25 @@ class PremiumGradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
+    final effectiveHeight = height ?? SizeConfig.normalize(58);
+    final effectiveRadius = borderRadius ?? SizeConfig.radiusRegular;
+
     return Container(
-      height: height ?? 58,
+      height: effectiveHeight,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: gradientColors ?? [
-            AppTheme.primaryGreen,
-            AppTheme.primaryTeal,
-          ],
+          colors:
+              gradientColors ?? [AppTheme.primaryGreen, AppTheme.primaryTeal],
         ),
-        borderRadius: BorderRadius.circular(borderRadius ?? 16),
+        borderRadius: BorderRadius.circular(effectiveRadius),
         boxShadow: [
           BoxShadow(
-            color: (gradientColors?.first ?? AppTheme.primaryGreen).withOpacity(0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: (gradientColors?.first ?? AppTheme.primaryGreen).withOpacity(
+              0.4,
+            ),
+            blurRadius: SizeConfig.normalize(20),
+            offset: Offset(0, SizeConfig.normalize(10)),
           ),
         ],
       ),
@@ -46,11 +51,11 @@ class PremiumGradientButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: isLoading ? null : onPressed,
-          borderRadius: BorderRadius.circular(borderRadius ?? 16),
+          borderRadius: BorderRadius.circular(effectiveRadius),
           child: Center(
             child: isLoading
-                ? const FlowerSpinner(
-                    size: 28,
+                ? FlowerSpinner(
+                    size: SizeConfig.iconSizeLarge,
                     color: Colors.white,
                   )
                 : Row(
@@ -58,19 +63,19 @@ class PremiumGradientButton extends StatelessWidget {
                     children: [
                       Text(
                         text,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 17,
+                          fontSize: SizeConfig.fontSizeRegular + 1,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                         ),
                       ),
                       if (icon != null) ...[
-                        const SizedBox(width: 8),
+                        SizedBox(width: SizeConfig.spaceSmall),
                         Icon(
                           icon,
                           color: Colors.white,
-                          size: 20,
+                          size: SizeConfig.iconSizeMedium,
                         ),
                       ],
                     ],

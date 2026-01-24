@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// Compact pill-shaped button with icon and text
 /// Used for quick actions like Reports, Clear, etc.
@@ -25,15 +26,15 @@ class CompactActionButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 2,
+          padding: EdgeInsets.symmetric(
+            horizontal: SizeConfig.spaceTiny,
+            vertical: SizeConfig.spaceTiny,
           ),
           decoration: BoxDecoration(
             color: color.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
             border: Border.all(
               color: color.withOpacity(0.5),
               width: 1,
@@ -43,26 +44,26 @@ class CompactActionButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(3),
+                padding: EdgeInsets.all(SizeConfig.spaceTiny),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                 ),
                 child: Icon(
                   icon,
-                  size: 14,
+                  size: SizeConfig.iconSizeSmall,
                   color: color,
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
+                padding: EdgeInsets.symmetric(
+                  horizontal: SizeConfig.spaceXSmall,
                   vertical: 1,
                 ),
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: SizeConfig.fontSizeXSmall,
                     fontWeight: FontWeight.bold,
                     color: color,
                     letterSpacing: 0.5,

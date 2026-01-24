@@ -69,6 +69,8 @@ class BluetoothService {
       {}; // Track connected machines by serial
   final Map<String, StreamSubscription<BluetoothConnectionState>> _connectionStateSubscriptions =
       {}; // Monitor connection state for each device
+  final Set<String> _manuallyDisconnectedMachines =
+      {}; // Track machines manually disconnected by user (prevents auto-reconnect)
   BluetoothStatus _status = BluetoothStatus.offline;
   BluetoothDevice? _connectedDevice;
   bool _isScanning = false;
@@ -431,8 +433,20 @@ class BluetoothService {
                 '🟢 [BLE] Machine Available: Serial $serialNumber from "$deviceName"',
               );
 
-              // Auto-connect immediately when device found
-              _connectToDeviceImmediately(device, serialNumber);
+              // Auto-connect only if:
+              // 1. Auto-connect is enabled
+              // 2. Device was NOT manually disconnected by user
+              if (_autoConnectEnabled && !_manuallyDisconnectedMachines.contains(serialNumber)) {
+                _connectToDeviceImmediately(device, serialNumber);
+              } else if (_manuallyDisconnectedMachines.contains(serialNumber)) {
+                print(
+                  'ℹ️ [BLE] Device $serialNumber was manually disconnected, skipping auto-connect',
+                );
+              } else {
+                print(
+                  'ℹ️ [BLE] Auto-connect disabled, device $serialNumber available for manual connection',
+                );
+              }
             }
           }
 
@@ -573,6 +587,12 @@ class BluetoothService {
       return true;
     }
 
+    // Clear from manually disconnected list (user explicitly wants to reconnect)
+    if (_manuallyDisconnectedMachines.contains(numericId)) {
+      _manuallyDisconnectedMachines.remove(numericId);
+      print('🔓 [BLE] Cleared manual disconnect flag for $machineId');
+    }
+
     try {
       print('🔵 [BLE] Connecting to $machineId (${device.platformName})...');
 
@@ -641,11 +661,18 @@ class BluetoothService {
 
     try {
       print('🔵 [BLE] Disconnecting from $machineId...');
-      await device.disconnect();
-
-      // Stop monitoring connection state
+      
+      // IMPORTANT: Stop monitoring connection state BEFORE disconnecting
+      // This prevents the automatic disconnection handler from being triggered
       await _connectionStateSubscriptions[numericId]?.cancel();
       _connectionStateSubscriptions.remove(numericId);
+      
+      // Now disconnect from the device
+      await device.disconnect();
+
+      // Mark as manually disconnected (prevents auto-reconnect until app restart)
+      _manuallyDisconnectedMachines.add(numericId);
+      print('🔒 [BLE] $machineId marked as manually disconnected (won\'t auto-reconnect)');
 
       // Mark as disconnected
       _connectedMachines.remove(numericId);
@@ -653,9 +680,9 @@ class BluetoothService {
       _machineDistance.remove(numericId);
       _connectedMachinesController.add(Map.from(_connectedMachines));
 
-      // Remove from available list since we lost connection
-      _availableMachineIds.remove(numericId);
-      _availableMachineIdsController.add(Set.from(_availableMachineIds));
+      // Keep device in available list (manual disconnect, device still nearby)
+      // Device remains available for reconnection
+      print('ℹ️ [BLE] $machineId disconnected but remains AVAILABLE for reconnection');
 
       // If no more connected machines, update status
       if (_connectedMachines.isEmpty) {
@@ -679,6 +706,9 @@ class BluetoothService {
       // Still mark as disconnected locally
       _connectedMachines.remove(numericId);
       _connectedMachinesController.add(Map.from(_connectedMachines));
+      
+      // Also mark as manually disconnected
+      _manuallyDisconnectedMachines.add(numericId);
     }
   }
 
@@ -777,6 +807,13 @@ class BluetoothService {
       if (_connectedMachines[serialNumber] == true) {
         print('⚡ [BLE] Device $serialNumber already connected');
         results[serialNumber] = true;
+        continue;
+      }
+
+      // Skip devices that were manually disconnected by user
+      if (_manuallyDisconnectedMachines.contains(serialNumber)) {
+        print('🔒 [BLE] Skipping $serialNumber - manually disconnected by user');
+        results[serialNumber] = false;
         continue;
       }
 

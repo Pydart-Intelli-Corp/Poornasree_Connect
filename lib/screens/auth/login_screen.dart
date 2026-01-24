@@ -13,7 +13,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
@@ -31,10 +32,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
   }
 
@@ -73,24 +77,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final errorMsg = authProvider.errorMessage ?? 'Failed to send OTP';
       String message = 'Error Occurred';
       String submessage = 'Please try again';
-      
-      if (errorMsg.toLowerCase().contains('network') || 
+
+      if (errorMsg.toLowerCase().contains('network') ||
           errorMsg.toLowerCase().contains('connection')) {
         message = 'Connection Failed';
         submessage = 'Check your internet connection and retry';
-      } else if (errorMsg.toLowerCase().contains('not found') || 
-                 errorMsg.toLowerCase().contains('not registered') ||
-                 (errorMsg.toLowerCase().contains('contact') && 
-                  errorMsg.toLowerCase().contains('supervisor'))) {
+      } else if (errorMsg.toLowerCase().contains('not found') ||
+          errorMsg.toLowerCase().contains('not registered') ||
+          (errorMsg.toLowerCase().contains('contact') &&
+              errorMsg.toLowerCase().contains('supervisor'))) {
         message = 'Email Not Registered';
-        submessage = 'Your email address is not registered in the system. Please contact your admin or supervisor to add your account';
+        submessage =
+            'Your email address is not registered in the system. Please contact your admin or supervisor to add your account';
       } else if (errorMsg.toLowerCase().contains('invalid email')) {
         message = 'Invalid Email';
         submessage = 'Please enter a valid email address';
-      } else if (errorMsg.toLowerCase().contains('server') || 
-                 errorMsg.toLowerCase().contains('failed to send')) {
+      } else if (errorMsg.toLowerCase().contains('server') ||
+          errorMsg.toLowerCase().contains('failed to send')) {
         message = 'Server Error';
-        submessage = 'Server is temporarily unavailable. Please try again later';
+        submessage =
+            'Server is temporarily unavailable. Please try again later';
       } else if (errorMsg.toLowerCase().contains('try again')) {
         message = 'Request Failed';
         submessage = 'Something went wrong, please try again';
@@ -98,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         message = 'Error Occurred';
         submessage = errorMsg;
       }
-      
+
       CustomSnackbar.showError(
         context,
         message: message,
@@ -109,79 +115,104 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final l10n = AppLocalizations();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          // Language flag dropdown
+          Padding(
+            padding: EdgeInsets.only(right: SizeConfig.spaceRegular),
+            child: LanguageFlagDropdown(
+              onLanguageChanged: () {
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
+        ],
+      ),
       body: PremiumGradientBackground(
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 24,
+              padding: EdgeInsets.symmetric(
+                horizontal: SizeConfig.spaceRegular + 4,
+                vertical: SizeConfig.spaceRegular + 4,
               ),
               child: FadeTransition(
                 opacity: _fadeAnimation,
                 child: SlideTransition(
                   position: _slideAnimation,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 400,
+                    constraints: BoxConstraints(
+                      maxWidth: SizeConfig.normalize(400),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Logo
                         Container(
-                          width: 120,
-                          height: 120,
+                          width: SizeConfig.normalize(160),
+                          height: SizeConfig.normalize(160),
                           decoration: BoxDecoration(
-                            color: isDark ? AppTheme.darkBg2 : AppTheme.cardLight,
-                            borderRadius: BorderRadius.circular(20),
+                            color: isDark
+                                ? AppTheme.darkBg2
+                                : AppTheme.cardLight,
+                            borderRadius: BorderRadius.circular(
+                              SizeConfig.radiusLarge + 4,
+                            ),
                             border: Border.all(
                               color: AppTheme.primaryGreen.withOpacity(0.3),
-                              width: 2,
+                              width: SizeConfig.normalize(3),
                             ),
                           ),
-                          padding: const EdgeInsets.all(20),
+                          padding: EdgeInsets.all(SizeConfig.radiusLarge + 4),
                           child: Image.asset(
                             'assets/images/fulllogo.png',
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
+                              return Icon(
                                 Icons.agriculture_rounded,
-                                size: 60,
+                                size: SizeConfig.iconSizeHuge + 20,
                                 color: AppTheme.primaryGreen,
                               );
                             },
                           ),
                         ),
-                        const SizedBox(height: 40),
+                        SizedBox(height: SizeConfig.spaceHuge + 8),
 
                         // Welcome Text
                         Text(
                           l10n.tr('welcome_back'),
                           style: TextStyle(
-                            fontSize: 28,
+                            fontSize: SizeConfig.fontSizeXLarge + 8,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
+                            color: isDark
+                                ? AppTheme.textPrimary
+                                : AppTheme.textPrimaryLight,
                             letterSpacing: 0.5,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: SizeConfig.spaceSmall + 4),
                         Text(
                           l10n.tr('sign_in_to_continue'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 15,
-                            color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                            fontSize: SizeConfig.fontSizeRegular + 2,
+                            color: isDark
+                                ? AppTheme.textSecondary
+                                : AppTheme.textSecondaryLight,
                             fontWeight: FontWeight.w400,
                             letterSpacing: 0.3,
                           ),
                         ),
-                        const SizedBox(height: 40),
+                        SizedBox(height: SizeConfig.spaceHuge + 8),
 
                         // Premium Login Card
                         PremiumCard(
@@ -201,13 +232,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     if (value == null || value.isEmpty) {
                                       return l10n.tr('please_enter_email');
                                     }
-                                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                    if (!RegExp(
+                                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                    ).hasMatch(value)) {
                                       return l10n.tr('enter_valid_email');
                                     }
                                     return null;
                                   },
                                 ),
-                                const SizedBox(height: 24),
+                                SizedBox(height: SizeConfig.spaceRegular + 4),
 
                                 // Premium Send OTP Button
                                 PremiumGradientButton(
@@ -220,7 +253,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: SizeConfig.spaceRegular + 4),
 
                         // Info Container
                         InfoContainer(

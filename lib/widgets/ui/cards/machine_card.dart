@@ -79,6 +79,7 @@ class _MachineCardState extends State<MachineCard> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final machine = Machine.fromJson(_machineData);
     final isDark = context.isDarkMode;
 
@@ -90,7 +91,7 @@ class _MachineCardState extends State<MachineCard> {
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: context.cardColor,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
           border: Border.all(
             color: machine.isMasterMachine
                 ? AppTheme.primaryAmber.withOpacity(0.4)
@@ -110,7 +111,7 @@ class _MachineCardState extends State<MachineCard> {
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onView,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
             splashColor: AppTheme.primaryGreen.withOpacity(0.05),
             highlightColor: AppTheme.primaryGreen.withOpacity(0.03),
             child: Column(
@@ -132,7 +133,7 @@ class _MachineCardState extends State<MachineCard> {
     final hasImage = machine.imageUrl != null && machine.imageUrl!.isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(SizeConfig.spaceRegular),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -160,21 +161,17 @@ class _MachineCardState extends State<MachineCard> {
                 // Title with signal indicator
                 Row(
                   children: [
-                    Flexible(
-                      child: Text(
-                        machine.machineId,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: context.textPrimaryColor,
-                          letterSpacing: -0.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      machine.machineId,
+                      style: TextStyle(
+                        fontSize: SizeConfig.fontSizeLarge,
+                        fontWeight: FontWeight.w600,
+                        color: context.textPrimaryColor,
+                        letterSpacing: -0.2,
                       ),
                     ),
-                    // Signal strength indicator after machine ID
-                    const SizedBox(width: 8),
+                    // Signal strength indicator right after machine ID
+                    SizedBox(width: SizeConfig.spaceXSmall),
                     _buildSignalStrengthIndicator(
                       _distance,
                       _bluetoothService.isMachineConnected(machine.machineId),
@@ -206,8 +203,8 @@ class _MachineCardState extends State<MachineCard> {
           BluetoothStatusButton(
             machineId: machine.machineId,
             showLabel: true,
-            iconSize: 18,
-            fontSize: 12,
+            iconSize: SizeConfig.iconSizeSmall,
+            fontSize: SizeConfig.fontSizeSmall,
           ),
         ],
       ),
@@ -216,7 +213,7 @@ class _MachineCardState extends State<MachineCard> {
 
   /// Clean circular image with subtle border - supports cached images for offline
   Widget _buildImage(Machine machine, bool hasImage) {
-    const double size = 72;
+    final double size = SizeConfig.listTileHeight;
 
     Widget imageWidget;
 
@@ -226,12 +223,12 @@ class _MachineCardState extends State<MachineCard> {
         height: size,
         decoration: BoxDecoration(
           color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
         ),
         child: Icon(
           Icons.precision_manufacturing_outlined,
           color: context.textSecondaryColor.withOpacity(0.3),
-          size: 32,
+          size: SizeConfig.iconSizeXLarge,
         ),
       );
     } else {
@@ -244,11 +241,11 @@ class _MachineCardState extends State<MachineCard> {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
           color: context.surfaceColor,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
           child: FutureBuilder<String?>(
             future: OfflineCacheService().getCachedImagePath(machineId),
             builder: (context, snapshot) {
@@ -281,11 +278,11 @@ class _MachineCardState extends State<MachineCard> {
       errorBuilder: (_, __, ___) => Icon(
         Icons.image_not_supported_outlined,
         color: context.textSecondaryColor.withOpacity(0.4),
-        size: 28,
+        size: SizeConfig.iconSizeLarge,
       ),
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
-        return Center(child: FlowerSpinner(size: 20));
+        return Center(child: FlowerSpinner(size: SizeConfig.iconSizeMedium));
       },
     );
   }
@@ -293,20 +290,27 @@ class _MachineCardState extends State<MachineCard> {
   /// Minimal master chip - Google style
   Widget _buildMasterChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceSmall,
+        vertical: SizeConfig.spaceXSmall,
+      ),
       decoration: BoxDecoration(
         color: AppTheme.primaryAmber.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.star_rounded, size: 12, color: AppTheme.primaryAmber),
-          const SizedBox(width: 4),
+          Icon(
+            Icons.star_rounded,
+            size: SizeConfig.iconSizeXSmall,
+            color: AppTheme.primaryAmber,
+          ),
+          SizedBox(width: SizeConfig.spaceXSmall),
           Text(
             AppLocalizations().tr('master'),
             style: TextStyle(
-              fontSize: 11,
+              fontSize: SizeConfig.fontSizeXSmall,
               fontWeight: FontWeight.w600,
               color: AppTheme.primaryAmber,
               letterSpacing: 0.2,
@@ -377,10 +381,13 @@ class _MachineCardState extends State<MachineCard> {
     return GestureDetector(
       onTap: () => _showUpdateInstructionsDialog(context, machine),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        padding: EdgeInsets.symmetric(
+          horizontal: SizeConfig.spaceXSmall + 2,
+          vertical: SizeConfig.spaceTiny + 1,
+        ),
         decoration: BoxDecoration(
           color: AppTheme.primaryAmber.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
           border: Border.all(
             color: AppTheme.primaryAmber.withOpacity(0.3),
             width: 1,
@@ -391,17 +398,23 @@ class _MachineCardState extends State<MachineCard> {
           children: [
             Icon(
               Icons.system_update_alt_rounded,
-              size: 12,
+              size: SizeConfig.iconSizeXSmall,
               color: AppTheme.primaryAmber,
             ),
-            const SizedBox(width: 4),
-            Text(
-              AppLocalizations().tr('update_available'),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.primaryAmber,
-                letterSpacing: 0.2,
+            SizedBox(width: SizeConfig.spaceXSmall),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  AppLocalizations().tr('update_available'),
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeXSmall,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryAmber,
+                    letterSpacing: 0.2,
+                  ),
+                  maxLines: 1,
+                ),
               ),
             ),
           ],
@@ -439,10 +452,13 @@ class _MachineCardState extends State<MachineCard> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceXSmall + 2,
+        vertical: SizeConfig.spaceXSmall,
+      ),
       decoration: BoxDecoration(
         color: context.cardColor.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
@@ -452,7 +468,7 @@ class _MachineCardState extends State<MachineCard> {
         ],
       ),
       child: CustomPaint(
-        size: const Size(20, 14),
+        size: Size(SizeConfig.iconSizeMedium, SizeConfig.iconSizeSmall - 2),
         painter: _SignalBarsPainter(
           signalBars: signalBars,
           signalColor: signalColor,
@@ -751,7 +767,10 @@ class _MachineCardState extends State<MachineCard> {
     final config = _getStatusConfig(status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceSmall + 2,
+        vertical: SizeConfig.spaceXSmall + 1,
+      ),
       decoration: BoxDecoration(
         color: config.color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(100),
@@ -760,18 +779,18 @@ class _MachineCardState extends State<MachineCard> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
+            width: SizeConfig.spaceXSmall + 2,
+            height: SizeConfig.spaceXSmall + 2,
             decoration: BoxDecoration(
               color: config.color,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: SizeConfig.spaceXSmall + 2),
           Text(
             status,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: SizeConfig.fontSizeSmall,
               fontWeight: FontWeight.w500,
               color: config.color,
             ),
@@ -864,7 +883,12 @@ class _MachineCardState extends State<MachineCard> {
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: EdgeInsets.fromLTRB(
+        SizeConfig.spaceRegular,
+        0,
+        SizeConfig.spaceRegular,
+        SizeConfig.spaceRegular,
+      ),
       child: Column(
         children: [
           // Divider
@@ -876,7 +900,7 @@ class _MachineCardState extends State<MachineCard> {
                         : AppTheme.borderLight)
                     .withOpacity(0.3),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: SizeConfig.spaceMedium),
 
           // Details grid - 2 columns
           ...List.generate((details.length / 2).ceil(), (rowIndex) {
@@ -886,13 +910,15 @@ class _MachineCardState extends State<MachineCard> {
 
             return Padding(
               padding: EdgeInsets.only(
-                bottom: rowIndex < (details.length / 2).ceil() - 1 ? 12 : 0,
+                bottom: rowIndex < (details.length / 2).ceil() - 1
+                    ? SizeConfig.spaceMedium
+                    : 0,
               ),
               child: Row(
                 children: [
                   Expanded(child: _buildDetailTile(rowItems[0])),
                   if (rowItems.length > 1) ...[
-                    const SizedBox(width: 16),
+                    SizedBox(width: SizeConfig.spaceRegular),
                     Expanded(child: _buildDetailTile(rowItems[1])),
                   ] else
                     const Expanded(child: SizedBox()),
@@ -930,30 +956,37 @@ class _MachineCardState extends State<MachineCard> {
       children: [
         Icon(
           item.icon,
-          size: 16,
+          size: SizeConfig.iconSizeSmall,
           color: AppTheme.primaryGreen.withOpacity(0.7),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: SizeConfig.spaceSmall),
         Expanded(
-          child: RichText(
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            text: TextSpan(
-              style: TextStyle(fontSize: 12, color: context.textPrimaryColor),
-              children: [
-                TextSpan(
-                  text: item.label,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: RichText(
+              maxLines: 1,
+              softWrap: false,
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: SizeConfig.fontSizeSmall,
+                  color: context.textPrimaryColor,
                 ),
-                const TextSpan(
-                  text: ' : ',
-                  style: TextStyle(fontWeight: FontWeight.w400),
-                ),
-                TextSpan(
-                  text: item.value,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
+                children: [
+                  TextSpan(
+                    text: item.label,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const TextSpan(
+                    text: ' : ',
+                    style: TextStyle(fontWeight: FontWeight.w400),
+                  ),
+                  TextSpan(
+                    text: item.value,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1056,10 +1089,17 @@ class _MachineCardState extends State<MachineCard> {
     final hasAnyCorrections = hasPendingCorrections || hasDownloadedCorrections;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: EdgeInsets.fromLTRB(
+        SizeConfig.spaceMedium,
+        SizeConfig.spaceSmall + 2,
+        SizeConfig.spaceMedium,
+        SizeConfig.spaceSmall + 2,
+      ),
       decoration: BoxDecoration(
         color: context.borderColor.withOpacity(0.05),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(SizeConfig.radiusRegular),
+        ),
         border: Border(
           top: BorderSide(
             color: context.borderColor.withOpacity(0.15),
@@ -1085,7 +1125,7 @@ class _MachineCardState extends State<MachineCard> {
                         statusType: userPwdStatus.statusType,
                         tooltip: userPwdStatus.text,
                       ),
-                      const SizedBox(width: 6),
+                      SizedBox(width: SizeConfig.spaceXSmall + 2),
                       _buildMiniStatusDot(
                         label: AppLocalizations().tr(
                           'supervisor_password_short',
@@ -1126,7 +1166,7 @@ class _MachineCardState extends State<MachineCard> {
 
           // Delete action
           if (widget.onDelete != null) ...[
-            const SizedBox(width: 8),
+            SizedBox(width: SizeConfig.spaceSmall),
             _buildIconButton(
               icon: Icons.delete_outline,
               onTap: widget.onDelete!,
@@ -1155,22 +1195,29 @@ class _MachineCardState extends State<MachineCard> {
           children: [
             Icon(
               icon,
-              size: 10,
+              size: SizeConfig.iconSizeXSmall - 2,
               color: context.textSecondaryColor.withOpacity(0.6),
             ),
-            const SizedBox(width: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-                color: context.textSecondaryColor.withOpacity(0.6),
-                letterSpacing: 0.3,
+            SizedBox(width: SizeConfig.spaceXSmall),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeXSmall - 1,
+                    fontWeight: FontWeight.w500,
+                    color: context.textSecondaryColor.withOpacity(0.6),
+                    letterSpacing: 0.3,
+                  ),
+                  maxLines: 1,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: SizeConfig.spaceXSmall),
         // Section content
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -1206,25 +1253,28 @@ class _MachineCardState extends State<MachineCard> {
     return Tooltip(
       message: tooltip,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        padding: EdgeInsets.symmetric(
+          horizontal: SizeConfig.spaceXSmall + 2,
+          vertical: SizeConfig.spaceTiny + 1,
+        ),
         decoration: BoxDecoration(
           color: color.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
           border: Border.all(color: color.withOpacity(0.3), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 6,
-              height: 6,
+              width: SizeConfig.spaceXSmall + 2,
+              height: SizeConfig.spaceXSmall + 2,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: SizeConfig.spaceXSmall),
             Text(
               label,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: SizeConfig.fontSizeXSmall,
                 fontWeight: FontWeight.w600,
                 color: color,
               ),
@@ -1246,20 +1296,25 @@ class _MachineCardState extends State<MachineCard> {
         : context.textSecondaryColor.withOpacity(0.5);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceXSmall + 2,
+        vertical: SizeConfig.spaceTiny + 1,
+      ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: color,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: SizeConfig.fontSizeXSmall,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+          maxLines: 1,
         ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -1268,8 +1323,8 @@ class _MachineCardState extends State<MachineCard> {
   Widget _buildVerticalSeparator() {
     return Container(
       width: 1,
-      height: 28,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      height: SizeConfig.iconSizeLarge + 4,
+      margin: EdgeInsets.symmetric(horizontal: SizeConfig.spaceSmall),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -1318,14 +1373,14 @@ class _MachineCardState extends State<MachineCard> {
           children: [
             Icon(
               Icons.show_chart,
-              size: 10,
+              size: SizeConfig.iconSizeXSmall - 2,
               color: context.textSecondaryColor.withOpacity(0.6),
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: SizeConfig.spaceXSmall),
             Text(
               AppLocalizations().tr('charts'),
               style: TextStyle(
-                fontSize: 9,
+                fontSize: SizeConfig.fontSizeXSmall - 1,
                 fontWeight: FontWeight.w500,
                 color: context.textSecondaryColor.withOpacity(0.6),
                 letterSpacing: 0.3,
@@ -1333,7 +1388,7 @@ class _MachineCardState extends State<MachineCard> {
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: SizeConfig.spaceXSmall),
         // Chart status pills
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -1346,7 +1401,7 @@ class _MachineCardState extends State<MachineCard> {
                 isReady: true, // Yellow - Ready to download
               ),
             if (chartInfo.pending.isNotEmpty && chartInfo.downloaded.isNotEmpty)
-              const SizedBox(width: 4),
+              SizedBox(width: SizeConfig.spaceXSmall),
             // Downloaded - Green
             if (chartInfo.downloaded.isNotEmpty)
               _buildChartStatusPill(
@@ -1366,10 +1421,13 @@ class _MachineCardState extends State<MachineCard> {
         : AppTheme.successColor; // Yellow or Green
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceXSmall + 1,
+        vertical: SizeConfig.spaceTiny,
+      ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
         border: Border.all(color: color.withOpacity(0.3), width: 1),
       ),
       child: Row(
@@ -1378,8 +1436,8 @@ class _MachineCardState extends State<MachineCard> {
           // Animated pulse dot for Ready status
           if (isReady)
             Container(
-              width: 5,
-              height: 5,
+              width: SizeConfig.spaceXSmall + 1,
+              height: SizeConfig.spaceXSmall + 1,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
@@ -1393,12 +1451,16 @@ class _MachineCardState extends State<MachineCard> {
               ),
             )
           else
-            Icon(Icons.check, size: 10, color: color),
-          const SizedBox(width: 3),
+            Icon(
+              Icons.check,
+              size: SizeConfig.iconSizeXSmall - 2,
+              color: color,
+            ),
+          SizedBox(width: SizeConfig.spaceTiny + 1),
           Text(
             label,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: SizeConfig.fontSizeXSmall - 1,
               fontWeight: FontWeight.w600,
               color: color,
             ),
@@ -1460,22 +1522,29 @@ class _MachineCardState extends State<MachineCard> {
           children: [
             Icon(
               Icons.tune,
-              size: 10,
+              size: SizeConfig.iconSizeXSmall - 2,
               color: context.textSecondaryColor.withOpacity(0.6),
             ),
-            const SizedBox(width: 4),
-            Text(
-              AppLocalizations().tr('corrections'),
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-                color: context.textSecondaryColor.withOpacity(0.6),
-                letterSpacing: 0.3,
+            SizedBox(width: SizeConfig.spaceXSmall),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  AppLocalizations().tr('corrections'),
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeXSmall - 1,
+                    fontWeight: FontWeight.w500,
+                    color: context.textSecondaryColor.withOpacity(0.6),
+                    letterSpacing: 0.3,
+                  ),
+                  maxLines: 1,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: SizeConfig.spaceXSmall),
         // Correction status pills
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -1489,7 +1558,7 @@ class _MachineCardState extends State<MachineCard> {
               ),
             if (correctionInfo.pending.isNotEmpty &&
                 correctionInfo.downloaded.isNotEmpty)
-              const SizedBox(width: 4),
+              SizedBox(width: SizeConfig.spaceXSmall),
             // Downloaded - Green
             if (correctionInfo.downloaded.isNotEmpty)
               _buildCorrectionStatusPill(
@@ -1512,10 +1581,13 @@ class _MachineCardState extends State<MachineCard> {
         : AppTheme.successColor; // Yellow or Green
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceXSmall + 1,
+        vertical: SizeConfig.spaceTiny,
+      ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
         border: Border.all(color: color.withOpacity(0.3), width: 1),
       ),
       child: Row(
@@ -1524,8 +1596,8 @@ class _MachineCardState extends State<MachineCard> {
           // Animated pulse dot for Ready status
           if (isReady)
             Container(
-              width: 5,
-              height: 5,
+              width: SizeConfig.spaceXSmall + 1,
+              height: SizeConfig.spaceXSmall + 1,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
@@ -1539,12 +1611,16 @@ class _MachineCardState extends State<MachineCard> {
               ),
             )
           else
-            Icon(Icons.check, size: 10, color: color),
-          const SizedBox(width: 3),
+            Icon(
+              Icons.check,
+              size: SizeConfig.iconSizeXSmall - 2,
+              color: color,
+            ),
+          SizedBox(width: SizeConfig.spaceTiny + 1),
           Text(
             label,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: SizeConfig.fontSizeXSmall - 1,
               fontWeight: FontWeight.w600,
               color: color,
             ),

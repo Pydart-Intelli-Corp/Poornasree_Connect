@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'widgets/widgets.dart';
 import 'providers/providers.dart';
 import 'utils/utils.dart';
@@ -8,30 +9,29 @@ import 'l10n/l10n.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize theme provider
   final themeProvider = ThemeProvider();
   await themeProvider.initialize();
-  
+
   // Load shift settings on startup
   await ShiftSettingsService().loadSettings();
-  
+
   // Load locale settings
   await AppLocalizations().loadLocale();
-  
+
   // Initialize connectivity service with periodic checks
-  ConnectivityService().startPeriodicCheck(interval: const Duration(seconds: 30));
-  
+  ConnectivityService().startPeriodicCheck(
+    interval: const Duration(seconds: 30),
+  );
+
   runApp(MyApp(themeProvider: themeProvider));
 }
 
 class MyApp extends StatefulWidget {
   final ThemeProvider themeProvider;
-  
-  const MyApp({
-    super.key,
-    required this.themeProvider,
-  });
+
+  const MyApp({super.key, required this.themeProvider});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -45,6 +45,14 @@ class _MyAppState extends State<MyApp> {
     AppLocalizations().addListener(_onLocaleChange);
     // Listen to theme changes
     widget.themeProvider.addListener(_onThemeChange);
+    // Load saved UI scale
+    _loadSavedScale();
+  }
+
+  Future<void> _loadSavedScale() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedScale = prefs.getDouble('ui_size_scale') ?? 1.0;
+    SizeConfig.setUserScale(savedScale);
   }
 
   @override
@@ -69,7 +77,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations();
-    
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
@@ -82,15 +90,16 @@ class _MyAppState extends State<MyApp> {
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            themeMode: themeProvider.isDarkMode
+                ? ThemeMode.dark
+                : ThemeMode.light,
             home: const SplashScreen(),
             builder: (context, child) {
               // Lock text scale factor to 1.0 to prevent system font size from affecting layout
               return MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: TextScaler.noScaling,
-                  boldText: false,
-                ),
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.noScaling, boldText: false),
                 child: child!,
               );
             },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/shift_settings_service.dart';
+import '../../utils/helpers/size_config.dart';
 import '../../utils/utils.dart';
 import '../../l10n/l10n.dart';
 
@@ -29,11 +30,13 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
   Future<void> _selectTime(String shiftType, bool isStart) async {
     int currentMinutes;
     if (shiftType == 'MR') {
-      currentMinutes =
-          isStart ? _shiftService.mrStartMinutes : _shiftService.mrEndMinutes;
+      currentMinutes = isStart
+          ? _shiftService.mrStartMinutes
+          : _shiftService.mrEndMinutes;
     } else {
-      currentMinutes =
-          isStart ? _shiftService.evStartMinutes : _shiftService.evEndMinutes;
+      currentMinutes = isStart
+          ? _shiftService.evStartMinutes
+          : _shiftService.evEndMinutes;
     }
 
     final TimeOfDay initialTime = TimeOfDay(
@@ -75,24 +78,36 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
         if (shiftType == 'MR') {
           if (isStart) {
             _shiftService.setMorningShift(
-                newMinutes, _shiftService.mrEndMinutes);
+              newMinutes,
+              _shiftService.mrEndMinutes,
+            );
           } else {
             // When MR end time changes, auto-update EV start time to match
             _shiftService.setMorningShift(
-                _shiftService.mrStartMinutes, newMinutes);
+              _shiftService.mrStartMinutes,
+              newMinutes,
+            );
             _shiftService.setEveningShift(
-                newMinutes, _shiftService.evEndMinutes);
+              newMinutes,
+              _shiftService.evEndMinutes,
+            );
           }
         } else {
           if (isStart) {
             // When EV start time changes, also update MR end time to match
             _shiftService.setMorningShift(
-                _shiftService.mrStartMinutes, newMinutes);
+              _shiftService.mrStartMinutes,
+              newMinutes,
+            );
             _shiftService.setEveningShift(
-                newMinutes, _shiftService.evEndMinutes);
+              newMinutes,
+              _shiftService.evEndMinutes,
+            );
           } else {
             _shiftService.setEveningShift(
-                _shiftService.evStartMinutes, newMinutes);
+              _shiftService.evStartMinutes,
+              newMinutes,
+            );
           }
         }
       });
@@ -103,14 +118,15 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final l10n = AppLocalizations();
     final isDark = context.isDarkMode;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(SizeConfig.spaceMedium),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkBg2 : AppTheme.lightBg2,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
       ),
       child: Column(
         children: [
@@ -121,22 +137,22 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
                 _isExpanded = !_isExpanded;
               });
             },
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(SizeConfig.spaceSmall),
                   decoration: BoxDecoration(
                     color: Colors.orange.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.schedule_rounded,
                     color: Colors.orange,
-                    size: 20,
+                    size: SizeConfig.iconSizeMedium,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: SizeConfig.spaceMedium),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,8 +160,8 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
                       Text(
                         l10n.tr('shift_settings'),
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontSize: SizeConfig.fontSizeRegular,
+                          fontWeight: FontWeight.w600,
                           color: context.textPrimaryColor,
                         ),
                       ),
@@ -154,7 +170,7 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
                             ? ''
                             : '${l10n.tr('mr')}: ${_shiftService.minutesToTimeString(_shiftService.mrStartMinutes)}-${_shiftService.minutesToTimeString(_shiftService.mrEndMinutes)} | ${l10n.tr('ev')}: ${_shiftService.minutesToTimeString(_shiftService.evStartMinutes)}-${_shiftService.minutesToTimeString(_shiftService.evEndMinutes)}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: SizeConfig.fontSizeXSmall,
                           color: context.textSecondaryColor,
                         ),
                       ),
@@ -164,7 +180,7 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
                 Icon(
                   _isExpanded ? Icons.expand_less : Icons.expand_more,
                   color: context.textSecondaryColor,
-                  size: 20,
+                  size: SizeConfig.iconSizeMedium,
                 ),
               ],
             ),
@@ -172,12 +188,12 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
 
           // Expandable content
           if (_isExpanded) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: SizeConfig.spaceMedium),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(SizeConfig.spaceMedium),
               decoration: BoxDecoration(
                 color: context.surfaceColor,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                 border: Border.all(color: context.borderColor),
               ),
               child: Column(
@@ -186,25 +202,29 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
                   _buildShiftRow(
                     label: '${l10n.tr('morning_shift')} (${l10n.tr('mr')})',
                     color: Colors.amber,
-                    startTime: _shiftService
-                        .minutesToTimeString(_shiftService.mrStartMinutes),
-                    endTime: _shiftService
-                        .minutesToTimeString(_shiftService.mrEndMinutes),
+                    startTime: _shiftService.minutesToTimeString(
+                      _shiftService.mrStartMinutes,
+                    ),
+                    endTime: _shiftService.minutesToTimeString(
+                      _shiftService.mrEndMinutes,
+                    ),
                     onStartTap: () => _selectTime('MR', true),
                     onEndTap: () => _selectTime('MR', false),
                     startLabel: l10n.tr('shift_start'),
                     endLabel: l10n.tr('shift_end'),
                     toLabel: l10n.tr('to'),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: SizeConfig.spaceSmall + 2),
                   // Evening Shift
                   _buildShiftRow(
                     label: '${l10n.tr('evening_shift')} (${l10n.tr('ev')})',
                     color: Colors.deepPurple,
-                    startTime: _shiftService
-                        .minutesToTimeString(_shiftService.evStartMinutes),
-                    endTime: _shiftService
-                        .minutesToTimeString(_shiftService.evEndMinutes),
+                    startTime: _shiftService.minutesToTimeString(
+                      _shiftService.evStartMinutes,
+                    ),
+                    endTime: _shiftService.minutesToTimeString(
+                      _shiftService.evEndMinutes,
+                    ),
                     onStartTap: () => _selectTime('EV', true),
                     onEndTap: () => _selectTime('EV', false),
                     startLabel: l10n.tr('shift_start'),
@@ -235,23 +255,26 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
       children: [
         // Shift label
         Container(
-          width: 100,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          width: SizeConfig.normalize(100.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: SizeConfig.spaceSmall,
+            vertical: SizeConfig.spaceXSmall,
+          ),
           decoration: BoxDecoration(
             color: color.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceXSmall + 2),
           ),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: SizeConfig.fontSizeXSmall,
               fontWeight: FontWeight.w600,
               color: color,
             ),
             textAlign: TextAlign.center,
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: SizeConfig.spaceMedium),
         // Start time
         Expanded(
           child: _buildTimeButton(
@@ -261,11 +284,11 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: EdgeInsets.symmetric(horizontal: SizeConfig.spaceSmall),
           child: Text(
             toLabel,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: SizeConfig.fontSizeSmall,
               color: context.textSecondaryColor,
             ),
           ),
@@ -290,21 +313,25 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
     final isDark = context.isDarkMode;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: SizeConfig.spaceMedium,
+          vertical: SizeConfig.spaceSmall,
+        ),
         decoration: BoxDecoration(
           color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
           border: Border.all(
-              color: isDark ? AppTheme.borderDark : AppTheme.borderLight),
+            color: isDark ? AppTheme.borderDark : AppTheme.borderLight,
+          ),
         ),
         child: Column(
           children: [
             Text(
               time,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: SizeConfig.fontSizeSmall,
                 fontWeight: FontWeight.w600,
                 color: context.textPrimaryColor,
               ),
@@ -312,7 +339,7 @@ class _ShiftSettingsWidgetState extends State<ShiftSettingsWidget> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: SizeConfig.fontSizeXSmall - 1,
                 color: context.textSecondaryColor,
               ),
             ),

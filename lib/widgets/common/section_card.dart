@@ -20,13 +20,14 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     return Container(
       width: double.infinity,
       margin: margin,
-      padding: padding ?? const EdgeInsets.all(16),
+      padding: padding ?? EdgeInsets.all(SizeConfig.spaceRegular),
       decoration: BoxDecoration(
         color: context.cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
         border: Border.all(color: context.borderColor),
       ),
       child: Column(
@@ -35,18 +36,28 @@ class SectionCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: context.textPrimaryColor,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: SizeConfig.fontSizeMedium,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimaryColor,
+                    ),
+                    maxLines: 1,
+                  ),
                 ),
               ),
-              if (trailing != null) trailing!,
+              if (trailing != null) ...[
+                SizedBox(width: SizeConfig.spaceSmall),
+                trailing!,
+              ],
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: SizeConfig.spaceRegular),
           child,
         ],
       ),

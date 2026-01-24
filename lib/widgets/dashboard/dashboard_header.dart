@@ -18,22 +18,25 @@ class DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Initialize SizeConfig
+    SizeConfig.init(context);
+    
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(ResponsiveHelper.getSpacing(context, 8)),
+      padding: EdgeInsets.all(SizeConfig.spaceSmall),
       decoration: BoxDecoration(
         color: context.cardColor,
         border: Border(
           bottom: BorderSide(
             color: AppTheme.primaryGreen.withValues(alpha: 0.2),
-            width: 1,
+            width: 1.0,
           ),
         ),
       ),
       child: Column(
         children: [
           _buildCompactUserInfo(context),
-          const SizedBox(height: 6),
+          SizedBox(height: SizeConfig.spaceSmall - 2),
           _buildStatisticsRow(context),
         ],
       ),
@@ -42,39 +45,39 @@ class DashboardHeader extends StatelessWidget {
 
   Widget _buildCompactUserInfo(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(SizeConfig.spaceSmall),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
         border: Border.all(
           color: AppTheme.primaryGreen.withValues(alpha: 0.2),
-          width: 1,
+          width: 1.0,
         ),
       ),
       child: Row(
         children: [
           // Avatar
           Container(
-            width: 36,
-            height: 36,
+            width: 36.0,
+            height: 36.0,
             decoration: BoxDecoration(
               color: AppTheme.primaryGreen.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
             ),
             child: Center(
               child: Text(
                 (user?.name != null && user!.name.isNotEmpty)
                     ? user!.name.substring(0, 1).toUpperCase()
                     : 'U',
-                style: TextStyle(
-                  fontSize: ResponsiveHelper.getFontSize(context, 16),
+                style: SizeConfig.getTextStyle(
+                  fontSize: SizeConfig.fontSizeMedium,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.primaryGreen,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: SizeConfig.spaceSmall),
 
           // User Info
           Expanded(
@@ -86,30 +89,31 @@ class DashboardHeader extends StatelessWidget {
                     Expanded(
                       child: Text(
                         user?.name ?? 'User',
-                        style: TextStyle(
-                          fontSize: ResponsiveHelper.getFontSize(context, 14),
+                        style: SizeConfig.getTextStyle(
+                          fontSize: SizeConfig.fontSizeRegular,
                           fontWeight: FontWeight.w600,
                           color: context.textPrimaryColor,
                         ),
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: SizeConfig.spaceSmall - 2),
                     // Role Badge
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: SizeConfig.spaceSmall - 2,
+                        vertical: 1.0,
                       ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryGreen.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(SizeConfig.radiusSmall + 1),
                       ),
                       child: Text(
                         (user?.role ?? 'user').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: ResponsiveHelper.getFontSize(context, 10),
+                        style: SizeConfig.getTextStyle(
+                          fontSize: SizeConfig.fontSizeXSmall,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.primaryGreen,
                           letterSpacing: 0.5,
@@ -118,16 +122,19 @@ class DashboardHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: SizeConfig.spaceTiny),
                 // Show hierarchy in one line
-                Text(
-                  _getHierarchyText(),
-                  style: TextStyle(
-                    fontSize: ResponsiveHelper.getFontSize(context, 11),
-                    color: context.textSecondaryColor,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _getHierarchyText(),
+                    style: SizeConfig.getTextStyle(
+                      fontSize: SizeConfig.fontSizeSmall - 1,
+                      color: context.textSecondaryColor,
+                    ),
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -158,7 +165,7 @@ class DashboardHeader extends StatelessWidget {
     final isDark = context.isDarkMode;
     
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(SizeConfig.spaceSmall),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -168,10 +175,10 @@ class DashboardHeader extends StatelessWidget {
             AppTheme.primaryGreen.withValues(alpha: isDark ? 0.03 : 0.01),
           ],
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
         border: Border.all(
           color: AppTheme.primaryGreen.withValues(alpha: 0.15),
-          width: 1,
+          width: 1.0,
         ),
       ),
       child: Column(
@@ -181,14 +188,14 @@ class DashboardHeader extends StatelessWidget {
             children: [
               Icon(
                 Icons.analytics_outlined,
-                size: 14,
+                size: SizeConfig.iconSizeSmall - 2,
                 color: AppTheme.primaryGreen,
               ),
-              const SizedBox(width: 4),
+              SizedBox(width: SizeConfig.spaceXSmall),
               Text(
                 AppLocalizations().tr('last_30_days'),
-                style: TextStyle(
-                  fontSize: ResponsiveHelper.getFontSize(context, 10),
+                style: SizeConfig.getTextStyle(
+                  fontSize: SizeConfig.fontSizeXSmall,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.primaryGreen,
                 ),
@@ -196,19 +203,19 @@ class DashboardHeader extends StatelessWidget {
               const Spacer(),
               InkWell(
                 onTap: onRefresh,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
                 child: Padding(
-                  padding: const EdgeInsets.all(3),
+                  padding: EdgeInsets.all(SizeConfig.spaceTiny + 1),
                   child: Icon(
                     Icons.refresh,
-                    size: 12,
+                    size: SizeConfig.iconSizeXSmall,
                     color: AppTheme.primaryGreen,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: SizeConfig.spaceSmall - 2),
           // Stats Row
           Row(
             children: [
@@ -256,9 +263,9 @@ class DashboardHeader extends StatelessWidget {
 
   Widget _buildDivider(BuildContext context) {
     return Container(
-      width: 1,
-      height: 24,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      width: 1.0,
+      height: 24.0,
+      margin: EdgeInsets.symmetric(horizontal: SizeConfig.spaceXSmall),
       color: context.borderColor,
     );
   }
@@ -273,24 +280,26 @@ class DashboardHeader extends StatelessWidget {
       children: [
         Icon(
           icon,
-          size: 12,
+          size: SizeConfig.iconSizeXSmall,
           color: AppTheme.primaryGreen.withValues(alpha: 0.7),
         ),
-        const SizedBox(height: 1),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: ResponsiveHelper.getFontSize(context, 11),
-            fontWeight: FontWeight.w700,
-            color: context.textPrimaryColor,
+        SizedBox(height: 1.0),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: SizeConfig.getTextStyle(
+              fontSize: SizeConfig.fontSizeSmall - 1,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimaryColor,
+            ),
+            maxLines: 1,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
         Text(
           label,
-          style: TextStyle(
-            fontSize: ResponsiveHelper.getFontSize(context, 8),
+          style: SizeConfig.getTextStyle(
+            fontSize: 8.0,
             color: context.textSecondaryColor,
           ),
         ),

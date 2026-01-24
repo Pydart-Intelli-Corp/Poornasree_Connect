@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:poornasree_connect/l10n/app_localizations.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// A primary reading card with circular progress indicator
 /// Used for displaying FAT, SNF, CLR values
@@ -111,9 +112,9 @@ class PrimaryReadingCard extends StatelessWidget {
               // Main content
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SizeConfig.spaceSmall,
+                    vertical: SizeConfig.spaceSmall,
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -122,9 +123,9 @@ class PrimaryReadingCard extends StatelessWidget {
                       // Title with icon badge
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: SizeConfig.spaceSmall,
+                          vertical: SizeConfig.spaceTiny,
                         ),
                         decoration: BoxDecoration(
                           color: isDark
@@ -134,7 +135,7 @@ class PrimaryReadingCard extends StatelessWidget {
                               : (isActive
                                     ? color.withValues(alpha: 0.2)
                                     : context.borderColor),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                           border: Border.all(
                             color: isActive
                                 ? color.withValues(alpha: 0.5)
@@ -147,16 +148,16 @@ class PrimaryReadingCard extends StatelessWidget {
                           children: [
                             Icon(
                               icon,
-                              size: 12,
+                              size: SizeConfig.iconSizeXSmall,
                               color: isActive
                                   ? (isDark ? Colors.white : color)
                                   : context.textSecondaryColor,
                             ),
-                            const SizedBox(width: 4),
+                            SizedBox(width: SizeConfig.spaceTiny),
                             Text(
                               unit.isNotEmpty ? '$title($unit)' : title,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: SizeConfig.fontSizeXSmall,
                                 fontWeight: FontWeight.w800,
                                 color: isActive
                                     ? (isDark ? Colors.white : color)
@@ -167,7 +168,7 @@ class PrimaryReadingCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: SizeConfig.spaceSmall),
                       // Large centered value with circular progress
                       Expanded(
                         child: Stack(
@@ -222,7 +223,7 @@ class PrimaryReadingCard extends StatelessWidget {
                                 Text(
                                   animatedValue.toStringAsFixed(2),
                                   style: TextStyle(
-                                    fontSize: 24,
+                                    fontSize: SizeConfig.fontSizeHuge,
                                     fontWeight: FontWeight.w900,
                                     color: isActive
                                         ? (isDark ? Colors.white : color)
@@ -245,12 +246,12 @@ class PrimaryReadingCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: SizeConfig.spaceTiny),
                       // Status indicator
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: SizeConfig.spaceSmall,
+                          vertical: SizeConfig.spaceTiny,
                         ),
                         decoration: BoxDecoration(
                           color: isViewingHistory
@@ -260,7 +261,7 @@ class PrimaryReadingCard extends StatelessWidget {
                                         0xFF10B981,
                                       ).withValues(alpha: 0.2)
                                     : Colors.grey.withValues(alpha: 0.1)),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -290,7 +291,7 @@ class PrimaryReadingCard extends StatelessWidget {
                                     : null,
                               ),
                             ),
-                            const SizedBox(width: 4),
+                            SizedBox(width: SizeConfig.spaceTiny),
                             Text(
                               isViewingHistory
                                   ? AppLocalizations().tr('past').toUpperCase()
@@ -302,7 +303,7 @@ class PrimaryReadingCard extends StatelessWidget {
                                               .tr('idle')
                                               .toUpperCase()),
                               style: TextStyle(
-                                fontSize: 8,
+                                fontSize: SizeConfig.fontSizeXSmall,
                                 fontWeight: FontWeight.w700,
                                 color: isViewingHistory
                                     ? const Color(0xFFf59e0b)

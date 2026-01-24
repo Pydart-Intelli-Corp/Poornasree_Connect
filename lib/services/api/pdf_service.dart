@@ -15,6 +15,8 @@ class PdfService {
     required String dateRange,
     required List<String> selectedColumns,
     String? logoPath,
+    String? farmerInfo,
+    String? societyInfo,
   }) async {
     final pdf = pw.Document();
 
@@ -96,6 +98,26 @@ class PdfService {
                         ),
                         textAlign: pw.TextAlign.center,
                       ),
+                      if (farmerInfo != null || societyInfo != null)
+                        pw.SizedBox(height: 4),
+                      if (farmerInfo != null)
+                        pw.Text(
+                          'Farmer: $farmerInfo',
+                          style: pw.TextStyle(
+                            font: font,
+                            fontSize: 9,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      if (societyInfo != null)
+                        pw.Text(
+                          'Society: $societyInfo',
+                          style: pw.TextStyle(
+                            font: font,
+                            fontSize: 9,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
                       pw.SizedBox(height: 8),
                       pw.Text(
                         'DETAILED COLLECTION DATA',
@@ -216,7 +238,7 @@ class PdfService {
                             cellValue = '${record['collection_date'] ?? ''} ${record['collection_time'] ?? ''}';
                             break;
                           case 'farmer':
-                            cellValue = '${record['farmer_id'] ?? ''} - ${record['farmer_name'] ?? ''}';
+                            cellValue = _formatFarmerId(record['farmer_id']?.toString());
                             break;
                           case 'society':
                             cellValue = '${record['society_name'] ?? ''}';
@@ -544,5 +566,11 @@ class PdfService {
       'MIX': 'MIXED',
     };
     return channelMap[channel] ?? channel.toUpperCase();
+  }
+
+  static String _formatFarmerId(String? id) {
+    if (id == null || id.isEmpty || id == '-') return '-';
+    final result = id.replaceFirst(RegExp(r'^0+'), '');
+    return result.isEmpty ? '0' : result;
   }
 }

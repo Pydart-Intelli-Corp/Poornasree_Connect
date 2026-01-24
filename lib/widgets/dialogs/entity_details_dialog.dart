@@ -120,11 +120,12 @@ class EntityDetailsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     return Dialog(
       backgroundColor: AppTheme.cardDark,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SizeConfig.spaceRegular)),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(SizeConfig.spaceLarge),
         constraints: const BoxConstraints(maxWidth: 400),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -133,19 +134,19 @@ class EntityDetailsDialog extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: EdgeInsets.all(SizeConfig.spaceSmall),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryGreen.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(SizeConfig.spaceSmall + 2),
                   ),
-                  child: Icon(icon, size: 28, color: AppTheme.primaryGreen),
+                  child: Icon(icon, size: SizeConfig.iconSizeLarge + 4, color: AppTheme.primaryGreen),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: SizeConfig.spaceSmall + 2),
                 Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: SizeConfig.fontSizeLarge,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,
                       letterSpacing: 0.3,
@@ -160,14 +161,14 @@ class EntityDetailsDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: SizeConfig.spaceLarge),
 
             // Details
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(SizeConfig.spaceRegular),
               decoration: BoxDecoration(
                 color: AppTheme.darkBg2,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(SizeConfig.spaceSmall + 2),
                 border: Border.all(
                   color: AppTheme.primaryGreen.withOpacity(0.2),
                   width: 1,
@@ -185,7 +186,7 @@ class EntityDetailsDialog extends StatelessWidget {
                     .toList(),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: SizeConfig.spaceRegular),
 
             // Close button
             SizedBox(
@@ -195,15 +196,15 @@ class EntityDetailsDialog extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryGreen,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceMedium),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Close',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: SizeConfig.fontSizeRegular,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
                   ),
@@ -218,7 +219,7 @@ class EntityDetailsDialog extends StatelessWidget {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceSmall),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -227,20 +228,20 @@ class EntityDetailsDialog extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: SizeConfig.fontSizeRegular,
                 color: AppTheme.textSecondary,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.2,
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceSmall + 2),
           Expanded(
             flex: 3,
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: SizeConfig.fontSizeRegular,
                 color: AppTheme.textPrimary,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.2,

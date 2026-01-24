@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 class CustomTextField extends StatefulWidget {
   final String? label;
@@ -87,9 +88,10 @@ class _CustomTextFieldState extends State<CustomTextField> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -97,15 +99,16 @@ class _CustomTextFieldState extends State<CustomTextField> {
           Text(
             widget.label!,
             style: theme.textTheme.bodyMedium?.copyWith(
+              fontSize: SizeConfig.fontSizeRegular + 2,
               fontWeight: FontWeight.w600,
-              color: widget.errorText != null 
-                ? colorScheme.error 
-                : _isFocused 
-                  ? colorScheme.primary 
+              color: widget.errorText != null
+                  ? colorScheme.error
+                  : _isFocused
+                  ? colorScheme.primary
                   : theme.textTheme.bodyMedium?.color,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: SizeConfig.spaceSmall),
         ],
         TextFormField(
           controller: widget.controller,
@@ -126,64 +129,71 @@ class _CustomTextFieldState extends State<CustomTextField> {
           onChanged: widget.onChanged,
           onFieldSubmitted: widget.onSubmitted,
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: widget.enabled 
-              ? theme.textTheme.bodyLarge?.color 
-              : theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
+            fontSize: SizeConfig.fontSizeRegular,
+            color: widget.enabled
+                ? theme.textTheme.bodyLarge?.color
+                : theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
           ),
           decoration: InputDecoration(
             hintText: widget.hintText,
+            hintStyle: TextStyle(fontSize: SizeConfig.fontSizeRegular),
             errorText: widget.errorText,
             prefixIcon: widget.prefixIcon,
             suffixIcon: widget.suffixIcon,
             filled: true,
-            fillColor: widget.enabled 
-              ? (theme.brightness == Brightness.light ? Colors.white : theme.colorScheme.surface)
-              : context.surfaceColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            fillColor: widget.enabled
+                ? (theme.brightness == Brightness.light
+                      ? Colors.white
+                      : theme.colorScheme.surface)
+                : context.surfaceColor,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: SizeConfig.spaceRegular,
+              vertical: SizeConfig.spaceRegular,
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: context.borderColor,
-              ),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
+              borderSide: BorderSide(color: context.borderColor),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
               borderSide: BorderSide(
-                color: widget.errorText != null 
-                  ? colorScheme.error 
-                  : context.borderColor,
+                color: widget.errorText != null
+                    ? colorScheme.error
+                    : context.borderColor,
               ),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
               borderSide: BorderSide(
-                color: widget.errorText != null 
-                  ? colorScheme.error 
-                  : colorScheme.primary,
-                width: 2,
+                color: widget.errorText != null
+                    ? colorScheme.error
+                    : colorScheme.primary,
+                width: SizeConfig.normalize(2),
               ),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
               borderSide: BorderSide(color: colorScheme.error),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colorScheme.error, width: 2),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
+              borderSide: BorderSide(
+                color: colorScheme.error,
+                width: SizeConfig.normalize(2),
+              ),
             ),
             disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: context.borderColor,
-              ),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
+              borderSide: BorderSide(color: context.borderColor),
             ),
           ),
         ),
         if (widget.helperText != null && widget.errorText == null) ...[
-          const SizedBox(height: 4),
+          SizedBox(height: SizeConfig.spaceTiny),
           Text(
             widget.helperText!,
             style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: SizeConfig.fontSizeXSmall,
               color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
             ),
           ),
@@ -272,9 +282,9 @@ class EmailField extends CustomTextField {
     super.textInputAction,
     super.autofocus = false,
   }) : super(
-          keyboardType: TextInputType.emailAddress,
-          prefixIcon: const Icon(Icons.email_outlined),
-        );
+         keyboardType: TextInputType.emailAddress,
+         prefixIcon: const Icon(Icons.email_outlined),
+       );
 }
 
 class PhoneField extends CustomTextField {
@@ -292,9 +302,9 @@ class PhoneField extends CustomTextField {
     super.textInputAction,
     super.autofocus = false,
   }) : super(
-          keyboardType: TextInputType.phone,
-          prefixIcon: const Icon(Icons.phone_outlined),
-        );
+         keyboardType: TextInputType.phone,
+         prefixIcon: const Icon(Icons.phone_outlined),
+       );
 }
 
 class SearchField extends CustomTextField {
@@ -312,7 +322,7 @@ class SearchField extends CustomTextField {
     super.textInputAction = TextInputAction.search,
     super.autofocus = false,
   }) : super(
-          keyboardType: TextInputType.text,
-          prefixIcon: const Icon(Icons.search),
-        );
+         keyboardType: TextInputType.text,
+         prefixIcon: const Icon(Icons.search),
+       );
 }

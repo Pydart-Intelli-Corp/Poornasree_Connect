@@ -276,6 +276,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Initialize SizeConfig for consistent sizing
+    SizeConfig.init(context);
+
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
     final hasConnectedDevice = _bluetoothService.connectedMachines.isNotEmpty;
@@ -293,96 +296,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          toolbarHeight: 56.0, // Fixed toolbar height
-          titleSpacing: 16.0,
-          title: Text(
-            l10n.tr('dashboard'),
-            style: const TextStyle(
-              fontSize: 20.0, // Fixed font size
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.15,
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(SizeConfig.appBarHeight),
+          child: AppBar(
+            toolbarHeight: SizeConfig.appBarHeight,
+            titleSpacing: SizeConfig.appBarTitleSpacing,
+            title: Text(
+              l10n.tr('dashboard'),
+              style: SizeConfig.appBarTitleStyle,
             ),
-            textScaler: TextScaler.noScaling, // Disable system font scaling
-          ),
-          actions: [
-            // Bluetooth dropdown menu
-            _BluetoothDropdownButton(bluetoothService: _bluetoothService),
-            IconButton(
-              iconSize: 24.0, // Fixed icon size
-              icon: const Icon(Icons.assessment_outlined),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        const ReportsScreen(defaultLocalMode: false),
+            actions: [
+              // Bluetooth dropdown menu
+              _BluetoothDropdownButton(bluetoothService: _bluetoothService),
+              SizedBox(
+                width: SizeConfig.appBarIconButtonSize,
+                height: SizeConfig.appBarIconButtonSize,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: SizeConfig.appBarIconSize,
+                  icon: const Icon(Icons.assessment_outlined),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const ReportsScreen(defaultLocalMode: false),
+                      ),
+                    );
+                  },
+                  tooltip: l10n.tr('reports'),
+                ),
+              ),
+              // Rate Chart button for society users
+              if (user?.role == 'society')
+                SizedBox(
+                  width: SizeConfig.appBarIconButtonSize,
+                  height: SizeConfig.appBarIconButtonSize,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: SizeConfig.appBarIconSize,
+                    icon: const Icon(Icons.receipt_long),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const RateChartScreen(),
+                        ),
+                      );
+                    },
+                    tooltip: l10n.tr('rate_chart'),
                   ),
-                );
-              },
-              tooltip: l10n.tr('reports'),
-              visualDensity: VisualDensity.compact,
-            ),
-            // Rate Chart button for society users
-            if (user?.role == 'society')
-              IconButton(
-                iconSize: 24.0, // Fixed icon size
-                icon: const Icon(Icons.receipt_long),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const RateChartScreen(),
-                    ),
-                  );
-                },
-                tooltip: l10n.tr('rate_chart'),
-                visualDensity: VisualDensity.compact,
+                ),
+              // Offline/Sync Status Icon
+              if (_isOffline || _isFromCache) _buildOfflineStatusIcon(),
+              SizedBox(
+                width: SizeConfig.appBarIconButtonSize,
+                height: SizeConfig.appBarIconButtonSize,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: SizeConfig.appBarIconSize,
+                  icon: const Icon(Icons.menu),
+                  onPressed: _showProfileMenu,
+                  tooltip: l10n.tr('profile'),
+                ),
               ),
-            // Offline/Sync Status Icon
-            if (_isOffline || _isFromCache) _buildOfflineStatusIcon(),
-            IconButton(
-              iconSize: 24.0, // Fixed icon size
-              icon: const Icon(Icons.menu),
-              onPressed: _showProfileMenu,
-              tooltip: l10n.tr('profile'),
-              visualDensity: VisualDensity.compact,
-            ),
-          ],
+            ],
+          ),
         ),
-        body: Column(
-          children: [
-            // Dashboard Header
-            DashboardHeader(
-              user: user,
-              statistics: _statistics,
-              onRefresh: _loadData,
+        body: RefreshIndicator(
+          onRefresh: _loadData,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                DashboardHeader(
+                  user: user,
+                  statistics: _statistics,
+                  onRefresh: _loadData,
+                ),
+                _buildContent(),
+              ],
             ),
-
-            // Main Content
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadData,
-                child: _buildContent(),
-              ),
-            ),
-          ],
+          ),
         ),
         // Floating Control Panel Button (shown when Bluetooth device connected)
         floatingActionButton: hasConnectedDevice
             ? FloatingActionButton.extended(
                 onPressed: _navigateToControlPanel,
                 backgroundColor: AppTheme.primaryGreen,
-                icon: const Icon(Icons.settings_remote, color: Colors.white, size: 24.0),
-                label: Text(
-                  l10n.tr('control_panel'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14.0,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                elevation: 4.0,
+                icon: Icon(
+                  Icons.settings_remote,
+                  color: Colors.white,
+                  size: SizeConfig.iconSizeLarge,
+                ),
+                label: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SizeConfig.spaceSmall,
                   ),
-                  textScaler: TextScaler.noScaling,
+                  child: Text(
+                    'CPanel',
+                    style: SizeConfig.buttonTextStyle.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               )
             : null,
@@ -392,7 +408,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildContent() {
     if (_isLoading) {
-      return const Center(child: FlowerSpinner(size: 48));
+      return SizedBox(
+        height: SizeConfig.screenHeight * 0.5,
+        child: const Center(child: FlowerSpinner(size: 48)),
+      );
     }
 
     if (_errorMessage != null) {
@@ -405,38 +424,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Minimal offline status icon for AppBar
   Widget _buildOfflineStatusIcon() {
     final l10n = AppLocalizations();
-    return IconButton(
-      iconSize: 24.0, // Fixed icon size
-      visualDensity: VisualDensity.compact,
-      icon: Stack(
-        children: [
-          Icon(
-            _isOffline ? Icons.cloud_off : Icons.cloud_done,
-            size: 24.0, // Fixed icon size
-            color: _isOffline ? AppTheme.warningColor : AppTheme.primaryTeal,
-          ),
-          // Small indicator dot
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              width: 8.0,
-              height: 8.0,
-              decoration: BoxDecoration(
-                color: _isOffline
-                    ? AppTheme.warningColor
-                    : AppTheme.primaryTeal,
-                shape: BoxShape.circle,
-                border: Border.all(color: context.borderColor, width: 1.0),
+    return SizedBox(
+      width: SizeConfig.appBarIconButtonSize,
+      height: SizeConfig.appBarIconButtonSize,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: SizeConfig.appBarIconSize,
+        icon: Stack(
+          children: [
+            Icon(
+              _isOffline ? Icons.cloud_off : Icons.cloud_done,
+              size: SizeConfig.appBarIconSize,
+              color: _isOffline ? AppTheme.warningColor : AppTheme.primaryTeal,
+            ),
+            // Small indicator dot
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                width: 8.0,
+                height: 8.0,
+                decoration: BoxDecoration(
+                  color: _isOffline
+                      ? AppTheme.warningColor
+                      : AppTheme.primaryTeal,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: context.borderColor, width: 1.0),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+        onPressed: _showOfflineStatusPopup,
+        tooltip: _isOffline
+            ? l10n.tr('offline_mode')
+            : l10n.tr('using_cached_data'),
       ),
-      onPressed: _showOfflineStatusPopup,
-      tooltip: _isOffline
-          ? l10n.tr('offline_mode')
-          : l10n.tr('using_cached_data'),
     );
   }
 
@@ -543,34 +566,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMachinesList() {
     return CustomScrollView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       slivers: [
         // Section Header
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: EdgeInsets.fromLTRB(
+              SizeConfig.spaceRegular,
+              SizeConfig.spaceRegular,
+              SizeConfig.spaceRegular,
+              SizeConfig.spaceSmall,
+            ),
             child: Row(
               children: [
                 Text(
                   AppLocalizations().tr('machines'),
-                  style: const TextStyle(
-                    fontSize: 20,
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeXLarge,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: SizeConfig.spaceSmall),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SizeConfig.spaceSmall,
+                    vertical: SizeConfig.spaceXSmall,
                   ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryGreen.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(
+                      SizeConfig.radiusRegular,
+                    ),
                   ),
                   child: Text(
                     '${_machines.length}',
-                    style: const TextStyle(
-                      fontSize: 14,
+                    style: TextStyle(
+                      fontSize: SizeConfig.fontSizeRegular,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.primaryGreen,
                     ),
@@ -585,12 +617,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _machines.isEmpty
             ? SliverFillRemaining(child: _buildEmptyState())
             : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: EdgeInsets.fromLTRB(
+                  SizeConfig.spaceRegular,
+                  0,
+                  SizeConfig.spaceRegular,
+                  SizeConfig.spaceRegular,
+                ),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final machine = _machines[index];
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                      padding: EdgeInsets.only(bottom: SizeConfig.spaceMedium),
                       child: MachineCard(
                         machineData: machine,
                         showActions: true,
@@ -777,224 +814,261 @@ class _BluetoothDropdownButtonState extends State<_BluetoothDropdownButton> {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: AppLocalizations().tr('bluetooth_options'),
-      iconSize: 24.0, // Fixed icon size
-      icon: Stack(
-        children: [
-          Icon(
-            _getStatusIcon(),
-            color: _getStatusColor(),
-            size: 24.0, // Fixed icon size
-          ),
-          // Available count badge (bottom-left, blue)
-          if (_availableCount > 0 && _connectedCount == 0)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: const EdgeInsets.all(2.0),
-                decoration: BoxDecoration(
-                  color: AppTheme.infoColor,
-                  borderRadius: BorderRadius.circular(6.0),
-                ),
-                constraints: const BoxConstraints(minWidth: 12.0, minHeight: 12.0),
-                child: Text(
-                  '$_availableCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textScaler: TextScaler.noScaling, // Disable system font scaling
-                  textAlign: TextAlign.center,
-                ),
-              ),
+    return SizedBox(
+      width: SizeConfig.appBarIconButtonSize,
+      height: SizeConfig.appBarIconButtonSize,
+      child: PopupMenuButton<String>(
+        tooltip: AppLocalizations().tr('bluetooth_options'),
+        padding: EdgeInsets.zero,
+        iconSize: SizeConfig.appBarIconSize,
+        icon: Stack(
+          children: [
+            Icon(
+              _getStatusIcon(),
+              color: _getStatusColor(),
+              size: SizeConfig.appBarIconSize,
             ),
-          // Connected count badge (top-right, green)
-          if (_connectedCount > 0)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: const EdgeInsets.all(2.0),
-                decoration: BoxDecoration(
-                  color: AppTheme.successColor,
-                  borderRadius: BorderRadius.circular(6.0),
-                ),
-                constraints: const BoxConstraints(minWidth: 12.0, minHeight: 12.0),
-                child: Text(
-                  '$_connectedCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textScaler: TextScaler.noScaling, // Disable system font scaling
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-        ],
-      ),
-      onSelected: (value) async {
-        switch (value) {
-          case 'scan':
-            _handleScan();
-            break;
-          case 'stop_scan':
-            _handleStopScan();
-            break;
-          case 'connect_all':
-            _handleConnectAll();
-            break;
-          case 'disconnect_all':
-            _handleDisconnectAll();
-            break;
-        }
-      },
-      itemBuilder: (context) => [
-        // Status header
-        PopupMenuItem<String>(
-          enabled: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(_getStatusIcon(), color: _getStatusColor(), size: 20.0),
-                  const SizedBox(width: 8.0),
-                  Text(
-                    _status == BluetoothStatus.scanning
-                        ? AppLocalizations().tr('scanning')
-                        : _connectedCount > 0
-                        ? '$_connectedCount ${AppLocalizations().tr('connected_count')}'
-                        : _availableCount > 0
-                        ? '$_availableCount ${AppLocalizations().tr('available_count')}'
-                        : AppLocalizations().tr('offline'),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14.0,
-                      color: _getStatusColor(),
+            // Available count badge (bottom-left, blue)
+            if (_availableCount > 0 && _connectedCount == 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: EdgeInsets.all(SizeConfig.spaceTiny),
+                  decoration: BoxDecoration(
+                    color: AppTheme.infoColor,
+                    borderRadius: BorderRadius.circular(
+                      SizeConfig.radiusSmall + 2,
                     ),
-                    textScaler: TextScaler.noScaling,
+                  ),
+                  constraints: BoxConstraints(
+                    minWidth: SizeConfig.iconSizeXSmall,
+                    minHeight: SizeConfig.iconSizeXSmall,
+                  ),
+                  child: Text(
+                    '$_availableCount',
+                    style: SizeConfig.getTextStyle(
+                      fontSize: 8.0,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      height: 1.0,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            // Connected count badge (top-right, green)
+            if (_connectedCount > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: EdgeInsets.all(SizeConfig.spaceTiny),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successColor,
+                    borderRadius: BorderRadius.circular(
+                      SizeConfig.radiusSmall + 2,
+                    ),
+                  ),
+                  constraints: BoxConstraints(
+                    minWidth: SizeConfig.iconSizeXSmall,
+                    minHeight: SizeConfig.iconSizeXSmall,
+                  ),
+                  child: Text(
+                    '$_connectedCount',
+                    style: SizeConfig.getTextStyle(
+                      fontSize: 8.0,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      height: 1.0,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        onSelected: (value) async {
+          switch (value) {
+            case 'scan':
+              _handleScan();
+              break;
+            case 'stop_scan':
+              _handleStopScan();
+              break;
+            case 'connect_all':
+              _handleConnectAll();
+              break;
+            case 'disconnect_all':
+              _handleDisconnectAll();
+              break;
+          }
+        },
+        itemBuilder: (context) => [
+          // Status header
+          PopupMenuItem<String>(
+            enabled: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _getStatusIcon(),
+                      color: _getStatusColor(),
+                      size: SizeConfig.iconSizeMedium,
+                    ),
+                    SizedBox(width: SizeConfig.spaceSmall),
+                    Text(
+                      _status == BluetoothStatus.scanning
+                          ? AppLocalizations().tr('scanning')
+                          : _connectedCount > 0
+                          ? '$_connectedCount ${AppLocalizations().tr('connected_count')}'
+                          : _availableCount > 0
+                          ? '$_availableCount ${AppLocalizations().tr('available_count')}'
+                          : AppLocalizations().tr('offline'),
+                      style: SizeConfig.getTextStyle(
+                        fontSize: SizeConfig.fontSizeRegular,
+                        fontWeight: FontWeight.bold,
+                        color: _getStatusColor(),
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+                if (_availableCount > 0 && _connectedCount > 0)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: SizeConfig.iconSizeLarge + SizeConfig.spaceXSmall,
+                    ),
+                    child: Text(
+                      '$_availableCount ${AppLocalizations().tr('devices_found')}',
+                      style: SizeConfig.getTextStyle(
+                        fontSize: SizeConfig.fontSizeSmall,
+                        color: context.textSecondaryColor,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+
+          // Scan option
+          if (_status == BluetoothStatus.scanning)
+            PopupMenuItem<String>(
+              value: 'stop_scan',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.stop,
+                    color: AppTheme.warningColor,
+                    size: SizeConfig.iconSizeMedium,
+                  ),
+                  SizedBox(width: SizeConfig.spaceSmall),
+                  Expanded(
+                    child: Text(
+                      AppLocalizations().tr('stop_scan'),
+                      style: SizeConfig.getTextStyle(
+                        fontSize: SizeConfig.fontSizeRegular,
+                        height: 1.2,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              if (_availableCount > 0 && _connectedCount > 0)
-                Padding(
-                  padding: const EdgeInsets.only(left: 28.0),
-                  child: Text(
-                    '$_availableCount ${AppLocalizations().tr('devices_found')}',
-                    style: TextStyle(
-                      fontSize: 12.0,
-                      color: context.textSecondaryColor,
-                    ),
-                    textScaler: TextScaler.noScaling,
+            )
+          else
+            PopupMenuItem<String>(
+              value: 'scan',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.bluetooth_searching,
+                    color: AppTheme.infoColor,
+                    size: SizeConfig.iconSizeMedium,
                   ),
-                ),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(),
+                  SizedBox(width: SizeConfig.spaceSmall),
+                  Expanded(
+                    child: Text(
+                      AppLocalizations().tr('scan_for_devices'),
+                      style: SizeConfig.getTextStyle(
+                        fontSize: SizeConfig.fontSizeRegular,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-        // Scan option
-        if (_status == BluetoothStatus.scanning)
+          // Connect All option
           PopupMenuItem<String>(
-            value: 'stop_scan',
+            value: 'connect_all',
+            enabled:
+                _availableCount > 0 &&
+                !_isConnectingAll &&
+                _status != BluetoothStatus.scanning,
             child: Row(
               children: [
-                Icon(Icons.stop, color: AppTheme.warningColor, size: 20.0),
-                const SizedBox(width: 12.0),
+                _isConnectingAll
+                    ? _FlowerSpinner(size: SizeConfig.iconSizeMedium)
+                    : Icon(
+                        Icons.bluetooth_connected,
+                        size: SizeConfig.iconSizeMedium,
+                        color: _availableCount > 0
+                            ? AppTheme.successColor
+                            : context.textSecondaryColor,
+                      ),
+                SizedBox(width: SizeConfig.spaceSmall),
                 Expanded(
                   child: Text(
-                    AppLocalizations().tr('stop_scan'),
-                    style: const TextStyle(fontSize: 14.0),
-                    textScaler: TextScaler.noScaling,
+                    _isConnectingAll
+                        ? AppLocalizations().tr('connecting')
+                        : AppLocalizations().tr('connect_all'),
+                    style: SizeConfig.getTextStyle(
+                      fontSize: SizeConfig.fontSizeRegular,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ],
             ),
-          )
-        else
+          ),
+
+          // Disconnect All option
           PopupMenuItem<String>(
-            value: 'scan',
+            value: 'disconnect_all',
+            enabled: _connectedCount > 0 && !_isDisconnectingAll,
             child: Row(
               children: [
-                Icon(Icons.bluetooth_searching, color: AppTheme.infoColor, size: 20.0),
-                const SizedBox(width: 12.0),
+                _isDisconnectingAll
+                    ? _FlowerSpinner(size: SizeConfig.iconSizeMedium)
+                    : Icon(
+                        Icons.bluetooth_disabled,
+                        size: SizeConfig.iconSizeMedium,
+                        color: _connectedCount > 0
+                            ? AppTheme.errorColor
+                            : context.textSecondaryColor,
+                      ),
+                SizedBox(width: SizeConfig.spaceSmall),
                 Expanded(
                   child: Text(
-                    AppLocalizations().tr('scan_for_devices'),
-                    style: const TextStyle(fontSize: 14.0),
-                    textScaler: TextScaler.noScaling,
+                    _isDisconnectingAll
+                        ? AppLocalizations().tr('disconnecting')
+                        : AppLocalizations().tr('disconnect_all'),
+                    style: SizeConfig.getTextStyle(
+                      fontSize: SizeConfig.fontSizeRegular,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-
-        // Connect All option
-        PopupMenuItem<String>(
-          value: 'connect_all',
-          enabled:
-              _availableCount > 0 &&
-              !_isConnectingAll &&
-              _status != BluetoothStatus.scanning,
-          child: Row(
-            children: [
-              _isConnectingAll
-                  ? const _FlowerSpinner(size: 20.0)
-                  : Icon(
-                      Icons.bluetooth_connected,
-                      size: 20.0,
-                      color: _availableCount > 0
-                          ? AppTheme.successColor
-                          : context.textSecondaryColor,
-                    ),
-              const SizedBox(width: 12.0),
-              Expanded(
-                child: Text(
-                  _isConnectingAll
-                      ? AppLocalizations().tr('connecting')
-                      : AppLocalizations().tr('connect_all'),
-                  style: const TextStyle(fontSize: 14.0),
-                  textScaler: TextScaler.noScaling,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Disconnect All option
-        PopupMenuItem<String>(
-          value: 'disconnect_all',
-          enabled: _connectedCount > 0 && !_isDisconnectingAll,
-          child: Row(
-            children: [
-              _isDisconnectingAll
-                  ? const _FlowerSpinner(size: 20.0)
-                  : Icon(
-                      Icons.bluetooth_disabled,
-                      size: 20.0,
-                      color: _connectedCount > 0
-                          ? AppTheme.errorColor
-                          : context.textSecondaryColor,
-                    ),
-              const SizedBox(width: 12.0),
-              Expanded(
-                child: Text(
-                  _isDisconnectingAll
-                      ? AppLocalizations().tr('disconnecting')
-                      : AppLocalizations().tr('disconnect_all'),
-                  style: const TextStyle(fontSize: 14.0),
-                  textScaler: TextScaler.noScaling,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

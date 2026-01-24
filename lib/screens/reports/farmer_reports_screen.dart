@@ -11,41 +11,33 @@ import '../../utils/utils.dart';
 import '../../widgets/widgets.dart';
 import '../../l10n/l10n.dart';
 
-class ReportsScreen extends StatefulWidget {
+class FarmerReportsScreen extends StatefulWidget {
+  const FarmerReportsScreen({super.key, this.defaultLocalMode = false});
   final bool defaultLocalMode;
-
-  const ReportsScreen({super.key, this.defaultLocalMode = false});
-
   @override
-  State<ReportsScreen> createState() => _ReportsScreenState();
+  State<FarmerReportsScreen> createState() => _FarmerReportsScreenState();
 }
-
-class _ReportsScreenState extends State<ReportsScreen> {
+class _FarmerReportsScreenState extends State<FarmerReportsScreen> {
   String _selectedReport = 'collections';
   bool _isLoading = false;
   List<dynamic> _records = [];
   List<dynamic> _allRecords = [];
   String? _errorMessage;
-  late bool _isLocalMode; // Toggle between local and cloud reports
 
   // Filter states
   DateTime? _fromDate;
   DateTime? _toDate;
   String _shiftFilter = 'all';
   String _channelFilter = 'all';
-  String? _machineFilter;
-  String? _farmerFilter;
 
   // Filter data
   List<Map<String, dynamic>> _machines = [];
   List<Map<String, dynamic>> _farmers = [];
 
   // Services
-  final LocalReportsService _localReportsService = LocalReportsService();
-  final ReadingsStorageService _storageService = ReadingsStorageService();
+  final ReportsService _reportsService = ReportsService();
 
-  // Stream subscription for auto-refresh
-  StreamSubscription? _readingSubscription;
+
 
   // Column selection for reports
   static const List<Map<String, String>> availableColumns = [
@@ -73,13 +65,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
     {'key': 'count', 'label': 'Count'},
   ];
 
-  // Default columns for email reports - report specific
+  // Default columns for email reports - report specific (farmer reports exclude farmer and society)
   static const Map<String, List<String>> reportDefaultColumns = {
     'collections': [
       'sl_no',
       'date_time',
-      'farmer',
-      'society',
       'channel',
       'fat',
       'snf',
@@ -195,95 +185,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize local mode from parameter
-    _isLocalMode = widget.defaultLocalMode;
-    // Initialize with current report defaults
     _selectedColumns = List.from(currentReportDefaultColumns);
-    // Lock to landscape orientation
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
     _loadColumnPreferences();
-
-    // Initialize society/machine details then fetch data
-    _initializeAndFetch();
-
-    // Subscribe to new readings for auto-refresh in local mode
-    _readingSubscription = _storageService.onNewReading.listen((_) {
-      if (_isLocalMode && mounted) {
-        // Auto-refresh when new data is received
-        _fetchRecords();
-      }
-    });
-  }
-
-  /// Initialize society/machine details then fetch data
-  Future<void> _initializeAndFetch() async {
-    await _initSocietyDetails();
     _fetchData();
-  }
-
-  Future<void> _initSocietyDetails() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final user = authProvider.user;
-    if (user != null) {
-      _localReportsService.setSocietyDetails(
-        societyId: user.societyId ?? user.societyIdentifier,
-        societyName: user.societyName ?? user.name,
-      );
-
-      // Fetch machine type from API if in local mode
-      if (_isLocalMode && user.token != null) {
-        try {
-          final response = await http
-              .get(
-                Uri.parse('${ApiConfig.baseUrl}/api/external/machines'),
-                headers: {
-                  'Authorization': 'Bearer ${user.token}',
-                  'Content-Type': 'application/json',
-                },
-              )
-              .timeout(const Duration(seconds: 5));
-
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body);
-            final machines = List<Map<String, dynamic>>.from(
-              data['data'] ?? [],
-            );
-            if (machines.isNotEmpty) {
-              // Use the first machine's type as default
-              final machineType = machines.first['machine_type']?.toString();
-              if (machineType != null && machineType.isNotEmpty) {
-                _localReportsService.setMachineType(machineType);
-              }
-            }
-          }
-        } catch (e) {
-          print('Error fetching machine type: $e - trying cached data');
-          // Try to load from cache
-          await _localReportsService.loadCachedMachineType();
-        }
-      }
-    } else {
-      // No user - try to load from cache for offline mode
-      await _localReportsService.loadCachedSocietyDetails();
-      await _localReportsService.loadCachedMachineType();
-    }
-  }
-
-  @override
-  void dispose() {
-    // Cancel stream subscription
-    _readingSubscription?.cancel();
-    // Restore all orientations when leaving this screen
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-    super.dispose();
   }
 
   Future<void> _loadColumnPreferences() async {
@@ -326,72 +230,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _errorMessage = null;
     });
 
-    await Future.wait([_fetchRecords(), _fetchMachines()]);
-
-    // Extract farmers from records after fetching
-    _extractFarmersFromRecords();
-  }
-
-  Future<void> _fetchMachines() async {
-    try {
-      if (_isLocalMode) {
-        // Load machines from local storage
-        final machines = await _localReportsService.getLocalMachines();
-        setState(() {
-          _machines = machines;
-        });
-        print(
-          'Fetched local machines: ${_machines.map((m) => {'id': m['id'], 'machine_id': m['machine_id']}).toList()}',
-        );
-      } else {
-        // Fetch from cloud API
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final token = authProvider.user?.token;
-        if (token == null) return;
-
-        try {
-          final response = await http
-              .get(
-                Uri.parse('${ApiConfig.baseUrl}/api/external/machines'),
-                headers: {
-                  'Authorization': 'Bearer $token',
-                  'Content-Type': 'application/json',
-                },
-              )
-              .timeout(const Duration(seconds: 10));
-
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body);
-            setState(() {
-              _machines = List<Map<String, dynamic>>.from(data['data'] ?? []);
-            });
-            print(
-              'Fetched machines: ${_machines.map((m) => {'id': m['id'], 'machine_id': m['machine_id'], 'machine_type': m['machine_type']}).toList()}',
-            );
-          } else {
-            // API error - try cache
-            await _loadCachedMachines();
-          }
-        } catch (e) {
-          // Network error - try cache
-          print('Error fetching machines from API: $e - trying cache');
-          await _loadCachedMachines();
-        }
-      }
-    } catch (e) {
-      print('Error fetching machines: $e');
-    }
-  }
-
-  Future<void> _loadCachedMachines() async {
-    final cacheService = OfflineCacheService();
-    final cachedMachines = await cacheService.getCachedMachines();
-    if (cachedMachines.isNotEmpty) {
-      setState(() {
-        _machines = List<Map<String, dynamic>>.from(cachedMachines);
-      });
-      print('Loaded cached machines: ${_machines.length}');
-    }
+    await _fetchRecords();
   }
 
   /// Build error widget based on error type
@@ -494,28 +333,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                   ),
                 ),
-                if (isNoInternet && !_isLocalMode)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      setState(() {
-                        _isLocalMode = true;
-                        _errorMessage = null;
-                      });
-                      _fetchData();
-                    },
-                    icon: Icon(Icons.smartphone, size: SizeConfig.iconSizeMedium),
-                    label: Text(AppLocalizations().tr('local_mode')),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryTeal,
-                      side: BorderSide(color: AppTheme.primaryTeal, width: 2),
-                      elevation: 0,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: SizeConfig.flexSpace(20),
-                        vertical: SizeConfig.flexSpace(12),
-                      ),
-                    ),
-                  ),
+
               ],
             ),
           ],
@@ -615,35 +433,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  void _extractFarmersFromRecords() {
-    if (_selectedReport != 'collections' || _allRecords.isEmpty) {
-      setState(() {
-        _farmers = [];
-      });
-      return;
-    }
-
-    // Extract unique farmers from records
-    final Map<String, Map<String, dynamic>> uniqueFarmers = {};
-
-    for (var record in _allRecords) {
-      final farmerId = record['farmer_id']?.toString();
-      final farmerName = record['farmer_name']?.toString();
-
-      if (farmerId != null &&
-          farmerName != null &&
-          !uniqueFarmers.containsKey(farmerId)) {
-        uniqueFarmers[farmerId] = {'id': farmerId, 'name': farmerName};
-      }
-    }
-
-    setState(() {
-      _farmers = uniqueFarmers.values.toList()
-        ..sort((a, b) => a['name'].compareTo(b['name']));
-      print('Extracted ${_farmers.length} unique farmers from records');
-    });
-  }
-
   Future<void> _fetchRecords() async {
     setState(() {
       _isLoading = true;
@@ -651,83 +440,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
 
     try {
-      if (_isLocalMode) {
-        // Fetch from local storage
-        final records = await _localReportsService.getCollectionRecords(
-          fromDate: _fromDate,
-          toDate: _toDate,
-          machineFilter: _machineFilter,
-          farmerFilter: _farmerFilter,
-          shiftFilter: _shiftFilter,
-          channelFilter: _channelFilter,
-        );
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.user?.token;
 
+      if (token == null) {
+        setState(() {
+          _errorMessage = 'Please login to view reports';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final result = await _reportsService.getCollectionReports(token);
+      
+      if (result['success'] == true && result['data'] != null) {
+        final records = List<Map<String, dynamic>>.from(result['data']['collections'] ?? []);
         setState(() {
           _allRecords = records;
           _applyFilters();
           _isLoading = false;
         });
-
-        _extractFarmersFromRecords();
       } else {
-        // Check connectivity first for cloud reports
-        final connectivityService = ConnectivityService();
-        final isOnline = await connectivityService.checkConnectivity();
-
-        if (!isOnline) {
-          setState(() {
-            _errorMessage = 'NO_INTERNET';
-            _isLoading = false;
-          });
-          return;
-        }
-
-        // Fetch from cloud API
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final token = authProvider.user?.token;
-
-        if (token == null) {
-          throw Exception('No authentication token');
-        }
-
-        final response = await http
-            .get(
-              Uri.parse(
-                '${ApiConfig.baseUrl}/api/external/reports/$_selectedReport?limit=50&offset=0',
-              ),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-            )
-            .timeout(const Duration(seconds: 15));
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          final records = data['data']['records'] ?? [];
-          print('DEBUG: Loaded ${records.length} records');
-          if (records.isNotEmpty) {
-            print(
-              'DEBUG: First record keys: ${(records[0] as Map).keys.toList()}',
-            );
-            print(
-              'DEBUG: First record machine_id: ${records[0]['machine_id']}',
-            );
-            print(
-              'DEBUG: Sample machine_ids in records: ${records.take(5).map((r) => r['machine_id']).toList()}',
-            );
-          }
-          setState(() {
-            _allRecords = records;
-            _applyFilters();
-            _isLoading = false;
-          });
-
-          // Extract farmers from records after loading
-          _extractFarmersFromRecords();
-        } else {
-          throw Exception('Failed to load $_selectedReport');
-        }
+        setState(() {
+          _errorMessage = result['message'] ?? 'Failed to fetch reports';
+          _isLoading = false;
+        });
       }
     } on TimeoutException {
       setState(() {
@@ -735,7 +472,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      // Check if it's a network error
       if (e.toString().contains('SocketException') ||
           e.toString().contains('Connection refused') ||
           e.toString().contains('Network is unreachable')) {
@@ -755,76 +491,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: true,
-      onPopInvoked: (bool didPop) async {
-        if (didPop) {
-          // Restore portrait orientation after going back
-          await SystemChrome.setPreferredOrientations([
-            DeviceOrientation.portraitUp,
-            DeviceOrientation.portraitDown,
-          ]);
-        }
-      },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            AppLocalizations().tr('reports_management'),
-            style: TextStyle(fontSize: SizeConfig.fontSizeLarge),
-          ),
+          title: Consumer<AuthProvider>(builder: (context, authProvider, _) {
+            final user = authProvider.user;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  AppLocalizations().tr('reports_management'),
+                  style: TextStyle(fontSize: SizeConfig.fontSizeLarge),
+                ),
+                if (user != null)
+                  Text(
+                    '${user.name ?? ''} | ${user.societyName ?? ''} (ID: ${user.societyIdentifier ?? '-'})',
+                    style: TextStyle(
+                      fontSize: SizeConfig.fontSizeXSmall,
+                      color: context.textSecondaryColor,
+                    ),
+                  ),
+              ],
+            );
+          }),
           elevation: 0,
           actions: [
-            // Local/Cloud toggle
-            Container(
-              margin: EdgeInsets.symmetric(vertical: SizeConfig.spaceSmall + 2),
-              padding: EdgeInsets.symmetric(
-                horizontal: SizeConfig.spaceXSmall,
-                vertical: SizeConfig.spaceXSmall,
-              ),
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                borderRadius: BorderRadius.circular(SizeConfig.spaceLarge),
-                border: Border.all(color: context.borderColor, width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildToggleOption(
-                    AppLocalizations().tr('cloud'),
-                    Icons.cloud_outlined,
-                    !_isLocalMode,
-                    false,
-                  ),
-                  SizedBox(width: SizeConfig.spaceXSmall),
-                  _buildToggleOption(
-                    AppLocalizations().tr('local'),
-                    Icons.storage_outlined,
-                    _isLocalMode,
-                    true,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: SizeConfig.spaceSmall),
-            _buildReportTypeChip(
-              AppLocalizations().tr('collections'),
-              'collections',
-              Icons.water_drop_outlined,
-            ),
-            // Hide Dispatches and Sales buttons in local mode
-            if (!_isLocalMode) ...[
-              SizedBox(width: SizeConfig.spaceSmall),
-              _buildReportTypeChip(
-                AppLocalizations().tr('dispatches'),
-                'dispatches',
-                Icons.local_shipping_outlined,
-              ),
-              SizedBox(width: SizeConfig.spaceSmall),
-              _buildReportTypeChip(
-                AppLocalizations().tr('sales'),
-                'sales',
-                Icons.sell_outlined,
-              ),
-            ],
             SizedBox(width: SizeConfig.spaceSmall),
             // Email button
             Builder(
@@ -869,46 +560,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               ),
             ),
-            // Sync button (only show in local mode)
-            if (_isLocalMode) ...[
-              Builder(
-                builder: (context) => Tooltip(
-                  message: AppLocalizations().tr('sync_to_cloud'),
-                  child: InkWell(
-                    onTap: () => _showSyncDialog(context),
-                    borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
-                    child: Padding(
-                      padding: EdgeInsets.all(SizeConfig.spaceSmall),
-                      child: Icon(
-                        Icons.cloud_upload_outlined,
-                        size: SizeConfig.iconSizeLarge,
-                        color: context.textPrimaryColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            // Clear local data button (only show in local mode)
-            if (_isLocalMode) ...[
-              Builder(
-                builder: (context) => Tooltip(
-                  message: AppLocalizations().tr('clear_local_data'),
-                  child: InkWell(
-                    onTap: () => _showClearLocalDataDialog(context),
-                    borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
-                    child: Padding(
-                      padding: EdgeInsets.all(SizeConfig.spaceSmall),
-                      child: Icon(
-                        Icons.delete_outline,
-                        size: SizeConfig.iconSizeLarge,
-                        color: context.textPrimaryColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
             // Filter button with badge
             Builder(
               builder: (BuildContext context) {
@@ -934,9 +585,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     if (_fromDate != null ||
                         _toDate != null ||
                         _shiftFilter != 'all' ||
-                        _channelFilter != 'all' ||
-                        _machineFilter != null ||
-                        _farmerFilter != null)
+                        _channelFilter != 'all')
                       Positioned(
                         right: SizeConfig.spaceSmall,
                         top: SizeConfig.spaceSmall,
@@ -999,58 +648,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     )
                   : _buildDataTable(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToggleOption(
-    String label,
-    IconData icon,
-    bool isSelected,
-    bool isLocalMode,
-  ) {
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _isLocalMode = isLocalMode;
-        });
-        HapticFeedback.lightImpact();
-        _fetchData();
-      },
-      borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: SizeConfig.spaceSmall + 2,
-          vertical: SizeConfig.spaceXSmall,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? context.cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: SizeConfig.fontSizeRegular,
-              color: isSelected
-                  ? context.primaryColor
-                  : context.textSecondaryColor,
-            ),
-            SizedBox(width: SizeConfig.spaceXSmall),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: SizeConfig.fontSizeXSmall,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? context.primaryColor
-                    : context.textSecondaryColor,
-                letterSpacing: 0.3,
-              ),
             ),
           ],
         ),
@@ -1222,21 +819,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           .toList();
     }
 
-    // Machine filter (works for collections, dispatches, and sales)
-    if (_machineFilter != null) {
-      filtered = filtered.where((r) {
-        String recordMachineId = r['machine_id']?.toString() ?? '';
-        return recordMachineId == _machineFilter;
-      }).toList();
-    }
-
-    // Farmer filter
-    if (_farmerFilter != null && _selectedReport == 'collections') {
-      filtered = filtered
-          .where((r) => r['farmer_id']?.toString() == _farmerFilter)
-          .toList();
-    }
-
     setState(() {
       _records = filtered;
     });
@@ -1248,8 +830,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _toDate = null;
       _shiftFilter = 'all';
       _channelFilter = 'all';
-      _machineFilter = null;
-      _farmerFilter = null;
       _applyFilters();
     });
   }
@@ -1681,124 +1261,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  void _showClearLocalDataDialog(BuildContext context) {
-    final LocalSyncService syncService = LocalSyncService();
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.cardColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(SizeConfig.spaceSmall),
-              decoration: BoxDecoration(
-                color: AppTheme.errorColor.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
-              ),
-              child: Icon(
-                Icons.delete_forever,
-                color: AppTheme.errorColor,
-                size: SizeConfig.iconSizeLarge,
-              ),
-            ),
-            SizedBox(width: SizeConfig.spaceMedium),
-            Text(
-              AppLocalizations().tr('clear_local_data'),
-              style: TextStyle(
-                color: context.textPrimaryColor,
-                fontSize: SizeConfig.fontSizeLarge,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              AppLocalizations().tr('delete_local_warning'),
-              style: TextStyle(
-                color: context.textSecondaryColor,
-                fontSize: SizeConfig.fontSizeRegular,
-              ),
-            ),
-            SizedBox(height: SizeConfig.spaceMedium),
-            Container(
-              padding: EdgeInsets.all(SizeConfig.spaceMedium),
-              decoration: BoxDecoration(
-                color: AppTheme.errorColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
-                border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber,
-                    color: AppTheme.warningColor,
-                    size: SizeConfig.iconSizeMedium,
-                  ),
-                  SizedBox(width: SizeConfig.spaceSmall),
-                  Expanded(
-                    child: Text(
-                      AppLocalizations().tr('unsynced_data_warning'),
-                      style: TextStyle(
-                        color: AppTheme.warningColor,
-                        fontSize: SizeConfig.fontSizeSmall,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              AppLocalizations().tr('cancel'),
-              style: TextStyle(color: context.textSecondaryColor),
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.pop(context);
-
-              // Clear all local readings
-              await _storageService.clearAllReadings();
-
-              // Also clear sync status
-              await syncService.resetAllSyncStatus();
-
-              // Refresh the view
-              _fetchData();
-
-              if (mounted) {
-                CustomSnackbar.showSuccess(
-                  context,
-                  message: AppLocalizations().tr('data_cleared'),
-                );
-              }
-            },
-            icon: Icon(Icons.delete_forever, size: SizeConfig.fontSizeLarge),
-            label: Text(AppLocalizations().tr('clear_all')),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.errorColor,
-              foregroundColor: context.cardColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showEmailDialog() async {
-    // Check internet connection first
     final connectivityService = ConnectivityService();
     final isOnline = await connectivityService.checkConnectivity();
 
@@ -1814,16 +1279,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userEmail = authProvider.user?.email ?? '';
-
     bool isLoading = false;
-    // Use current report's default columns
-    List<String> tempSelectedColumns = List.from(currentReportDefaultColumns);
-    // Add any additional selected columns that are not in defaults
-    for (String col in _selectedColumns) {
-      if (!tempSelectedColumns.contains(col)) {
-        tempSelectedColumns.add(col);
-      }
-    }
 
     showDialog(
       context: context,
@@ -1833,236 +1289,137 @@ class _ReportsScreenState extends State<ReportsScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
           ),
-          contentPadding: EdgeInsets.fromLTRB(
-            SizeConfig.spaceLarge,
-            SizeConfig.spaceRegular,
-            SizeConfig.spaceLarge,
-            SizeConfig.spaceSmall,
-          ),
-          actionsPadding: EdgeInsets.fromLTRB(
-            SizeConfig.spaceLarge,
-            SizeConfig.spaceSmall,
-            SizeConfig.spaceLarge,
-            SizeConfig.spaceRegular,
-          ),
           title: Row(
             children: [
-              Icon(
-                Icons.email_outlined,
-                color: context.primaryColor,
-                size: SizeConfig.iconSizeLarge,
+              Container(
+                padding: EdgeInsets.all(SizeConfig.spaceSmall),
+                decoration: BoxDecoration(
+                  color: context.primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
+                ),
+                child: Icon(
+                  Icons.email_outlined,
+                  color: context.primaryColor,
+                  size: SizeConfig.iconSizeLarge,
+                ),
               ),
-              SizedBox(width: SizeConfig.spaceSmall),
-              Text(
-                AppLocalizations().tr('email_report'),
-                style: TextStyle(
-                  color: context.textPrimaryColor,
-                  fontSize: SizeConfig.fontSizeLarge,
+              SizedBox(width: SizeConfig.spaceMedium),
+              Expanded(
+                child: Text(
+                  AppLocalizations().tr('email_report'),
+                  style: TextStyle(
+                    color: context.textPrimaryColor,
+                    fontSize: SizeConfig.fontSizeLarge,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
-          content: SizedBox(
-            width: SizeConfig.getWidth(90).clamp(300, 500),
-            height:
-                MediaQuery.of(context).size.height * 0.7, // Constrain height
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppLocalizations().tr('send_email_description'),
-                    style: TextStyle(
-                      color: context.textSecondaryColor,
-                      fontSize: SizeConfig.fontSizeRegular,
-                    ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send ${_getReportTitle(_selectedReport)} to your email',
+                style: TextStyle(
+                  color: context.textSecondaryColor,
+                  fontSize: SizeConfig.fontSizeRegular,
+                ),
+              ),
+              SizedBox(height: SizeConfig.spaceLarge),
+              Container(
+                padding: EdgeInsets.all(SizeConfig.spaceMedium),
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
+                  borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
+                  border: Border.all(
+                    color: context.primaryColor.withOpacity(0.3),
                   ),
-                  SizedBox(height: SizeConfig.spaceMedium),
-                  Container(
-                    padding: EdgeInsets.all(SizeConfig.spaceSmall + 2),
-                    decoration: BoxDecoration(
-                      color: context.surfaceColor,
-                      borderRadius: BorderRadius.circular(
-                        SizeConfig.spaceSmall,
-                      ),
-                      border: Border.all(
-                        color: context.primaryColor.withOpacity(0.3),
-                      ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.email,
+                      color: context.primaryColor,
+                      size: SizeConfig.iconSizeMedium,
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.email_outlined,
-                          color: context.primaryColor,
-                          size: SizeConfig.fontSizeLarge,
-                        ),
-                        SizedBox(width: SizeConfig.spaceSmall + 2),
-                        Expanded(
-                          child: Text(
+                    SizedBox(width: SizeConfig.spaceMedium),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Email Address',
+                            style: TextStyle(
+                              color: context.textSecondaryColor,
+                              fontSize: SizeConfig.fontSizeSmall,
+                            ),
+                          ),
+                          SizedBox(height: SizeConfig.spaceXSmall),
+                          Text(
                             userEmail,
                             style: TextStyle(
                               color: context.textPrimaryColor,
                               fontSize: SizeConfig.fontSizeRegular,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: SizeConfig.spaceMedium),
-
-                  // Column Selection Section
-                  Row(
-                    children: [
-                      Text(
-                        AppLocalizations().tr('report_columns'),
-                        style: TextStyle(
-                          color: context.textPrimaryColor,
-                          fontSize: SizeConfig.fontSizeSmall + 1,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${tempSelectedColumns.length} ${AppLocalizations().tr('selected')}',
-                        style: TextStyle(
-                          color: context.textSecondaryColor,
-                          fontSize: SizeConfig.fontSizeSmall - 1,
-                        ),
-                      ),
-                      SizedBox(width: SizeConfig.spaceSmall),
-                      TextButton.icon(
-                        onPressed: () {
-                          _showColumnSelectionDialog(
-                            context,
-                            tempSelectedColumns,
-                            (newColumns) {
-                              setState(() {
-                                tempSelectedColumns = newColumns;
-                              });
-                            },
-                          );
-                        },
-                        icon: Icon(
-                          Icons.tune,
-                          size: SizeConfig.iconSizeSmall,
-                          color: context.primaryColor,
-                        ),
-                        label: Text(
-                          AppLocalizations().tr('select_columns'),
-                          style: TextStyle(
-                            color: context.primaryColor,
-                            fontSize: SizeConfig.fontSizeSmall - 1,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: SizeConfig.spaceSmall),
-
-                  // Selected columns preview
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(SizeConfig.spaceSmall + 2),
-                    decoration: BoxDecoration(
-                      color: context.surfaceColor,
-                      borderRadius: BorderRadius.circular(
-                        SizeConfig.spaceSmall,
-                      ),
-                      border: Border.all(
-                        color: context.primaryColor.withOpacity(0.3),
+                        ],
                       ),
                     ),
-                    child: Wrap(
-                      spacing: SizeConfig.spaceTiny + 1,
-                      runSpacing: SizeConfig.spaceTiny + 1,
-                      children:
-                          tempSelectedColumns.take(15).map((columnKey) {
-                            final column = currentReportAvailableColumns
-                                .firstWhere(
-                                  (col) => col['key'] == columnKey,
-                                  orElse: () => <String, String>{
-                                    'key': columnKey,
-                                    'label': columnKey,
-                                  },
-                                );
-                            return Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: SizeConfig.spaceXSmall + 1,
-                                vertical: SizeConfig.spaceTiny,
-                              ),
-                              decoration: BoxDecoration(
-                                color: context.primaryColor.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(
-                                  SizeConfig.spaceSmall,
-                                ),
-                                border: Border.all(
-                                  color: context.primaryColor.withOpacity(0.3),
-                                  width: 0.5,
-                                ),
-                              ),
-                              child: Text(
-                                column['label']!,
-                                style: TextStyle(
-                                  color: context.primaryColor,
-                                  fontSize: SizeConfig.fontSizeXSmall - 1,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          }).toList()..addAll(
-                            tempSelectedColumns.length > 15
-                                ? [
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: SizeConfig.spaceXSmall + 1,
-                                        vertical: SizeConfig.spaceTiny,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: context.textSecondaryColor
-                                            .withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(
-                                          SizeConfig.spaceSmall,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '+${tempSelectedColumns.length - 15} ${AppLocalizations().tr('more')}',
-                                        style: TextStyle(
-                                          color: context.textSecondaryColor,
-                                          fontSize:
-                                              SizeConfig.fontSizeXSmall - 1,
-                                        ),
-                                      ),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                    ),
-                  ),
-
-                  SizedBox(height: SizeConfig.spaceSmall),
-                  Text(
-                    '${AppLocalizations().tr('reports')}: ${_records.length} ${_selectedReport} ${AppLocalizations().tr('records')}, ${tempSelectedColumns.length} ${AppLocalizations().tr('columns')}',
-                    style: TextStyle(
-                      color: context.textSecondaryColor,
-                      fontSize: SizeConfig.fontSizeSmall - 1,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              SizedBox(height: SizeConfig.spaceLarge),
+              Container(
+                padding: EdgeInsets.all(SizeConfig.spaceMedium),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
+                  border: Border.all(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: AppTheme.primaryGreen,
+                      size: SizeConfig.iconSizeMedium,
+                    ),
+                    SizedBox(width: SizeConfig.spaceMedium),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Report Details',
+                            style: TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontSize: SizeConfig.fontSizeSmall,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: SizeConfig.spaceXSmall),
+                          Text(
+                            '${_records.length} records • PDF format',
+                            style: TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontSize: SizeConfig.fontSizeSmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: isLoading ? null : () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  horizontal: SizeConfig.spaceRegular,
-                  vertical: SizeConfig.spaceMedium,
-                ),
-              ),
               child: Text(
                 AppLocalizations().tr('cancel'),
                 style: TextStyle(
@@ -2072,25 +1429,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed:
-                  isLoading || userEmail.isEmpty || tempSelectedColumns.isEmpty
+              onPressed: isLoading || userEmail.isEmpty
                   ? null
                   : () async {
                       setState(() => isLoading = true);
                       try {
-                        // Save column preferences
-                        this.setState(() {
-                          _selectedColumns = List.from(tempSelectedColumns);
-                        });
-                        await _saveColumnPreferences();
-
-                        // Send email with selected columns
-                        await _sendEmailReport(userEmail, tempSelectedColumns);
+                        await _sendEmailReport(userEmail, currentReportDefaultColumns);
                         Navigator.pop(context);
                         CustomSnackbar.showSuccess(
                           context,
                           message: 'Report sent successfully',
-                          submessage: 'Report has been sent to $userEmail',
+                          submessage: 'Check your email: $userEmail',
                         );
                       } catch (e) {
                         setState(() => isLoading = false);
@@ -2111,23 +1460,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 isLoading
                     ? AppLocalizations().tr('sending')
                     : AppLocalizations().tr('send_report'),
-                style: TextStyle(fontSize: SizeConfig.fontSizeSmall + 1),
+                style: TextStyle(fontSize: SizeConfig.fontSizeRegular),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.primaryColor,
                 foregroundColor: context.cardColor,
-                disabledBackgroundColor: context.textSecondaryColor.withOpacity(
-                  0.3,
-                ),
-                disabledForegroundColor: context.textSecondaryColor,
+                disabledBackgroundColor: context.textSecondaryColor.withOpacity(0.3),
                 padding: EdgeInsets.symmetric(
-                  horizontal: SizeConfig.spaceMedium,
-                  vertical: SizeConfig.spaceSmall,
-                ),
-                minimumSize: Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
+                  horizontal: SizeConfig.spaceLarge,
+                  vertical: SizeConfig.spaceMedium,
                 ),
               ),
             ),
@@ -2149,29 +1490,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
         throw Exception('No authentication token');
       }
 
-      // Generate report stats (same calculation as web version)
       Map<String, dynamic> stats = _calculateReportStats();
 
-      // Generate date range string
       final dateRange = _fromDate != null && _toDate != null
           ? '${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year} To ${_toDate!.day}/${_toDate!.month}/${_toDate!.year}'
           : 'All Dates';
 
-      // Generate CSV content (matching web version exactly)
-      String csvContent = _generateCSVContent(
-        stats,
-        dateRange,
-        selectedColumns,
-      );
-
-      // Generate PDF content (we'll send the data to server to create PDF)
       String pdfContent = await _generatePDFContent(
         stats,
         dateRange,
         selectedColumns,
       );
 
-      // Call the email API
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/user/reports/send-email'),
         headers: {
@@ -2180,7 +1510,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         },
         body: json.encode({
           'email': email,
-          'csvContent': csvContent,
           'pdfContent': pdfContent,
           'reportType': _getReportTitle(_selectedReport),
           'dateRange': dateRange,
@@ -2363,21 +1692,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
             }
             break;
           case 'farmer':
-            // Show only farmer ID
-            value = record['farmer_id']?.toString() ?? '';
+            // Show farmer ID without leading zeros
+            value = _formatFarmerId(record['farmer_id']?.toString());
             break;
           case 'society':
-            String societyId = record['society_id']?.toString() ?? '';
-            String societyName = record['society_name']?.toString() ?? '';
-            if (societyId.isNotEmpty && societyName.isNotEmpty) {
-              value = '$societyId - $societyName';
-            } else if (societyId.isNotEmpty) {
-              value = societyId;
-            } else if (societyName.isNotEmpty) {
-              value = societyName;
-            } else {
-              value = '';
-            }
+            // Show society name from local storage
+            value = record['society_name']?.toString() ?? '';
             break;
           case 'machine':
             // Handle different field names across report types
@@ -2735,12 +2055,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
           }
         }
 
-        // Format society field to include ID and name (matching CSV format)
-        if (record.containsKey('society_id') &&
-            record.containsKey('society_name')) {
-          normalizedRecord['society_name'] =
-              '${record['society_id']?.toString() ?? ''} - ${record['society_name']?.toString() ?? ''}';
-        }
+        // Format society field - society_name already contains the full display value from local storage
+        // No additional formatting needed as local storage handles this
 
         // Format farmer field to include ID and name (matching CSV format)
         if (record.containsKey('farmer_id') &&
@@ -2763,7 +2079,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
         stats: stats,
         dateRange: dateRange,
         selectedColumns: selectedColumns,
-        logoPath: 'assets/images/fulllogo.png', // Logo path in assets
+        logoPath: 'assets/images/fulllogo.png',
+        farmerInfo: pdfRecords.isNotEmpty ? _formatFarmerId(pdfRecords.first['farmer_id']?.toString()) : null,
+        societyInfo: pdfRecords.isNotEmpty ? pdfRecords.first['society_name']?.toString() : null,
       );
 
       // Convert PDF bytes to base64 string (same format as web app)
@@ -3029,86 +2347,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 value == 'all' ? AppLocalizations().tr('all_channels') : value,
           ),
         ),
-        // Machine Filter (All report types)
-        PopupMenuItem(
-          enabled: false,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: _buildDropdownFilter(
-            AppLocalizations().tr('machine'),
-            Icons.precision_manufacturing,
-            _machineFilter ?? 'all',
-            [
-              'all',
-              ..._machines
-                  .where(
-                    (m) =>
-                        m['machine_id'] != null &&
-                        m['machine_id'].toString().isNotEmpty,
-                  )
-                  .map((m) => m['machine_id'].toString()),
-            ],
-            (value) {
-              Navigator.pop(context);
-              setState(() {
-                _machineFilter = value == 'all' ? null : value;
-                _applyFilters();
-              });
-            },
-            (value) {
-              if (value == 'all') return AppLocalizations().tr('all_machines');
-              Map<String, dynamic> machine = <String, dynamic>{};
-              try {
-                machine = _machines.firstWhere(
-                  (m) => m['machine_id']?.toString() == value,
-                );
-              } catch (_) {
-                // Not found, use empty map
-              }
-              final type =
-                  machine['machine_type']?.toString() ??
-                  AppLocalizations().tr('machine');
-              final machineId = machine['machine_id']?.toString() ?? value;
-              return '$type - $machineId';
-            },
-          ),
-        ),
-        // Farmer Filter (Collections only)
-        if (_selectedReport == 'collections')
-          PopupMenuItem(
-            enabled: false,
-            padding: EdgeInsets.symmetric(
-              horizontal: SizeConfig.spaceMedium,
-              vertical: SizeConfig.spaceSmall,
-            ),
-            child: _buildDropdownFilter(
-              AppLocalizations().tr('farmer'),
-              Icons.person_outline,
-              _farmerFilter ?? 'all',
-              ['all', ..._farmers.map((f) => f['id']?.toString() ?? '')],
-              (value) {
-                Navigator.pop(context);
-                setState(() {
-                  _farmerFilter = value == 'all' ? null : value;
-                  _applyFilters();
-                });
-              },
-              (value) {
-                if (value == 'all') return AppLocalizations().tr('all_farmers');
-                Map<String, dynamic> farmer = <String, dynamic>{};
-                try {
-                  farmer = _farmers.firstWhere(
-                    (f) => f['id']?.toString() == value,
-                  );
-                } catch (_) {
-                  // Not found, use empty map
-                }
-                final name =
-                    farmer['name']?.toString() ??
-                    AppLocalizations().tr('farmer');
-                return '$name - ID: $value';
-              },
-            ),
-          ),
         // Results Info
         PopupMenuItem(
           enabled: false,
@@ -3282,19 +2520,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return [
           DataColumn(label: Text(AppLocalizations().tr('sl_no'))),
           DataColumn(label: Text(AppLocalizations().tr('date_time'))),
-          DataColumn(label: Text(AppLocalizations().tr('farmer_id'))),
-          DataColumn(label: Text(AppLocalizations().tr('society'))),
-          DataColumn(label: Text(AppLocalizations().tr('machine'))),
           DataColumn(label: Text(AppLocalizations().tr('shift'))),
           DataColumn(label: Text(AppLocalizations().tr('channel'))),
           DataColumn(label: Text(AppLocalizations().tr('fat_percent'))),
           DataColumn(label: Text(AppLocalizations().tr('snf_percent'))),
           DataColumn(label: Text(AppLocalizations().tr('clr'))),
-          DataColumn(label: Text(AppLocalizations().tr('protein_percent'))),
-          DataColumn(label: Text(AppLocalizations().tr('lactose_percent'))),
-          DataColumn(label: Text(AppLocalizations().tr('salt_percent'))),
           DataColumn(label: Text(AppLocalizations().tr('water_percent'))),
-          DataColumn(label: Text(AppLocalizations().tr('temp_c'))),
           DataColumn(label: Text(AppLocalizations().tr('rate_per_liter'))),
           DataColumn(label: Text(AppLocalizations().tr('bonus'))),
           DataColumn(label: Text(AppLocalizations().tr('qty_liter'))),
@@ -3305,8 +2536,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           DataColumn(label: Text(AppLocalizations().tr('sl_no'))),
           DataColumn(label: Text(AppLocalizations().tr('date_time'))),
           DataColumn(label: Text(AppLocalizations().tr('dispatch_id'))),
-          DataColumn(label: Text(AppLocalizations().tr('society'))),
-          DataColumn(label: Text(AppLocalizations().tr('machine'))),
           DataColumn(label: Text(AppLocalizations().tr('shift'))),
           DataColumn(label: Text(AppLocalizations().tr('channel'))),
           DataColumn(label: Text(AppLocalizations().tr('qty_liter'))),
@@ -3321,8 +2550,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           DataColumn(label: Text(AppLocalizations().tr('sl_no'))),
           DataColumn(label: Text(AppLocalizations().tr('date_time'))),
           DataColumn(label: Text(AppLocalizations().tr('count'))),
-          DataColumn(label: Text(AppLocalizations().tr('society'))),
-          DataColumn(label: Text(AppLocalizations().tr('machine'))),
           DataColumn(label: Text(AppLocalizations().tr('shift'))),
           DataColumn(label: Text(AppLocalizations().tr('channel'))),
           DataColumn(label: Text(AppLocalizations().tr('qty_liter'))),
@@ -3350,61 +2577,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
                 Text(
                   record['collection_time']?.toString() ?? '-',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall - 1,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          DataCell(
-            Center(
-              child: Text(
-                _formatFarmerId(record['farmer_id']?.toString() ?? '-'),
-                style: TextStyle(
-                  fontSize: SizeConfig.fontSizeXSmall,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record['society_name'] ?? '-',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'ID: ${record['society_id']?.toString() ?? "-"}',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall - 1,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ID: ${record['machine_id']?.toString() ?? '-'}',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${record['machine_type']?.toString() ?? AppLocalizations().tr('unknown')}',
                   style: TextStyle(
                     fontSize: SizeConfig.fontSizeXSmall - 1,
                     color: context.textSecondaryColor,
@@ -3467,31 +2639,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           DataCell(
             Text(
-              (record['protein_percentage'] ?? 0).toString(),
-              style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
-            ),
-          ),
-          DataCell(
-            Text(
-              (record['lactose_percentage'] ?? 0).toString(),
-              style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
-            ),
-          ),
-          DataCell(
-            Text(
-              (record['salt_percentage'] ?? 0).toString(),
-              style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
-            ),
-          ),
-          DataCell(
-            Text(
               (record['water_percentage'] ?? 0).toString(),
-              style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
-            ),
-          ),
-          DataCell(
-            Text(
-              (record['temperature'] ?? 0).toString(),
               style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
             ),
           ),
@@ -3553,50 +2701,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Text(
               record['dispatch_id']?.toString() ?? '-',
               style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record['society_name'] ?? '-',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'ID: ${record['society_id']?.toString() ?? "-"}',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall - 1,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ID: ${record['machine_number']?.toString() ?? record['machine_id']?.toString() ?? '-'}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${record['machine_type']?.toString() ?? 'Unknown'}',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-              ],
             ),
           ),
           DataCell(
@@ -3703,50 +2807,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Text(
               record['count']?.toString() ?? '-',
               style: TextStyle(fontSize: SizeConfig.fontSizeXSmall),
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record['society_name'] ?? '-',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'ID: ${record['society_id']?.toString() ?? "-"}',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall - 1,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ID: ${record['machine_number']?.toString() ?? record['machine_id']?.toString() ?? '-'}',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${record['machine_type']?.toString() ?? 'Unknown'}',
-                  style: TextStyle(
-                    fontSize: SizeConfig.fontSizeXSmall - 1,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-              ],
             ),
           ),
           DataCell(
@@ -3900,32 +2960,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     if (_channelFilter != 'all') {
       filters.add('Channel: $_channelFilter');
-    }
-
-    if (_machineFilter != null) {
-      Map<String, dynamic> machine = <String, dynamic>{};
-      try {
-        machine = _machines.firstWhere(
-          (m) => m['machine_id']?.toString() == _machineFilter,
-        );
-      } catch (_) {
-        // Not found, use empty map
-      }
-      final machineName = machine['machine_type']?.toString() ?? 'Machine';
-      filters.add('Machine: $machineName ($_machineFilter)');
-    }
-
-    if (_farmerFilter != null) {
-      Map<String, dynamic> farmer = <String, dynamic>{};
-      try {
-        farmer = _farmers.firstWhere(
-          (f) => f['id']?.toString() == _farmerFilter,
-        );
-      } catch (_) {
-        // Not found, use empty map
-      }
-      final farmerName = farmer['name']?.toString() ?? 'Farmer';
-      filters.add('Farmer: $farmerName ($_farmerFilter)');
     }
 
     return filters.isEmpty ? 'No filters applied' : filters.join('; ');

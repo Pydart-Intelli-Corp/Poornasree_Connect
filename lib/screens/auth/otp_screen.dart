@@ -260,83 +260,78 @@ class _OtpScreenState extends State<OtpScreen>
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: PremiumGradientBackground(
         child: SafeArea(
           child: Column(
             children: [
-              // Premium App Bar
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    TransparentBackButton(
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
 
               // Content
               Expanded(
                 child: Center(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 24,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: SizeConfig.spaceRegular + 4,
+                      vertical: SizeConfig.spaceRegular + 4,
                     ),
                     child: FadeTransition(
                       opacity: _fadeAnimation,
                       child: SlideTransition(
                         position: _slideAnimation,
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: 400,
+                          constraints: BoxConstraints(
+                            maxWidth: SizeConfig.normalize(400),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               // Icon
                               Container(
-                                width: 100,
-                                height: 100,
+                                width: SizeConfig.normalize(140),
+                                height: SizeConfig.normalize(140),
                                 decoration: BoxDecoration(
                                   color: isDark ? AppTheme.darkBg2 : AppTheme.cardLight,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(SizeConfig.radiusLarge + 4),
                                   border: Border.all(
                                     color: AppTheme.primaryGreen.withOpacity(0.3),
-                                    width: 2,
+                                    width: SizeConfig.normalize(3),
                                   ),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.mark_email_read_rounded,
-                                  size: 50,
+                                  size: SizeConfig.iconSizeHuge + 20,
                                   color: AppTheme.primaryGreen,
                                 ),
                               ),
-                              const SizedBox(height: 40),
+                              SizedBox(height: SizeConfig.spaceHuge + 8),
 
                               // Title
                               Text(
                                 AppLocalizations().tr('verify_otp'),
                                 style: TextStyle(
-                                  fontSize: 28,
+                                  fontSize: SizeConfig.fontSizeXLarge + 8,
                                   fontWeight: FontWeight.w700,
                                   color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                                   letterSpacing: 0.5,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              SizedBox(height: SizeConfig.spaceSmall + 4),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                padding: EdgeInsets.symmetric(horizontal: SizeConfig.radiusLarge + 4),
                                 child: RichText(
                                   textAlign: TextAlign.center,
                                   text: TextSpan(
                                     style: TextStyle(
-                                      fontSize: 15,
+                                      fontSize: SizeConfig.fontSizeRegular + 2,
                                       color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
                                       fontWeight: FontWeight.w400,
                                       height: 1.4,
@@ -358,65 +353,115 @@ class _OtpScreenState extends State<OtpScreen>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 40),
+                              SizedBox(height: SizeConfig.spaceHuge + 8),
 
                               // Premium OTP Card
                               PremiumCard(
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: SizeConfig.spaceRegular,
+                                    vertical: SizeConfig.spaceSmall,
+                                  ),
                                   child: Column(
                                     children: [
-                                      // OTP Input
+                                      // OTP Label
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: EdgeInsets.all(SizeConfig.spaceSmall),
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                colors: [AppTheme.primaryGreen, AppTheme.primaryTeal],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                              borderRadius: BorderRadius.circular(SizeConfig.radiusSmall + 2),
+                                            ),
+                                            child: Icon(
+                                              Icons.pin_rounded,
+                                              size: SizeConfig.iconSizeSmall + 4,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          SizedBox(width: SizeConfig.spaceSmall + 2),
+                                          Text(
+                                            AppLocalizations().tr('enter_6_digit_code'),
+                                            style: TextStyle(
+                                              fontSize: SizeConfig.fontSizeRegular + 2,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
+                                              letterSpacing: 0.3,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: SizeConfig.spaceRegular + 8),
+                                      
+                                      // Modern OTP Input
                                       LayoutBuilder(
                                         builder: (context, constraints) {
                                           final availableWidth = constraints.maxWidth;
-                                          const spacing = 8.0;
-                                          const totalSpacing = spacing * 5;
-                                          final fieldWidth = ((availableWidth - totalSpacing) / 6).clamp(40.0, 52.0);
-                                          final fieldHeight = (fieldWidth * 1.2).clamp(50.0, 62.0);
-                                          
-                                          final fillColor = isDark ? AppTheme.darkBg2 : AppTheme.cardLight;
-                                          const textColor = AppTheme.primaryGreen;
-                                          final borderColor = isDark 
-                                              ? AppTheme.primaryGreen.withOpacity(0.2)
-                                              : AppTheme.borderLight;
+                                          final spacing = SizeConfig.spaceSmall;
+                                          final totalSpacing = spacing * 5;
+                                          final fieldWidth = ((availableWidth - totalSpacing) / 6)
+                                              .clamp(SizeConfig.normalize(52), SizeConfig.normalize(68));
+                                          final fieldHeight = fieldWidth * 1.18;
                                           
                                           return PinCodeTextField(
                                             appContext: context,
                                             length: 6,
                                             controller: _otpController,
                                             keyboardType: TextInputType.number,
-                                            animationType: AnimationType.scale,
+                                            animationType: AnimationType.fade,
                                             enabled: !_isDisposed && !_isNavigating,
-                                            animationDuration: const Duration(milliseconds: 200),
+                                            animationDuration: const Duration(milliseconds: 300),
                                             enableActiveFill: true,
+                                            cursorColor: AppTheme.primaryGreen,
                                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                            textStyle: const TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w700,
-                                              color: textColor,
+                                            textStyle: TextStyle(
+                                              fontSize: SizeConfig.fontSizeXLarge + 4,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppTheme.primaryGreen,
                                               letterSpacing: 0.5,
                                             ),
                                             pinTheme: PinTheme(
                                               shape: PinCodeFieldShape.box,
-                                              borderRadius: BorderRadius.circular(12),
+                                              borderRadius: BorderRadius.circular(SizeConfig.radiusRegular + 4),
                                               fieldHeight: fieldHeight,
                                               fieldWidth: fieldWidth,
-                                              borderWidth: 1.5,
+                                              borderWidth: SizeConfig.normalize(2.5),
+                                              // Active state (currently typing)
                                               activeColor: AppTheme.primaryGreen,
-                                              selectedColor: AppTheme.primaryGreen.withOpacity(0.6),
-                                              inactiveColor: borderColor,
-                                              activeFillColor: fillColor,
-                                              selectedFillColor: fillColor,
-                                              inactiveFillColor: fillColor,
+                                              activeFillColor: isDark 
+                                                  ? AppTheme.primaryGreen.withOpacity(0.08)
+                                                  : AppTheme.primaryGreen.withOpacity(0.05),
+                                              // Selected state (focused)
+                                              selectedColor: AppTheme.primaryGreen,
+                                              selectedFillColor: isDark 
+                                                  ? AppTheme.primaryGreen.withOpacity(0.12)
+                                                  : AppTheme.primaryGreen.withOpacity(0.08),
+                                              // Inactive state (empty)
+                                              inactiveColor: isDark 
+                                                  ? AppTheme.primaryGreen.withOpacity(0.15)
+                                                  : AppTheme.borderLight,
+                                              inactiveFillColor: isDark 
+                                                  ? AppTheme.darkBg2
+                                                  : AppTheme.cardLight,
                                             ),
+                                            boxShadows: [
+                                              BoxShadow(
+                                                color: AppTheme.primaryGreen.withOpacity(0.1),
+                                                blurRadius: SizeConfig.normalize(8),
+                                                offset: Offset(0, SizeConfig.normalize(2)),
+                                              ),
+                                            ],
                                             onChanged: (value) {
                                               if (!mounted || _isDisposed) return;
                                             },
                                           );
                                         },
                                       ),
-                                      const SizedBox(height: 24),
+                                      SizedBox(height: SizeConfig.spaceRegular + 8),
 
                                       // Verify Button
                                       PremiumGradientButton(
@@ -425,7 +470,7 @@ class _OtpScreenState extends State<OtpScreen>
                                         onPressed: _verifyOtp,
                                         isLoading: _isLoading,
                                       ),
-                                      const SizedBox(height: 20),
+                                      SizedBox(height: SizeConfig.radiusLarge + 4),
 
                                       // Resend OTP
                                       Row(
@@ -436,7 +481,7 @@ class _OtpScreenState extends State<OtpScreen>
                                               '${AppLocalizations().tr('didnt_receive_code')} ',
                                               style: TextStyle(
                                                 color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
-                                                fontSize: 14,
+                                                fontSize: SizeConfig.fontSizeRegular + 1,
                                                 fontWeight: FontWeight.w500,
                                                 letterSpacing: 0.2,
                                               ),
@@ -445,26 +490,26 @@ class _OtpScreenState extends State<OtpScreen>
                                           if (_canResend)
                                             InkWell(
                                               onTap: _resendOtp,
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
                                               child: Padding(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: SizeConfig.spaceSmall + 2,
+                                                  vertical: SizeConfig.spaceTiny + 2,
                                                 ),
                                                 child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    const Icon(
+                                                    Icon(
                                                       Icons.refresh_rounded,
-                                                      size: 16,
+                                                      size: SizeConfig.iconSizeMedium + 2,
                                                       color: AppTheme.primaryGreen,
                                                     ),
-                                                    const SizedBox(width: 4),
+                                                    SizedBox(width: SizeConfig.spaceTiny + 1),
                                                     Text(
                                                       AppLocalizations().tr('resend'),
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         color: AppTheme.primaryGreen,
-                                                        fontSize: 14,
+                                                        fontSize: SizeConfig.fontSizeRegular + 1,
                                                         fontWeight: FontWeight.w700,
                                                         letterSpacing: 0.3,
                                                       ),
@@ -475,24 +520,24 @@ class _OtpScreenState extends State<OtpScreen>
                                             )
                                           else
                                             Padding(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: SizeConfig.spaceSmall + 2,
+                                                vertical: SizeConfig.spaceTiny + 2,
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Icon(
                                                     Icons.timer_outlined,
-                                                    size: 16,
+                                                    size: SizeConfig.iconSizeMedium + 2,
                                                     color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
                                                   ),
-                                                  const SizedBox(width: 4),
+                                                  SizedBox(width: SizeConfig.spaceTiny + 1),
                                                   Text(
                                                     '${_resendTimer}s',
                                                     style: TextStyle(
                                                       color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
-                                                      fontSize: 14,
+                                                      fontSize: SizeConfig.fontSizeRegular + 1,
                                                       fontWeight: FontWeight.w600,
                                                       letterSpacing: 0.2,
                                                     ),
@@ -506,7 +551,7 @@ class _OtpScreenState extends State<OtpScreen>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              SizedBox(height: SizeConfig.spaceRegular + 4),
 
                               // Security Info
                               InfoContainer(

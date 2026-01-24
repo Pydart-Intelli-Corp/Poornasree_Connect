@@ -97,7 +97,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   }
 
   void _handleEditProfile() {
-    Navigator.pop(context);
     EditProfileDialog.show(
       context,
       user: widget.user,
@@ -112,53 +111,55 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final l10n = AppLocalizations();
-    
+    final authProvider = Provider.of<AuthProvider>(context); // Listen to changes
+    final user = authProvider.user; // Get latest user data
+
     return Material(
       color: Colors.transparent,
-      child: Container(
-        color: context.backgroundColor,
-        child: SafeArea(
+      child: Scaffold(
+        backgroundColor: context.backgroundColor,
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(SizeConfig.appBarHeight),
+          child: AppBar(
+            toolbarHeight: SizeConfig.appBarHeight,
+            titleSpacing: SizeConfig.appBarTitleSpacing,
+            title: Text(
+              l10n.tr('profile'),
+              style: SizeConfig.appBarTitleStyle,
+            ),
+          ),
+        ),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.all(SizeConfig.spaceLarge),
           child: Column(
             children: [
-              // Header
-              _buildHeader(),
+              // Profile Header
+              ProfileHeader(user: user),
+              SizedBox(height: SizeConfig.spaceHuge),
 
-              // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      // Profile Header
-                      ProfileHeader(user: widget.user),
-                      const SizedBox(height: 32),
+              // Profile Details Card
+              ProfileDetailsCard(
+                user: user,
+                onEditPressed: _handleEditProfile,
+              ),
+              SizedBox(height: SizeConfig.spaceXLarge),
 
-                      // Profile Details Card
-                      ProfileDetailsCard(
-                        user: widget.user,
-                        onEditPressed: _handleEditProfile,
-                      ),
-                      const SizedBox(height: 24),
+              // Settings Card
+              _buildSettingsCard(),
+              SizedBox(height: SizeConfig.spaceHuge),
 
-                      // Settings Card
-                      _buildSettingsCard(),
-                      const SizedBox(height: 32),
+              // Logout Button
+              _buildLogoutButton(),
+              SizedBox(height: SizeConfig.spaceRegular),
 
-                      // Logout Button
-                      _buildLogoutButton(),
-                      const SizedBox(height: 16),
-
-                      // App Version
-                      Text(
-                        '${l10n.tr('app_name')} v1.0.0',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.textSecondaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
+              // App Version
+              Text(
+                '${l10n.tr('app_name')} v1.0.0',
+                style: TextStyle(
+                  fontSize: SizeConfig.fontSizeSmall,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ],
@@ -168,47 +169,24 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    final l10n = AppLocalizations();
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: context.cardColor,
-        border: Border(
-          bottom: BorderSide(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            l10n.tr('profile'),
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: context.textPrimaryColor,
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.close, color: context.textSecondaryColor),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSettingsCard() {
     final l10n = AppLocalizations();
-    
+    final user = Provider.of<AuthProvider>(context, listen: false).user;
+    final isFarmer = user?.role?.toLowerCase() == 'farmer';
+
     return SectionCard(
       title: l10n.tr('settings'),
       child: Column(
         children: [
+          SizeScaleSlider(
+            onChanged: (scale) {
+              // Trigger a rebuild to apply new sizes
+              if (mounted) {
+                setState(() {});
+              }
+            },
+          ),
+          SizedBox(height: SizeConfig.spaceMedium),
           LanguageSelector(
             onLocaleChanged: (locale) {
               widget.onLanguageChanged(locale);
@@ -218,26 +196,31 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
               }
             },
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: SizeConfig.spaceMedium),
           ThemeToggle(
             isDarkMode: _isDarkMode,
             onChanged: (value) async {
               setState(() => _isDarkMode = value);
-              final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+              final themeProvider = Provider.of<ThemeProvider>(
+                context,
+                listen: false,
+              );
               await themeProvider.setDarkMode(value);
               widget.onThemeChanged(value);
             },
           ),
-          const SizedBox(height: 12),
-          AutoConnectToggle(
-            isAutoConnectEnabled: _isAutoConnectEnabled,
-            onChanged: (value) {
-              setState(() => _isAutoConnectEnabled = value);
-              widget.onAutoConnectChanged(value);
-            },
-          ),
-          const SizedBox(height: 12),
-          const ShiftSettingsWidget(),
+          if (!isFarmer) ...[
+            SizedBox(height: SizeConfig.spaceMedium),
+            AutoConnectToggle(
+              isAutoConnectEnabled: _isAutoConnectEnabled,
+              onChanged: (value) {
+                setState(() => _isAutoConnectEnabled = value);
+                widget.onAutoConnectChanged(value);
+              },
+            ),
+            SizedBox(height: SizeConfig.spaceMedium),
+            const ShiftSettingsWidget(),
+          ],
         ],
       ),
     );
@@ -245,20 +228,28 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
 
   Widget _buildLogoutButton() {
     final l10n = AppLocalizations();
-    
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: _handleLogout,
-        icon: const Icon(Icons.logout, size: 20),
-        label: Text(l10n.tr('logout')),
+        icon: Icon(Icons.logout, size: SizeConfig.iconSizeSmall),
+        label: Text(
+          l10n.tr('logout'),
+          style: TextStyle(fontSize: SizeConfig.fontSizeSmall),
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.red.withOpacity(0.15),
           foregroundColor: Colors.red,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.symmetric(
+            vertical: SizeConfig.spaceSmall + 4,
+            horizontal: SizeConfig.spaceRegular,
+          ),
+          minimumSize: Size(0, 0),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
             side: BorderSide(color: Colors.red.withOpacity(0.3)),
           ),
         ),

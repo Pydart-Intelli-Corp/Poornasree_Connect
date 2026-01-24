@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// A reusable action button for bottom navigation bars
 /// Supports icons, labels, disabled state, and "all machines" indicator
@@ -37,20 +38,20 @@ class ActionButton extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceSmall),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: SizeConfig.iconSizeHuge,
+                    height: SizeConfig.iconSizeHuge,
                     decoration: BoxDecoration(
                       color: isDisabled
                           ? context.surfaceColor
                           : (isDark ? color.withOpacity(0.12) : color.withOpacity(0.08)),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                       border: !isDisabled && !isDark ? Border.all(
                         color: color.withOpacity(0.2),
                         width: 1,
@@ -61,7 +62,7 @@ class ActionButton extends StatelessWidget {
                         Icon(
                           icon,
                           color: isDisabled ? Colors.grey : color,
-                          size: 24,
+                          size: SizeConfig.iconSizeLarge,
                         ),
                   ),
                   // "A" indicator for "All Machines" mode
@@ -70,8 +71,8 @@ class ActionButton extends StatelessWidget {
                       right: 0,
                       top: 0,
                       child: Container(
-                        width: 16,
-                        height: 16,
+                        width: SizeConfig.iconSizeMedium,
+                        height: SizeConfig.iconSizeMedium,
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
@@ -82,12 +83,12 @@ class ActionButton extends StatelessWidget {
                             width: 2,
                           ),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
                             'A',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 8,
+                              fontSize: SizeConfig.fontSizeXSmall,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -96,11 +97,11 @@ class ActionButton extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: SizeConfig.spaceTiny),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: SizeConfig.fontSizeXSmall,
                   fontWeight: FontWeight.w600,
                   color: isDisabled
                       ? context.textSecondaryColor.withValues(alpha: 0.5)

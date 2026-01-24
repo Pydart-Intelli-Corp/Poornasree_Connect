@@ -1,8 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/utils.dart';
 
 class ReportsService {
+  static const String _collectionsCacheKey = 'collections_report_cache';
+  static const String _collectionsCacheTimestampKey = 'collections_report_cache_timestamp';
+
   // Fetch collection reports
   Future<Map<String, dynamic>> getCollectionReports(String token, {
     String? fromDate,
@@ -13,7 +17,7 @@ class ReportsService {
     String? dairyId,
   }) async {
     try {
-      var url = ApiConfig.statistics;
+      var url = ApiConfig.collections;
       
       // Add query parameters
       final queryParams = <String, String>{};
@@ -38,10 +42,14 @@ class ReportsService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
       );
 
       print('📡 Collection Reports API response status: ${response.statusCode}');
-      print('📡 Collection Reports API response body: ${response.body}');
 
       final data = jsonDecode(response.body);
 
@@ -52,11 +60,25 @@ class ReportsService {
         final records = data['data']['collections'] ?? [];
         final stats = _calculateStatistics(List<Map<String, dynamic>>.from(records));
         
-        return {
+        final result = {
           'success': true,
           'data': {
             'collections': records,
             'stats': stats,
+          },
+        };
+
+        // Save to cache with proper structure
+        await _saveCollectionsToCache(result);
+        
+        return result;
+      } else if (response.statusCode >= 500) {
+        return {
+          'success': false,
+          'message': 'Server is temporarily unavailable',
+          'data': {
+            'collections': [],
+            'stats': _getEmptyStats(),
           },
         };
       } else {
@@ -72,10 +94,9 @@ class ReportsService {
       }
     } catch (e, stackTrace) {
       print('❌ Network/Parse error in getCollectionReports: $e');
-      print('❌ Stack trace: $stackTrace');
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Unable to connect to server',
         'data': {
           'collections': [],
           'stats': _getEmptyStats(),
@@ -145,5 +166,55 @@ class ReportsService {
       'weightedSnf': 0.0,
       'weightedClr': 0.0,
     };
+  }
+
+  // Cache management methods
+  Future<void> _saveCollectionsToCache(Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_collectionsCacheKey, json.encode(data));
+      await prefs.setInt(
+        _collectionsCacheTimestampKey,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (e) {
+      print('Failed to save collections to cache: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> loadCollectionsFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString(_collectionsCacheKey);
+
+      print('📦 [Service] Loading collections from cache...');
+      print('📦 [Service] Cache key: $_collectionsCacheKey');
+      print('📦 [Service] Cache exists: ${cachedData != null}');
+      
+      if (cachedData != null) {
+        final decoded = json.decode(cachedData);
+        print('📦 [Service] Decoded cache: $decoded');
+        return decoded;
+      }
+      print('⚠️ [Service] No cache found');
+      return null;
+    } catch (e) {
+      print('❌ [Service] Failed to load collections from cache: $e');
+      return null;
+    }
+  }
+
+  Future<DateTime?> getCollectionsCacheTimestamp() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = prefs.getInt(_collectionsCacheTimestampKey);
+
+      if (timestamp != null) {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 }

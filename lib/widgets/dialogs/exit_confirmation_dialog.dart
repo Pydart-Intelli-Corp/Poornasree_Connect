@@ -44,49 +44,51 @@ class ExitConfirmationDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: context.cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(SizeConfig.spaceLarge),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Icon
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(SizeConfig.spaceRegular),
               decoration: BoxDecoration(
                 color: Colors.orange.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.exit_to_app_rounded,
-                size: 48,
+                size: SizeConfig.iconSizeHuge,
                 color: Colors.orange,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: SizeConfig.spaceRegular),
 
             // Title
             Text(
               title ?? context.tr('exit_app'),
               style: TextStyle(
-                fontSize: 20,
+                fontSize: SizeConfig.fontSizeXLarge,
                 fontWeight: FontWeight.bold,
                 color: context.textPrimaryColor,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: SizeConfig.spaceMedium),
 
             // Message
             Text(
               message ?? context.tr('exit_app_message'),
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: SizeConfig.fontSizeRegular,
                 color: context.textSecondaryColor,
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: SizeConfig.spaceLarge),
 
             // Buttons
             Row(
@@ -96,41 +98,45 @@ class ExitConfirmationDialog extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context, false),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                        vertical: SizeConfig.spaceMedium,
+                      ),
                       side: BorderSide(color: context.borderColor, width: 1),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                       ),
                     ),
                     child: Text(
                       cancelText ?? context.tr('cancel'),
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: SizeConfig.fontSizeRegular,
                         fontWeight: FontWeight.w600,
                         color: context.textPrimaryColor,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: SizeConfig.spaceMedium),
 
                 // Confirm button
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                        vertical: SizeConfig.spaceMedium,
+                      ),
                       backgroundColor: Colors.orange,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                       ),
                     ),
                     child: Text(
                       confirmText ?? context.tr('exit'),
-                      style: const TextStyle(
-                        fontSize: 14,
+                      style: TextStyle(
+                        fontSize: SizeConfig.fontSizeRegular,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

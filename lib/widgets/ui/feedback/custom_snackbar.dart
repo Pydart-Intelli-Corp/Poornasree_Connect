@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'flower_spinner.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// Snackbar type for styling
 enum SnackbarType { info, success, error, warning, loading }
@@ -371,9 +372,9 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
     final isSmallScreen = screenWidth < 400;
 
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 12 + _position.dy,
-      left: 12 + _position.dx,
-      right: 12 - _position.dx,
+      top: MediaQuery.of(context).padding.top + SizeConfig.spaceMedium + _position.dy,
+      left: SizeConfig.spaceMedium + _position.dx,
+      right: SizeConfig.spaceMedium - _position.dx,
       child: SlideTransition(
         position: _slideAnimation,
         child: FadeTransition(
@@ -395,19 +396,19 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
                 child: Material(
                   color: Colors.transparent,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                       child: Container(
                         constraints: BoxConstraints(
-                          maxWidth: isSmallScreen ? screenWidth - 24 : 400,
+                          maxWidth: isSmallScreen ? screenWidth - (SizeConfig.spaceMedium * 2) : 400,
                           minWidth: 280,
                         ),
                         decoration: BoxDecoration(
                           color: isDark
                               ? Colors.grey.shade900.withOpacity(0.85)
                               : Colors.white.withOpacity(0.92),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
                           border: Border.all(
                             color: _isDragging
                                 ? widget.colors.primary.withOpacity(0.6)
@@ -453,25 +454,25 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
                               },
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceSmall),
                                 decoration: BoxDecoration(
                                   color: _isDragging
                                       ? widget.colors.primary.withOpacity(0.1)
                                       : Colors.transparent,
-                                  borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(16),
-                                    topRight: Radius.circular(16),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(SizeConfig.radiusRegular),
+                                    topRight: Radius.circular(SizeConfig.radiusRegular),
                                   ),
                                 ),
                                 child: Center(
                                   child: Container(
-                                    width: 36,
-                                    height: 4,
+                                    width: SizeConfig.iconSizeLarge + 4,
+                                    height: SizeConfig.spaceXSmall,
                                     decoration: BoxDecoration(
                                       color: isDark
                                           ? Colors.white.withOpacity(0.3)
                                           : Colors.black.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(2),
+                                      borderRadius: BorderRadius.circular(SizeConfig.spaceTiny),
                                     ),
                                   ),
                                 ),
@@ -479,53 +480,54 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
                             ),
                             // Main content
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              padding: EdgeInsets.fromLTRB(
+                                SizeConfig.spaceRegular,
+                                SizeConfig.spaceSmall,
+                                SizeConfig.spaceRegular,
+                                SizeConfig.spaceRegular,
+                              ),
                               child: Row(
                                 children: [
                                   // Icon container with glow effect
                                   _buildIconContainer(isDark),
-                                  const SizedBox(width: 14),
+                                  SizedBox(width: SizeConfig.spaceMedium),
                                   // Text content
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
                                           widget.message,
                                           style: TextStyle(
-                                            fontSize: 14,
+                                            fontSize: SizeConfig.fontSizeRegular,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? Colors.white
-                                                : widget.colors.text,
+                                            color: isDark ? Colors.white : widget.colors.text,
                                             height: 1.3,
                                           ),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         if (widget.submessage != null) ...[
-                                          const SizedBox(height: 4),
+                                          SizedBox(height: SizeConfig.spaceXSmall),
                                           Text(
                                             widget.submessage!,
                                             style: TextStyle(
-                                              fontSize: 12,
+                                              fontSize: SizeConfig.fontSizeSmall,
                                               fontWeight: FontWeight.w400,
-                                              color: isDark
-                                                  ? Colors.grey.shade400
-                                                  : Colors.grey.shade600,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                               height: 1.3,
                                             ),
                                             maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
+                                            overflow: TextOverflow.visible,
+                                            softWrap: true,
                                           ),
                                         ],
                                       ],
                                     ),
                                   ),
                                   if (widget.dismissible) ...[
-                                    const SizedBox(width: 8),
+                                    SizedBox(width: SizeConfig.spaceSmall),
                                     _buildCloseButton(isDark),
                                   ],
                                 ],
@@ -548,11 +550,11 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
 
   Widget _buildIconContainer(bool isDark) {
     return Container(
-      width: 42,
-      height: 42,
+      width: SizeConfig.iconSizeHuge - 6,
+      height: SizeConfig.iconSizeHuge - 6,
       decoration: BoxDecoration(
         color: widget.colors.background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
         border: Border.all(
           color: widget.colors.border.withOpacity(0.5),
           width: 1,
@@ -574,7 +576,7 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
   Widget _buildAnimatedIcon() {
     switch (widget.type) {
       case SnackbarType.loading:
-        return const FlowerSpinner(size: 22);
+        return FlowerSpinner(size: SizeConfig.iconSizeMedium + 2);
       case SnackbarType.success:
         return _AnimatedCheckmark(color: widget.colors.icon);
       case SnackbarType.error:
@@ -595,16 +597,16 @@ class _AnimatedSnackbarWidgetState extends State<_AnimatedSnackbarWidget>
       color: Colors.transparent,
       child: InkWell(
         onTap: _handleDismiss,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
         child: Container(
-          padding: const EdgeInsets.all(6),
+          padding: EdgeInsets.all(SizeConfig.spaceXSmall),
           decoration: BoxDecoration(
             color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
           ),
           child: Icon(
             Icons.close_rounded,
-            size: 18,
+            size: SizeConfig.iconSizeSmall + 2,
             color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
           ),
         ),
@@ -755,7 +757,7 @@ class _AnimatedCheckmarkState extends State<_AnimatedCheckmark>
         return Transform.scale(
           scale: _scaleAnimation.value,
           child: CustomPaint(
-            size: const Size(24, 24),
+            size: Size(SizeConfig.iconSizeLarge, SizeConfig.iconSizeLarge),
             painter: _CheckmarkPainter(
               progress: _progressAnimation.value,
               color: widget.color,
@@ -880,7 +882,7 @@ class _AnimatedErrorIconState extends State<_AnimatedErrorIcon>
             child: Icon(
               Icons.error_rounded,
               color: widget.color,
-              size: 24,
+              size: SizeConfig.iconSizeLarge,
             ),
           ),
         );
@@ -944,7 +946,7 @@ class _AnimatedWarningIconState extends State<_AnimatedWarningIcon>
           child: Icon(
             Icons.warning_rounded,
             color: widget.color,
-            size: 24,
+            size: SizeConfig.iconSizeLarge,
           ),
         );
       },
@@ -1010,7 +1012,7 @@ class _AnimatedIconState extends State<_AnimatedIcon>
           scale: _scaleAnimation.value,
           child: Transform.rotate(
             angle: _rotationAnimation.value,
-            child: Icon(widget.icon, color: widget.color, size: 22),
+            child: Icon(widget.icon, color: widget.color, size: SizeConfig.iconSizeMedium + 2),
           ),
         );
       },

@@ -15,7 +15,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     
     <application
-        android:label="poornasree_connect"
+        android:label="Poornasree"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

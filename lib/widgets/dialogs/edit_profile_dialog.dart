@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../utils/helpers/size_config.dart';
 import '../../utils/utils.dart';
 import '../../l10n/l10n.dart';
+import '../ui/buttons/custom_button.dart';
 import 'form_field_widget.dart';
 import 'package:provider/provider.dart';
 
@@ -56,10 +58,18 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     _presidentController = TextEditingController(
       text: widget.user?.presidentName ?? '',
     );
-    _addressController = TextEditingController();
-    _bankNameController = TextEditingController();
-    _accountNumberController = TextEditingController();
-    _ifscController = TextEditingController();
+    _addressController = TextEditingController(
+      text: widget.user?.address ?? '',
+    );
+    _bankNameController = TextEditingController(
+      text: widget.user?.bankName ?? '',
+    );
+    _accountNumberController = TextEditingController(
+      text: widget.user?.bankAccountNumber ?? '',
+    );
+    _ifscController = TextEditingController(
+      text: widget.user?.ifscCode ?? '',
+    );
   }
 
   @override
@@ -141,13 +151,15 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
       widget.onSuccess?.call();
     } else if (mounted) {
       _showSnackBar(
-        authProvider.errorMessage ?? AppLocalizations().tr('failed_update_profile'),
+        authProvider.errorMessage ??
+            AppLocalizations().tr('failed_update_profile'),
         isError: true,
       );
     }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
+    SizeConfig.init(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -155,15 +167,17 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
             Icon(
               isError ? Icons.error : Icons.check_circle,
               color: Colors.white,
-              size: 20,
+              size: SizeConfig.iconSizeMedium,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: SizeConfig.spaceSmall),
             Expanded(child: Text(message)),
           ],
         ),
         backgroundColor: isError ? Colors.red : AppTheme.primaryGreen,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SizeConfig.spaceSmall + 2),
+        ),
       ),
     );
   }
@@ -177,13 +191,18 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
+    final isDark = context.isDarkMode;
+
     return Dialog(
-      backgroundColor: AppTheme.cardDark,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: isDark ? AppTheme.cardDark : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(SizeConfig.spaceLarge),
+      ),
       child: Container(
         width: double.infinity,
         constraints: const BoxConstraints(maxWidth: 400),
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(SizeConfig.spaceXLarge),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -191,15 +210,15 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
             children: [
               // Header
               _buildHeader(),
-              const SizedBox(height: 8),
+              SizedBox(height: SizeConfig.spaceSmall),
               Text(
                 'Update your profile details below. Email cannot be changed.',
                 style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary.withOpacity(0.8),
+                  fontSize: SizeConfig.fontSizeSmall,
+                  color: context.textSecondaryColor.withOpacity(0.8),
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: SizeConfig.spaceXLarge),
 
               // Email (Read-only)
               FormFieldWidget(
@@ -211,7 +230,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 enabled: false,
                 hint: AppLocalizations().tr('cannot_change_email'),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: SizeConfig.spaceRegular),
 
               // Name
               FormFieldWidget(
@@ -220,7 +239,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 icon: Icons.person_outline,
                 enabled: !_isLoading,
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: SizeConfig.spaceRegular),
 
               // Location (for society, bmc, dairy)
               if (_showLocationField) ...[
@@ -230,7 +249,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                   icon: Icons.location_on_outlined,
                   enabled: !_isLoading,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceRegular),
               ],
 
               // Phone
@@ -244,7 +263,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
               // President (for society and dairy)
               if (_showPresidentField) ...[
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceRegular),
                 FormFieldWidget(
                   label: AppLocalizations().tr('president_name'),
                   controller: _presidentController,
@@ -255,7 +274,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
               // Farmer fields
               if (_showFarmerFields) ...[
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceRegular),
                 FormFieldWidget(
                   label: AppLocalizations().tr('address'),
                   controller: _addressController,
@@ -263,14 +282,14 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                   enabled: !_isLoading,
                   maxLines: 2,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceRegular),
                 FormFieldWidget(
                   label: AppLocalizations().tr('bank_name'),
                   controller: _bankNameController,
                   icon: Icons.account_balance_outlined,
                   enabled: !_isLoading,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceRegular),
                 FormFieldWidget(
                   label: AppLocalizations().tr('account_number'),
                   controller: _accountNumberController,
@@ -278,7 +297,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                   enabled: !_isLoading,
                   keyboardType: TextInputType.number,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceRegular),
                 FormFieldWidget(
                   label: AppLocalizations().tr('ifsc_code'),
                   controller: _ifscController,
@@ -287,7 +306,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 ),
               ],
 
-              const SizedBox(height: 28),
+              SizedBox(height: SizeConfig.spaceLarge + 4),
               _buildActionButtons(),
             ],
           ),
@@ -299,36 +318,42 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   Widget _buildHeader() {
     final l10n = AppLocalizations();
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(SizeConfig.spaceSmall + 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
+                ),
+                child: Icon(
+                  Icons.edit,
+                  color: AppTheme.primaryGreen,
+                  size: SizeConfig.iconSizeLarge,
+                ),
               ),
-              child: const Icon(
-                Icons.edit,
-                color: AppTheme.primaryGreen,
-                size: 24,
+              SizedBox(width: SizeConfig.spaceMedium),
+              Flexible(
+                child: Text(
+                  l10n.tr('edit_profile'),
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeXLarge,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimaryColor,
+                  ),
+                  softWrap: true,
+                  maxLines: 2,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              l10n.tr('edit_profile'),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         IconButton(
           onPressed: _isLoading ? null : () => Navigator.pop(context),
-          icon: const Icon(Icons.close, color: AppTheme.textSecondary),
+          icon: Icon(Icons.close, color: context.textSecondaryColor),
         ),
       ],
     );
@@ -339,42 +364,19 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton(
+          child: CustomButton(
+            text: l10n.tr('cancel'),
+            type: CustomButtonType.outline,
             onPressed: _isLoading ? null : () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
-              side: const BorderSide(color: AppTheme.borderDark),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(l10n.tr('cancel')),
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: SizeConfig.spaceMedium),
         Expanded(
-          child: ElevatedButton(
+          child: CustomButton(
+            text: l10n.tr('save_changes'),
+            type: CustomButtonType.primary,
+            isLoading: _isLoading,
             onPressed: _isLoading ? null : _saveProfile,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryGreen,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Text(l10n.tr('save_changes')),
           ),
         ),
       ],

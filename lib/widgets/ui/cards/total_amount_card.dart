@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// A total amount card with animated value and status badge
 class TotalAmountCard extends StatelessWidget {
@@ -94,7 +95,7 @@ class TotalAmountCard extends StatelessWidget {
               ),
               // Content
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+                padding: EdgeInsets.fromLTRB(SizeConfig.spaceMedium, SizeConfig.spaceMedium, SizeConfig.spaceMedium, SizeConfig.spaceSmall),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -119,15 +120,15 @@ class TotalAmountCard extends StatelessWidget {
                               color: isActive
                                   ? color
                                   : context.textSecondaryColor,
-                              size: 12,
+                              size: SizeConfig.iconSizeXSmall,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: SizeConfig.spaceXSmall),
                         AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 300),
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: SizeConfig.fontSizeXSmall,
                             color: isActive
                                 ? context.textSecondaryColor
                                 : context.textSecondaryColor.withValues(alpha: 0.5),
@@ -147,7 +148,7 @@ class TotalAmountCard extends StatelessWidget {
                       child: AnimatedDefaultTextStyle(
                         duration: const Duration(milliseconds: 300),
                         style: TextStyle(
-                          fontSize: isActive ? 24 : 20,
+                          fontSize: isActive ? SizeConfig.fontSizeHuge : SizeConfig.fontSizeXLarge,
                           fontWeight: FontWeight.w900,
                           color: isActive
                               ? color
@@ -161,22 +162,22 @@ class TotalAmountCard extends StatelessWidget {
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       padding: EdgeInsets.symmetric(
-                        horizontal: isActive ? 10 : 8,
-                        vertical: 3,
+                        horizontal: isActive ? SizeConfig.spaceSmall : SizeConfig.spaceXSmall,
+                        vertical: SizeConfig.spaceTiny,
                       ),
                       decoration: BoxDecoration(
                         color: isActive
                             ? color.withOpacity(0.15)
                             : Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
-                            width: isActive ? 8 : 6,
-                            height: isActive ? 8 : 6,
+                            width: isActive ? SizeConfig.spaceSmall : SizeConfig.spaceXSmall,
+                            height: isActive ? SizeConfig.spaceSmall : SizeConfig.spaceXSmall,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isActive ? color : Colors.grey,
@@ -191,7 +192,7 @@ class TotalAmountCard extends StatelessWidget {
                                   : null,
                             ),
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: SizeConfig.spaceTiny),
                           Text(
                             isActive
                                 ? AppLocalizations().tr('paid').toUpperCase()
@@ -199,7 +200,7 @@ class TotalAmountCard extends StatelessWidget {
                                       .tr('pending')
                                       .toUpperCase(),
                             style: TextStyle(
-                              fontSize: 8,
+                              fontSize: SizeConfig.fontSizeXSmall,
                               fontWeight: FontWeight.w700,
                               color: isActive ? color : Colors.grey,
                               letterSpacing: 0.5,

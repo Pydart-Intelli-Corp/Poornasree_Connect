@@ -259,18 +259,44 @@ class AuthProvider with ChangeNotifier {
       
       if (result['success']) {
         print('✅ Profile updated successfully');
+        print('✅ API Response data: ${result['data']}');
         
-        // Update local user data with new values
-        _user = _user!.copyWith(
-          name: profileData['name'] ?? _user!.name,
-          location: profileData['location'] ?? _user!.location,
-          presidentName: profileData['president_name'] ?? _user!.presidentName,
-          contactPhone: profileData['contact_phone'] ?? _user!.contactPhone,
-          phone: profileData['phone'] ?? _user!.phone,
-        );
+        // Get the updated data from API response
+        final updatedData = result['data'];
+        if (updatedData != null && updatedData['data'] != null) {
+          final entityData = updatedData['data'];
+          
+          // Update user with data from API response
+          _user = _user!.copyWith(
+            name: entityData['name']?.toString() ?? _user!.name,
+            location: entityData['location']?.toString(),
+            presidentName: entityData['president_name']?.toString(),
+            contactPhone: entityData['contact_phone']?.toString(),
+            phone: entityData['phone']?.toString(),
+            address: entityData['address']?.toString(),
+            bankName: entityData['bank_name']?.toString(),
+            bankAccountNumber: entityData['bank_account_number']?.toString(),
+            ifscCode: entityData['ifsc_code']?.toString(),
+          );
+        } else {
+          // Fallback: use submitted data if API doesn't return updated data
+          _user = _user!.copyWith(
+            name: profileData['name'] ?? _user!.name,
+            location: profileData['location'],
+            presidentName: profileData['president_name'],
+            contactPhone: profileData['contact_phone'],
+            phone: profileData['phone'],
+            address: profileData['address'],
+            bankName: profileData['bank_name'],
+            bankAccountNumber: profileData['bank_account_number'],
+            ifscCode: profileData['ifsc_code'],
+          );
+        }
         
         // Persist updated user data
         await _storage.write(key: _userKey, value: jsonEncode(_user!.toJson()));
+        
+        print('✅ Updated user name: ${_user!.name}');
         
         _isLoading = false;
         notifyListeners();

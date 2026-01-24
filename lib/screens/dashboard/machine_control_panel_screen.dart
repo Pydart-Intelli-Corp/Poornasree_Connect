@@ -975,24 +975,24 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       context: context,
       backgroundColor: context.cardColor,
       elevation: 8,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SizeConfig.radiusLarge)),
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(SizeConfig.spaceSmall),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 BottomSheetHeader(
-                  title:
-                      '${AppLocalizations().tr('select_machines_for')} $actionName',
+                  title: '${AppLocalizations().tr('select_machines_for')} $actionName',
                   icon: actionIcon,
                   color: actionColor,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceXSmall),
 
                 // All Machines checkbox
                 CheckboxListTile(
@@ -1009,27 +1009,30 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   title: Text(
                     AppLocalizations().tr('all_machines'),
                     style: TextStyle(
+                      fontSize: SizeConfig.fontSizeLarge,
                       fontWeight: FontWeight.w600,
                       color: context.textPrimaryColor,
                     ),
                   ),
                   subtitle: Text(
                     '${_connectedMachineIds.length} ${AppLocalizations().tr('machines_connected')}',
-                    style: TextStyle(color: context.textSecondaryColor),
+                    style: TextStyle(
+                      fontSize: SizeConfig.fontSizeMedium,
+                      color: context.textSecondaryColor,
+                    ),
                   ),
                   activeColor: actionColor,
                   contentPadding: EdgeInsets.zero,
                 ),
 
+                SizedBox(height: SizeConfig.spaceTiny),
                 const Divider(),
+                SizedBox(height: SizeConfig.spaceTiny),
 
                 // Individual machine checkboxes with weighing scale toggle
                 ..._connectedMachineIds.map((machineId) {
-                  final isSelected =
-                      _testAllMachines ||
-                      _selectedTestMachines.contains(machineId);
-                  final isWeighingAuto =
-                      _machineWeighingScaleMode[machineId] ?? true;
+                  final isSelected = _testAllMachines || _selectedTestMachines.contains(machineId);
+                  final isWeighingAuto = _machineWeighingScaleMode[machineId] ?? true;
 
                   return Column(
                     children: [
@@ -1049,7 +1052,11 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               },
                         title: Text(
                           '${AppLocalizations().tr('machine')} m${_formatMachineId(machineId)}',
-                          style: TextStyle(color: context.textPrimaryColor),
+                          style: TextStyle(
+                            fontSize: SizeConfig.fontSizeLarge,
+                            fontWeight: FontWeight.w600,
+                            color: context.textPrimaryColor,
+                          ),
                         ),
                         activeColor: actionColor,
                         contentPadding: EdgeInsets.zero,
@@ -1057,25 +1064,26 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       // Weighing Scale & Farmer ID Toggles (only for Test)
                       if (actionName == 'Test') ...[
                         Padding(
-                          padding: const EdgeInsets.only(
-                            left: 48,
-                            right: 16,
-                            bottom: 4,
-                            top: 4,
+                          padding: EdgeInsets.only(
+                            left: SizeConfig.iconButtonSize,
+                            right: SizeConfig.spaceSmall,
+                            bottom: SizeConfig.spaceTiny,
+                            top: SizeConfig.spaceTiny,
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.scale_rounded,
-                                size: 16,
+                                size: SizeConfig.iconSizeSmall,
                                 color: context.textSecondaryColor,
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: SizeConfig.spaceXSmall),
                               Expanded(
                                 child: Text(
                                   'Weighing Scale:',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: SizeConfig.fontSizeMedium,
+                                    fontWeight: FontWeight.w500,
                                     color: context.textSecondaryColor,
                                   ),
                                 ),
@@ -1091,14 +1099,13 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                   _savePreferences();
                                 },
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: SizeConfig.spaceXSmall),
                               _buildInlineToggle(
                                 label: l10n.tr('manual'),
                                 isSelected: !isWeighingAuto,
                                 onTap: () {
                                   setModalState(() {
-                                    _machineWeighingScaleMode[machineId] =
-                                        false;
+                                    _machineWeighingScaleMode[machineId] = false;
                                   });
                                   setState(() {});
                                   _savePreferences();
@@ -1108,32 +1115,32 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(
-                            left: 48,
-                            right: 16,
-                            bottom: 8,
+                          padding: EdgeInsets.only(
+                            left: SizeConfig.iconButtonSize,
+                            right: SizeConfig.spaceSmall,
+                            bottom: SizeConfig.spaceSmall,
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.badge_rounded,
-                                size: 16,
+                                size: SizeConfig.iconSizeSmall,
                                 color: context.textSecondaryColor,
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: SizeConfig.spaceXSmall),
                               Expanded(
                                 child: Text(
                                   'Farmer ID:',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: SizeConfig.fontSizeMedium,
+                                    fontWeight: FontWeight.w500,
                                     color: context.textSecondaryColor,
                                   ),
                                 ),
                               ),
                               _buildInlineToggle(
                                 label: l10n.tr('auto'),
-                                isSelected:
-                                    _machineFarmerIdMode[machineId] ?? false,
+                                isSelected: _machineFarmerIdMode[machineId] ?? false,
                                 onTap: () {
                                   setModalState(() {
                                     _machineFarmerIdMode[machineId] = true;
@@ -1142,11 +1149,10 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                   _savePreferences();
                                 },
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: SizeConfig.spaceXSmall),
                               _buildInlineToggle(
                                 label: l10n.tr('manual'),
-                                isSelected:
-                                    !(_machineFarmerIdMode[machineId] ?? false),
+                                isSelected: !(_machineFarmerIdMode[machineId] ?? false),
                                 onTap: () {
                                   setModalState(() {
                                     _machineFarmerIdMode[machineId] = false;
@@ -1163,7 +1169,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                   );
                 }).toList(),
 
-                const SizedBox(height: 16),
+                SizedBox(height: SizeConfig.spaceXSmall),
 
                 // Save button
                 SizedBox(
@@ -1172,25 +1178,29 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     onPressed: () {
                       Navigator.pop(context);
                     },
-                    icon: const Icon(Icons.check_rounded),
+                    icon: Icon(Icons.check_rounded, size: SizeConfig.iconSizeLarge),
                     label: Text(
                       _testAllMachines
                           ? '${AppLocalizations().tr('save')} (${AppLocalizations().tr('all')} ${_connectedMachineIds.length} ${AppLocalizations().tr('machines').toLowerCase()})'
                           : '${AppLocalizations().tr('save')} (${_selectedTestMachines.length} ${AppLocalizations().tr('selected').toLowerCase()})',
+                      style: TextStyle(fontSize: SizeConfig.fontSizeLarge, fontWeight: FontWeight.w700),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: actionColor,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: EdgeInsets.symmetric(
+                        vertical: SizeConfig.spaceMedium,
+                        horizontal: SizeConfig.spaceRegular,
+                      ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
                       ),
                     ),
                   ),
                 ),
               ],
             ),
-          );
+          ));
         },
       ),
     );
@@ -1485,35 +1495,83 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations().tr('control_panel')),
-        actions: [
-          // Machine navigation (shown when multiple machines connected)
-          if (showNavigation) ...[
+        titleSpacing: 0,
+        centerTitle: true,
+        title: _readingHistory.length > 1
+            ? HistoryNavigator(
+                historyCount: _readingHistory.length,
+                historyIndex: _historyIndex,
+                isViewingHistory: _isViewingHistory,
+                onPrevious: () {
+                  setState(() {
+                    _isViewingHistory = true;
+                    _historyIndex++;
+                  });
+                },
+                onNext: () {
+                  setState(() {
+                    _historyIndex--;
+                    if (_historyIndex == 0) {
+                      _isViewingHistory = false;
+                    }
+                  });
+                },
+                onGoToLive: () {
+                  setState(() {
+                    _isViewingHistory = false;
+                    _historyIndex = 0;
+                  });
+                },
+              )
+            : null,
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             IconButton(
-              onPressed: _switchToPreviousMachine,
-              icon: const Icon(Icons.chevron_left),
-              tooltip: AppLocalizations().tr('previous_machine'),
-              iconSize: 20,
-              padding: const EdgeInsets.all(8),
+              icon: Icon(Icons.arrow_back),
+              onPressed: () => Navigator.pop(context),
             ),
-            // Machine number dropdown
-            PopupMenuButton<int>(
+            Text(
+              'CPanel',
+              style: TextStyle(
+                fontSize: SizeConfig.adaptiveNormalize(18.0),
+                fontWeight: FontWeight.w600,
+                color: context.textPrimaryColor,
+              ),
+            ),
+          ],
+        ),
+        leadingWidth: 120,
+        actions: [
+          if (showNavigation)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: _switchToPreviousMachine,
+                  icon: Icon(Icons.chevron_left, size: SizeConfig.appBarIconSize),
+                  tooltip: AppLocalizations().tr('previous_machine'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
+                ),
+                PopupMenuButton<int>(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
               ),
               color: context.cardColor,
-              elevation: 8,
-              offset: const Offset(0, 50),
+              elevation: 4,
+              offset: Offset(0, SizeConfig.appBarHeight),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+                padding: EdgeInsets.symmetric(
+                  horizontal: SizeConfig.spaceSmall,
+                  vertical: SizeConfig.spaceTiny,
                 ),
                 decoration: BoxDecoration(
                   color: isConnected
                       ? AppTheme.primaryGreen.withOpacity(context.isDarkMode ? 0.15 : 0.08)
                       : AppTheme.errorColor.withOpacity(context.isDarkMode ? 0.15 : 0.08),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
                   border: Border.all(
                     color: isConnected
                         ? AppTheme.primaryGreen.withOpacity(context.isDarkMode ? 0.4 : 0.6)
@@ -1534,23 +1592,23 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           : (isConnected
                                 ? AppTheme.primaryGreen
                                 : AppTheme.errorColor),
-                      size: 16,
+                      size: SizeConfig.iconSizeSmall,
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: SizeConfig.spaceXSmall),
                     Text(
                       _currentMachineId ?? '',
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: SizeConfig.fontSizeSmall,
                         fontWeight: FontWeight.w700,
                         color: isConnected
                             ? AppTheme.primaryGreen
                             : AppTheme.errorColor,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: SizeConfig.spaceTiny),
                     Icon(
                       Icons.expand_more_rounded,
-                      size: 16,
+                      size: SizeConfig.iconSizeSmall,
                       color: isConnected
                           ? AppTheme.primaryGreen
                           : AppTheme.errorColor,
@@ -1576,17 +1634,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
 
                   return PopupMenuItem<int>(
                     value: index,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: SizeConfig.spaceMedium,
+                      vertical: SizeConfig.spaceSmall,
                     ),
                     child: Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(SizeConfig.spaceMedium),
                       decoration: BoxDecoration(
                         color: isCurrentMachine
                             ? AppTheme.primaryGreen.withOpacity(0.1)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                         border: Border.all(
                           color: isCurrentMachine
                               ? AppTheme.primaryGreen.withOpacity(0.3)
@@ -1598,8 +1656,8 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                         children: [
                           // Serial number badge
                           Container(
-                            width: 28,
-                            height: 28,
+                            width: SizeConfig.iconSizeLarge + 4,
+                            height: SizeConfig.iconSizeLarge + 4,
                             decoration: BoxDecoration(
                               color: machineConnected
                                   ? AppTheme.primaryGreen.withOpacity(0.15)
@@ -1620,7 +1678,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               child: Text(
                                 '${index + 1}',
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: SizeConfig.fontSizeSmall,
                                   fontWeight: FontWeight.w700,
                                   color: machineConnected
                                       ? AppTheme.primaryGreen
@@ -1629,7 +1687,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: SizeConfig.spaceMedium),
                           // Machine info
                           Expanded(
                             child: Column(
@@ -1641,12 +1699,12 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                     Text(
                                       '${AppLocalizations().tr('machine')} $machineId',
                                       style: TextStyle(
-                                        fontSize: 14,
+                                        fontSize: SizeConfig.fontSizeRegular,
                                         fontWeight: FontWeight.w600,
                                         color: context.textPrimaryColor,
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
+                                    SizedBox(width: SizeConfig.spaceXSmall),
                                     // Bluetooth icon with signal strength color
                                     Icon(
                                       machineConnected
@@ -1667,16 +1725,16 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                         }
                                         return AppTheme.primaryGreen;
                                       }(),
-                                      size: 14,
+                                      size: SizeConfig.iconSizeSmall,
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
+                                SizedBox(height: SizeConfig.spaceTiny),
                                 Row(
                                   children: [
                                     Container(
-                                      width: 6,
-                                      height: 6,
+                                      width: SizeConfig.spaceXSmall + 2,
+                                      height: SizeConfig.spaceXSmall + 2,
                                       decoration: BoxDecoration(
                                         color: machineConnected
                                             ? AppTheme.primaryGreen
@@ -1684,13 +1742,13 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                         shape: BoxShape.circle,
                                       ),
                                     ),
-                                    const SizedBox(width: 4),
+                                    SizedBox(width: SizeConfig.spaceTiny),
                                     Text(
                                       machineConnected
                                           ? AppLocalizations().tr('connected')
                                           : AppLocalizations().tr('offline'),
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: SizeConfig.fontSizeSmall,
                                         fontWeight: FontWeight.w500,
                                         color: machineConnected
                                             ? AppTheme.primaryGreen
@@ -1705,15 +1763,15 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                           // Check icon for current machine
                           if (isCurrentMachine)
                             Container(
-                              padding: const EdgeInsets.all(4),
+                              padding: EdgeInsets.all(SizeConfig.spaceTiny),
                               decoration: BoxDecoration(
                                 color: AppTheme.primaryGreen.withOpacity(0.15),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.check_rounded,
                                 color: AppTheme.primaryGreen,
-                                size: 16,
+                                size: SizeConfig.iconSizeMedium,
                               ),
                             ),
                         ],
@@ -1721,16 +1779,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     ),
                   );
                 });
-              },
+  }),
+                IconButton(
+                  onPressed: _switchToNextMachine,
+                  icon: Icon(Icons.chevron_right, size: SizeConfig.appBarIconSize),
+                  tooltip: AppLocalizations().tr('next_machine'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
-            IconButton(
-              onPressed: _switchToNextMachine,
-              icon: const Icon(Icons.chevron_right),
-              tooltip: AppLocalizations().tr('next_machine'),
-              iconSize: 20,
-              padding: const EdgeInsets.all(8),
-            ),
-          ],
         ],
       ),
       body: Column(
@@ -1738,7 +1797,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
           // Main content area - Scrollable
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(SizeConfig.spaceMedium),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1783,35 +1842,6 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                         },
                       ),
                       const SizedBox(width: 8),
-                      // History navigation
-                      if (_readingHistory.length > 1) ...[
-                        HistoryNavigator(
-                          historyCount: _readingHistory.length,
-                          historyIndex: _historyIndex,
-                          isViewingHistory: _isViewingHistory,
-                          onPrevious: () {
-                            setState(() {
-                              _isViewingHistory = true;
-                              _historyIndex++;
-                            });
-                          },
-                          onNext: () {
-                            setState(() {
-                              _historyIndex--;
-                              if (_historyIndex == 0) {
-                                _isViewingHistory = false;
-                              }
-                            });
-                          },
-                          onGoToLive: () {
-                            setState(() {
-                              _isViewingHistory = false;
-                              _historyIndex = 0;
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       // Clear button
                       CompactActionButton(
                         icon: Icons.restart_alt_rounded,
@@ -1837,7 +1867,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       Text(
                         _formatReadingTimestamp(_currentReading.timestamp),
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: SizeConfig.fontSizeSmall,
                           fontWeight: FontWeight.w500,
                           color: _isViewingHistory
                               ? AppTheme.warningColor
@@ -1846,9 +1876,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: SizeConfig.spaceSmall),
                   SizedBox(
-                    height: 170,
+                    height: 150,
                     child: Row(
                       children: [
                         Expanded(
@@ -1860,7 +1890,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             isViewingHistory: _isViewingHistory,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: SizeConfig.spaceMedium),
                         Expanded(
                           child: PrimaryReadingCard(
                             title: AppLocalizations().tr('snf').toUpperCase(),
@@ -1870,7 +1900,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                             isViewingHistory: _isViewingHistory,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: SizeConfig.spaceMedium),
                         Expanded(
                           child: PrimaryReadingCard(
                             title: AppLocalizations().tr('clr').toUpperCase(),
@@ -1883,7 +1913,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: SizeConfig.spaceMedium),
 
                   // === SECTION 3: TRANSACTION ===
                   SectionLabel(label: AppLocalizations().tr('transaction')),
@@ -2159,9 +2189,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             ],
           ),
 
-          const SizedBox(height: 12),
+          SizedBox(height: SizeConfig.spaceTiny),
           const ThemedDivider(),
-          const SizedBox(height: 12),
+          SizedBox(height: SizeConfig.spaceTiny),
 
           // Averages row (Avg FAT, Avg SNF)
           Row(
@@ -2186,9 +2216,9 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             ],
           ),
 
-          const SizedBox(height: 12),
+          SizedBox(height: SizeConfig.spaceTiny),
           const ThemedDivider(),
-          const SizedBox(height: 12),
+          SizedBox(height: SizeConfig.spaceTiny),
 
           // Best and Worst row
           Row(
@@ -2207,7 +2237,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     ? 'm${_formatMachineId(_bestMachineId!)}'
                     : null,
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: SizeConfig.spaceSmall),
               QualityHighlightCard(
                 title: AppLocalizations().tr('needs_improvement'),
                 icon: Icons.trending_down_rounded,
@@ -2234,7 +2264,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.primaryBlue.withOpacity(isDark ? 0.08 : 0.05),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
         border: Border.all(
           color: AppTheme.primaryBlue.withOpacity(isDark ? 0.3 : 0.2),
           width: 1,
@@ -2242,7 +2272,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
       ),
       child: Row(
         children: [
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceMedium),
           FarmerInfoItem(
             label: AppLocalizations().tr('tests').toUpperCase(),
             value:
@@ -2269,7 +2299,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             icon: Icons.card_giftcard,
             color: AppTheme.primaryPurple,
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceMedium),
         ],
       ),
     );
@@ -2279,56 +2309,58 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : Colors.black.withOpacity(0.08),
-            blurRadius: isDark ? 20 : 12,
-            offset: isDark ? const Offset(0, 4) : const Offset(0, 2),
-            spreadRadius: isDark ? 0 : -2,
-          ),
-        ],
-        border: Border.all(color: context.borderColor, width: 1),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildTestButton(),
-          ActionButton(
-            label: AppLocalizations().tr('ok'),
-            icon: Icons.done_rounded,
-            color: AppTheme.primaryBlue,
-            onTap: _handleOk,
-            onLongPress: () => _showMachineSelector('OK'),
-            showAllIndicator: _connectedMachineIds.length > 1,
-            isAllMode: _testAllMachines,
-          ),
-          ActionButton(
-            label: AppLocalizations().tr('cancel'),
-            icon: Icons.close_rounded,
-            color: AppTheme.primaryAmber,
-            onTap: _handleCancel,
-            onLongPress: () => _showMachineSelector('Cancel'),
-            showAllIndicator: _connectedMachineIds.length > 1,
-            isAllMode: _testAllMachines,
-          ),
-          ActionButton(
-            label: AppLocalizations().tr('clean'),
-            icon: Icons.opacity_rounded,
-            color: AppTheme.primaryPurple,
-            onTap: _handleClean,
-            onLongPress: () => _showMachineSelector('Clean'),
-            showAllIndicator: _connectedMachineIds.length > 1,
-            isAllMode: _testAllMachines,
-          ),
-        ],
+    return SafeArea(
+      child: Container(
+        margin: EdgeInsets.fromLTRB(SizeConfig.spaceMedium, 0, SizeConfig.spaceMedium, SizeConfig.spaceMedium),
+        padding: EdgeInsets.symmetric(horizontal: SizeConfig.spaceXSmall, vertical: SizeConfig.spaceSmall),
+        decoration: BoxDecoration(
+          color: context.cardColor,
+          borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.08),
+              blurRadius: isDark ? 20 : 12,
+              offset: isDark ? const Offset(0, 4) : const Offset(0, 2),
+              spreadRadius: isDark ? 0 : -2,
+            ),
+          ],
+          border: Border.all(color: context.borderColor, width: 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildTestButton(),
+            ActionButton(
+              label: AppLocalizations().tr('ok'),
+              icon: Icons.done_rounded,
+              color: AppTheme.primaryBlue,
+              onTap: _handleOk,
+              onLongPress: () => _showMachineSelector('OK'),
+              showAllIndicator: _connectedMachineIds.length > 1,
+              isAllMode: _testAllMachines,
+            ),
+            ActionButton(
+              label: AppLocalizations().tr('cancel'),
+              icon: Icons.close_rounded,
+              color: AppTheme.primaryAmber,
+              onTap: _handleCancel,
+              onLongPress: () => _showMachineSelector('Cancel'),
+              showAllIndicator: _connectedMachineIds.length > 1,
+              isAllMode: _testAllMachines,
+            ),
+            ActionButton(
+              label: AppLocalizations().tr('clean'),
+              icon: Icons.opacity_rounded,
+              color: AppTheme.primaryPurple,
+              onTap: _handleClean,
+              onLongPress: () => _showMachineSelector('Clean'),
+              showAllIndicator: _connectedMachineIds.length > 1,
+              isAllMode: _testAllMachines,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2366,25 +2398,26 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: SizeConfig.spaceSmall,
+          vertical: SizeConfig.spaceXSmall,
+        ),
         decoration: BoxDecoration(
           color: isSelected
               ? AppTheme.successColor.withOpacity(0.15)
               : context.surfaceColor,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
           border: Border.all(
             color: isSelected ? AppTheme.successColor : context.borderColor,
-            width: 1,
+            width: 2,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            color: isSelected
-                ? AppTheme.primaryGreen
-                : context.textSecondaryColor,
+            fontSize: SizeConfig.fontSizeMedium,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+            color: isSelected ? AppTheme.primaryGreen : context.textSecondaryColor,
           ),
         ),
       ),
@@ -2426,21 +2459,21 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             return AlertDialog(
               backgroundColor: context.cardColor,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
               ),
               title: Row(
                 children: [
                   Icon(
                     Icons.person_rounded,
                     color: AppTheme.successColor,
-                    size: 24,
+                    size: SizeConfig.iconSizeLarge,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: SizeConfig.spaceMedium),
                   Text(
                     l10n.tr('enter_farmer_ids'),
                     style: TextStyle(
                       color: context.textPrimaryColor,
-                      fontSize: 18,
+                      fontSize: SizeConfig.fontSizeLarge,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2455,7 +2488,7 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     final isLast = index == machines.length - 1;
 
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                      padding: EdgeInsets.only(bottom: SizeConfig.spaceRegular),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -2467,12 +2500,12 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                                   _formatMachineId(machineId),
                                 ),
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: SizeConfig.fontSizeSmall,
                               fontWeight: FontWeight.w600,
                               color: context.textPrimaryColor,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: SizeConfig.spaceSmall),
                           TextField(
                             controller: controllers[machineId],
                             focusNode: focusNodes[machineId],
@@ -2509,36 +2542,36 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               prefixIcon: Icon(
                                 Icons.badge_rounded,
                                 color: AppTheme.primaryGreen,
-                                size: 20,
+                                size: SizeConfig.iconSizeMedium,
                               ),
                               filled: true,
                               fillColor: context.surfaceColor,
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                                 borderSide: BorderSide.none,
                               ),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                                 borderSide: BorderSide(
                                   color: context.borderColor,
                                   width: 1,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                                 borderSide: BorderSide(
                                   color: AppTheme.primaryGreen,
                                   width: 2,
                                 ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: SizeConfig.spaceRegular,
+                                vertical: SizeConfig.spaceMedium,
                               ),
                             ),
                             style: TextStyle(
                               color: context.textPrimaryColor,
-                              fontSize: 14,
+                              fontSize: SizeConfig.fontSizeRegular,
                             ),
                           ),
                         ],
@@ -2556,9 +2589,18 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     }
                     Navigator.pop(context, null);
                   },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: SizeConfig.spaceLarge,
+                      vertical: SizeConfig.spaceMedium,
+                    ),
+                  ),
                   child: Text(
                     l10n.tr('cancel'),
-                    style: TextStyle(color: context.textSecondaryColor),
+                    style: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontSize: SizeConfig.fontSizeRegular,
+                    ),
                   ),
                 ),
                 ElevatedButton(
@@ -2580,15 +2622,16 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: context.borderColor,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: SizeConfig.spaceLarge,
+                      vertical: SizeConfig.spaceMedium,
                     ),
                   ),
                   child: Text(
                     showStartTest ? l10n.tr('start_test') : l10n.tr('continue'),
+                    style: TextStyle(fontSize: SizeConfig.fontSizeRegular),
                   ),
                 ),
               ],
@@ -2713,21 +2756,21 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
             return AlertDialog(
               backgroundColor: context.cardColor,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
               ),
               title: Row(
                 children: [
                   Icon(
                     Icons.scale_rounded,
                     color: AppTheme.primaryGreen,
-                    size: 24,
+                    size: SizeConfig.iconSizeLarge,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: SizeConfig.spaceMedium),
                   Text(
                     l10n.tr('enter_weights'),
                     style: TextStyle(
                       color: context.textPrimaryColor,
-                      fontSize: 18,
+                      fontSize: SizeConfig.fontSizeLarge,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2742,19 +2785,19 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     final isLast = index == machines.length - 1;
 
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                      padding: EdgeInsets.only(bottom: SizeConfig.spaceRegular),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Machine m${_formatMachineId(machineId)}',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: SizeConfig.fontSizeSmall,
                               fontWeight: FontWeight.w600,
                               color: context.textSecondaryColor,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: SizeConfig.spaceSmall),
                           TextField(
                             controller: controllers[machineId],
                             focusNode: focusNodes[machineId],
@@ -2798,37 +2841,37 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                               prefixIcon: Icon(
                                 Icons.monitor_weight_rounded,
                                 color: AppTheme.primaryGreen,
-                                size: 20,
+                                size: SizeConfig.iconSizeMedium,
                               ),
                               suffixText: 'kg',
                               filled: true,
                               fillColor: context.surfaceColor,
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                                 borderSide: BorderSide.none,
                               ),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                                 borderSide: BorderSide(
                                   color: context.borderColor,
                                   width: 1,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                                 borderSide: BorderSide(
                                   color: AppTheme.successColor,
                                   width: 2,
                                 ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: SizeConfig.spaceRegular,
+                                vertical: SizeConfig.spaceMedium,
                               ),
                             ),
                             style: TextStyle(
                               color: context.textPrimaryColor,
-                              fontSize: 14,
+                              fontSize: SizeConfig.fontSizeRegular,
                             ),
                           ),
                         ],
@@ -2846,9 +2889,18 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     }
                     Navigator.pop(context, null);
                   },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: SizeConfig.spaceLarge,
+                      vertical: SizeConfig.spaceMedium,
+                    ),
+                  ),
                   child: Text(
                     l10n.tr('cancel'),
-                    style: TextStyle(color: context.textSecondaryColor),
+                    style: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontSize: SizeConfig.fontSizeRegular,
+                    ),
                   ),
                 ),
                 ElevatedButton(
@@ -2870,14 +2922,17 @@ class _MachineControlPanelScreenState extends State<MachineControlPanelScreen>
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: context.borderColor,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: SizeConfig.spaceLarge,
+                      vertical: SizeConfig.spaceMedium,
                     ),
                   ),
-                  child: Text(l10n.tr('start_test')),
+                  child: Text(
+                    l10n.tr('start_test'),
+                    style: TextStyle(fontSize: SizeConfig.fontSizeRegular),
+                  ),
                 ),
               ],
             );

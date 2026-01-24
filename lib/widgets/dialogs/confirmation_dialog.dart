@@ -49,45 +49,46 @@ class ConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     return Dialog(
       backgroundColor: AppTheme.cardDark,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SizeConfig.spaceRegular)),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(SizeConfig.spaceLarge),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(SizeConfig.spaceSmall + 2),
                 decoration: BoxDecoration(
                   color: (iconColor ?? AppTheme.primaryGreen).withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
-                  size: 32,
+                  size: SizeConfig.iconSizeHuge,
                   color: iconColor ?? AppTheme.primaryGreen,
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: SizeConfig.spaceRegular),
             ],
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 18,
+              style: TextStyle(
+                fontSize: SizeConfig.fontSizeXLarge,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: SizeConfig.spaceSmall + 2),
             Text(
               message,
-              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+              style: TextStyle(fontSize: SizeConfig.fontSizeRegular, color: AppTheme.textSecondary),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: SizeConfig.spaceLarge),
             Row(
               children: [
                 Expanded(
@@ -96,15 +97,15 @@ class ConfirmationDialog extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.textSecondary,
                       side: BorderSide(color: AppTheme.borderDark),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceMedium),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                       ),
                     ),
                     child: Text(cancelText ?? AppLocalizations().tr('cancel')),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: SizeConfig.spaceSmall + 2),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context, true),
@@ -113,9 +114,9 @@ class ConfirmationDialog extends StatelessWidget {
                           ? Colors.red.shade600
                           : AppTheme.primaryGreen,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceMedium),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
                       ),
                     ),
                     child: Text(confirmText ?? AppLocalizations().tr('confirm')),

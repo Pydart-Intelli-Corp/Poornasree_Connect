@@ -18,14 +18,16 @@ class BottomSheetHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: context.textPrimaryColor,
+        Icon(icon, color: color, size: SizeConfig.iconSizeLarge),
+        SizedBox(width: SizeConfig.spaceSmall),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: SizeConfig.fontSizeXLarge,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimaryColor,
+            ),
           ),
         ),
       ],

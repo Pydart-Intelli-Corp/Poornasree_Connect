@@ -20,6 +20,10 @@ class UserModel {
   
   // Farmer-specific
   final String? farmerId;
+  final String? address;
+  final String? bankName;
+  final String? bankAccountNumber;
+  final String? ifscCode;
   
   // BMC-specific
   final String? bmcId;
@@ -59,6 +63,10 @@ class UserModel {
     this.societyName,
     this.presidentName,
     this.farmerId,
+    this.address,
+    this.bankName,
+    this.bankAccountNumber,
+    this.ifscCode,
     this.bmcId,
     this.bmcName,
     this.dairyId,
@@ -93,6 +101,10 @@ class UserModel {
       societyName: (json['societyName'] ?? json['society_name'])?.toString(),
       presidentName: (json['presidentName'] ?? json['president_name'])?.toString(),
       farmerId: (json['farmerId'] ?? json['farmer_id'])?.toString(),
+      address: json['address']?.toString(),
+      bankName: (json['bankName'] ?? json['bank_name'])?.toString(),
+      bankAccountNumber: (json['bankAccountNumber'] ?? json['bank_account_number'])?.toString(),
+      ifscCode: (json['ifscCode'] ?? json['ifsc_code'])?.toString(),
       bmcId: (json['bmcId'] ?? json['bmc_id'])?.toString(),
       bmcName: (json['bmcName'] ?? json['bmc_name'])?.toString(),
       dairyId: (json['dairyId'] ?? json['dairy_id'])?.toString(),
@@ -128,6 +140,10 @@ class UserModel {
       'societyName': societyName,
       'presidentName': presidentName,
       'farmerId': farmerId,
+      'address': address,
+      'bankName': bankName,
+      'bankAccountNumber': bankAccountNumber,
+      'ifscCode': ifscCode,
       'bmcId': bmcId,
       'bmcName': bmcName,
       'dairyId': dairyId,
@@ -162,6 +178,10 @@ class UserModel {
     String? societyName,
     String? presidentName,
     String? farmerId,
+    String? address,
+    String? bankName,
+    String? bankAccountNumber,
+    String? ifscCode,
     String? bmcId,
     String? bmcName,
     String? dairyId,
@@ -193,6 +213,10 @@ class UserModel {
       societyName: societyName ?? this.societyName,
       presidentName: presidentName ?? this.presidentName,
       farmerId: farmerId ?? this.farmerId,
+      address: address ?? this.address,
+      bankName: bankName ?? this.bankName,
+      bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
+      ifscCode: ifscCode ?? this.ifscCode,
       bmcId: bmcId ?? this.bmcId,
       bmcName: bmcName ?? this.bmcName,
       dairyId: dairyId ?? this.dairyId,

@@ -14,30 +14,42 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final l10n = AppLocalizations();
     return Column(
       children: [
         // Avatar
         ProfileAvatar(name: user?.name),
-        const SizedBox(height: 16),
+        SizedBox(height: SizeConfig.spaceRegular),
 
         // Name
-        Text(
-          user?.name ?? l10n.tr('user'),
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: context.textPrimaryColor,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            user?.name ?? l10n.tr('user'),
+            style: TextStyle(
+              fontSize: SizeConfig.fontSizeHuge,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimaryColor,
+            ),
+            maxLines: 1,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: SizeConfig.spaceXSmall),
 
         // Email
-        Text(
-          user?.email ?? '',
-          style: TextStyle(fontSize: 14, color: context.textSecondaryColor),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            user?.email ?? '',
+            style: TextStyle(
+              fontSize: SizeConfig.fontSizeRegular,
+              color: context.textSecondaryColor,
+            ),
+            maxLines: 1,
+          ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: SizeConfig.spaceMedium),
 
         // Role Badge
         RoleBadge(role: user?.role ?? 'user'),
@@ -61,14 +73,18 @@ class ProfileDetailsCard extends StatelessWidget {
       trailing: onEditPressed != null
           ? TextButton.icon(
               onPressed: onEditPressed,
-              icon: const Icon(Icons.edit, size: 16),
-              label: Text(l10n.tr('edit')),
+              icon: Icon(Icons.edit, size: SizeConfig.iconSizeMedium),
+              label: Text(
+                l10n.tr('edit'),
+                style: TextStyle(fontSize: SizeConfig.fontSizeRegular),
+              ),
               style: TextButton.styleFrom(
                 foregroundColor: AppTheme.primaryGreen,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+                padding: EdgeInsets.symmetric(
+                  horizontal: SizeConfig.spaceRegular,
+                  vertical: SizeConfig.spaceSmall,
                 ),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             )
           : null,
@@ -100,11 +116,11 @@ class ProfileDetailsCard extends StatelessWidget {
               label: l10n.tr('society'),
               value: user?.societyName ?? '-',
             ),
-          if (user?.societyId != null)
+          if (user?.societyId != null || user?.societyIdentifier != null)
             DetailRow(
               icon: Icons.tag_outlined,
               label: l10n.tr('society_id'),
-              value: user?.societyId ?? '-',
+              value: user?.societyIdentifier ?? user?.societyId ?? '-',
             ),
           if (user?.bmcName != null)
             DetailRow(
@@ -129,6 +145,30 @@ class ProfileDetailsCard extends StatelessWidget {
               icon: Icons.phone_outlined,
               label: l10n.tr('phone'),
               value: user?.phone ?? user?.contactPhone ?? '-',
+            ),
+          if (user?.address != null)
+            DetailRow(
+              icon: Icons.home_outlined,
+              label: l10n.tr('address'),
+              value: user?.address ?? '-',
+            ),
+          if (user?.bankName != null)
+            DetailRow(
+              icon: Icons.account_balance_outlined,
+              label: l10n.tr('bank_name'),
+              value: user?.bankName ?? '-',
+            ),
+          if (user?.bankAccountNumber != null)
+            DetailRow(
+              icon: Icons.credit_card_outlined,
+              label: l10n.tr('account_number'),
+              value: user?.bankAccountNumber ?? '-',
+            ),
+          if (user?.ifscCode != null)
+            DetailRow(
+              icon: Icons.pin_outlined,
+              label: l10n.tr('ifsc_code'),
+              value: user?.ifscCode ?? '-',
             ),
           if (user?.presidentName != null)
             DetailRow(

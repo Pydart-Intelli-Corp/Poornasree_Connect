@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import '../feedback/flower_spinner.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
-enum CustomButtonType {
-  primary,
-  secondary,
-  outline,
-  text,
-}
+enum CustomButtonType { primary, secondary, outline, text }
 
 class CustomButton extends StatefulWidget {
   final String text;
@@ -53,10 +49,7 @@ class _CustomButtonState extends State<CustomButton>
     _scaleAnimation = Tween<double>(
       begin: 1.0,
       end: 0.95,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -92,7 +85,10 @@ class _CustomButtonState extends State<CustomButton>
   BorderSide? _getBorder() {
     switch (widget.type) {
       case CustomButtonType.outline:
-        return const BorderSide(color: AppTheme.primaryGreen, width: 2);
+        return BorderSide(
+          color: AppTheme.primaryGreen,
+          width: SizeConfig.normalize(2),
+        );
       default:
         return null;
     }
@@ -122,6 +118,8 @@ class _CustomButtonState extends State<CustomButton>
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
+
     return AnimatedBuilder(
       animation: _scaleAnimation,
       builder: (context, child) {
@@ -129,7 +127,7 @@ class _CustomButtonState extends State<CustomButton>
           scale: _scaleAnimation.value,
           child: Container(
             width: widget.isFullWidth ? double.infinity : widget.width,
-            height: widget.height ?? 56,
+            height: widget.height ?? SizeConfig.normalize(56),
             child: GestureDetector(
               onTapDown: _handleTapDown,
               onTapUp: _handleTapUp,
@@ -138,20 +136,21 @@ class _CustomButtonState extends State<CustomButton>
               child: Container(
                 decoration: BoxDecoration(
                   color: _getBackgroundColor(),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
                   border: _getBorder() != null
                       ? Border.all(
                           color: _getBorder()!.color,
                           width: _getBorder()!.width,
                         )
                       : null,
-                  boxShadow: widget.type == CustomButtonType.primary ||
+                  boxShadow:
+                      widget.type == CustomButtonType.primary ||
                           widget.type == CustomButtonType.secondary
                       ? [
                           BoxShadow(
                             color: _getBackgroundColor().withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
+                            blurRadius: SizeConfig.normalize(8),
+                            offset: Offset(0, SizeConfig.normalize(4)),
                           ),
                         ]
                       : null,
@@ -159,12 +158,16 @@ class _CustomButtonState extends State<CustomButton>
                 child: Material(
                   color: Colors.transparent,
                   child: Container(
-                    padding: widget.padding ??
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    padding:
+                        widget.padding ??
+                        EdgeInsets.symmetric(
+                          horizontal: SizeConfig.spaceRegular + 4,
+                          vertical: SizeConfig.spaceRegular,
+                        ),
                     child: widget.isLoading
                         ? Center(
                             child: FlowerSpinner(
-                              size: 20,
+                              size: SizeConfig.iconSizeMedium,
                               color: _getTextColor(),
                             ),
                           )
@@ -176,16 +179,23 @@ class _CustomButtonState extends State<CustomButton>
                                 Icon(
                                   widget.icon,
                                   color: _getTextColor(),
-                                  size: 20,
+                                  size: SizeConfig.iconSizeMedium,
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: SizeConfig.spaceSmall),
                               ],
-                              Text(
-                                widget.text,
-                                style: TextStyle(
-                                  color: _getTextColor(),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    widget.text,
+                                    style: TextStyle(
+                                      color: _getTextColor(),
+                                      fontSize: SizeConfig.fontSizeRegular,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                  ),
                                 ),
                               ),
                             ],

@@ -24,11 +24,18 @@ class _RateChartScreenState extends State<RateChartScreen> {
   bool _isOffline = false;
   bool _showSearch = false;
   String? _errorMessage;
+  Map<String, dynamic> _allChannelsData = {}; // Stores data for all channels
   Map<String, dynamic>? _rateChartInfo;
   List<dynamic> _rateData = [];
   List<dynamic> _filteredRateData = [];
   DateTime? _cacheTimestamp;
   int? _highlightedIndex;
+  String _selectedChannel = 'CH1'; // Default to Cow channel
+
+  // Get current channel data
+  Map<String, dynamic>? get _currentChannelData {
+    return _allChannelsData[_selectedChannel];
+  }
 
   @override
   void initState() {
@@ -60,13 +67,23 @@ class _RateChartScreenState extends State<RateChartScreen> {
       final cacheTime = await _rateChartService.getCacheTimestamp();
       
       if (cachedData != null && cachedData['success'] == true && cachedData['data'] != null) {
+        final channels = cachedData['data']['channels'] ?? {};
         setState(() {
-          _rateChartInfo = cachedData['data']['info'];
-          _rateData = cachedData['data']['data'] ?? [];
-          _filteredRateData = _rateData;
+          _allChannelsData = Map<String, dynamic>.from(channels);
           _cacheTimestamp = cacheTime;
           _isLoading = false;
           _isOffline = true; // Show offline indicator until network sync
+          // Update current channel data
+          final channelData = _currentChannelData;
+          if (channelData != null) {
+            _rateChartInfo = channelData['info'];
+            _rateData = channelData['data'] ?? [];
+            _filteredRateData = _rateData;
+          } else {
+            _rateChartInfo = null;
+            _rateData = [];
+            _filteredRateData = [];
+          }
         });
       } else {
         setState(() {
@@ -97,20 +114,30 @@ class _RateChartScreenState extends State<RateChartScreen> {
 
       final result = await _rateChartService.fetchRateChart(token);
 
-      if (result['success'] == true && result['data'] != null) {
+      if (result['success'] == true && result['channels'] != null) {
         final cacheTime = await _rateChartService.getCacheTimestamp();
+        final channels = result['channels'] ?? {};
         setState(() {
-          _rateChartInfo = result['data']['info'];
-          _rateData = result['data']['data'] ?? [];
-          _filteredRateData = _rateData;
+          _allChannelsData = Map<String, dynamic>.from(channels);
           _cacheTimestamp = cacheTime;
           _isLoading = false;
           _isLoadingFromNetwork = false;
           _isOffline = false;
+          // Update current channel data
+          final channelData = _currentChannelData;
+          if (channelData != null) {
+            _rateChartInfo = channelData['info'];
+            _rateData = channelData['data'] ?? [];
+            _filteredRateData = _rateData;
+          } else {
+            _rateChartInfo = null;
+            _rateData = [];
+            _filteredRateData = [];
+          }
         });
       } else {
         // Network fetch failed, keep showing cached data if available
-        if (_rateData.isEmpty) {
+        if (_allChannelsData.isEmpty) {
           setState(() {
             _errorMessage = result['message'] ?? 'Failed to load rate chart';
             _isLoading = false;
@@ -119,13 +146,13 @@ class _RateChartScreenState extends State<RateChartScreen> {
         } else {
           setState(() {
             _isLoadingFromNetwork = false;
-            // Keep showing cached data
+            _isOffline = true;
           });
         }
       }
     } catch (e) {
       // Network error, keep showing cached data if available
-      if (_rateData.isEmpty) {
+      if (_allChannelsData.isEmpty) {
         setState(() {
           _errorMessage = e.toString();
           _isLoading = false;
@@ -135,7 +162,6 @@ class _RateChartScreenState extends State<RateChartScreen> {
         setState(() {
           _isLoadingFromNetwork = false;
           _isOffline = true;
-          // Keep showing cached data
         });
       }
     }
@@ -187,6 +213,34 @@ class _RateChartScreenState extends State<RateChartScreen> {
     });
   }
 
+  String _getEmptyStateMessage() {
+    final l10n = AppLocalizations();
+    
+    if (_rateData.isEmpty) {
+      // No data for current channel
+      if (_currentChannelData == null) {
+        return l10n.tr('no_rate_chart_for_channel');
+      }
+      return l10n.tr('no_rate_data');
+    } else {
+      // Has data but no search results
+      return 'No matching rates found';
+    }
+  }
+
+  String _getAvailableChannelsMessage() {
+    final l10n = AppLocalizations();
+    final availableChannels = <String>[];
+    
+    if (_allChannelsData.containsKey('CH1')) availableChannels.add(l10n.tr('cow'));
+    if (_allChannelsData.containsKey('CH2')) availableChannels.add(l10n.tr('buffalo'));
+    if (_allChannelsData.containsKey('CH3')) availableChannels.add(l10n.tr('mixed'));
+    
+    if (availableChannels.isEmpty) return '';
+    
+    return 'Available: ${availableChannels.join(', ')}';
+  }
+
   void _clearSearch() {
     _fatController.clear();
     _snfController.clear();
@@ -206,12 +260,24 @@ class _RateChartScreenState extends State<RateChartScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Text(l10n.tr('rate_chart')),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  l10n.tr('rate_chart'),
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeXLarge,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
             if (_isOffline) ...[
-              const SizedBox(width: 8),
+              SizedBox(width: SizeConfig.spaceSmall),
               Icon(
                 Icons.cloud_off,
-                size: 18,
+                size: SizeConfig.iconSizeSmall,
                 color: AppTheme.warningColor,
               ),
             ],
@@ -219,8 +285,39 @@ class _RateChartScreenState extends State<RateChartScreen> {
         ),
         elevation: 0,
         actions: [
+          // Channel Dropdown
+          ChannelDropdownButton(
+            selectedChannel: _selectedChannel,
+            onChannelChanged: (channel) {
+              setState(() {
+                _selectedChannel = channel;
+                // Update current channel data
+                final channelData = _currentChannelData;
+                if (channelData != null) {
+                  _rateChartInfo = channelData['info'];
+                  _rateData = channelData['data'] ?? [];
+                  _filteredRateData = _rateData;
+                } else {
+                  _rateChartInfo = null;
+                  _rateData = [];
+                  _filteredRateData = [];
+                }
+                // Clear search when switching channels
+                _fatController.clear();
+                _snfController.clear();
+                _clrController.clear();
+                _highlightedIndex = null;
+              });
+            },
+            compact: true,
+          ),
+          SizedBox(width: SizeConfig.spaceSmall),
+          // Search Toggle
           IconButton(
-            icon: Icon(_showSearch ? Icons.search_off : Icons.search),
+            icon: Icon(
+              _showSearch ? Icons.search_off : Icons.search,
+              size: SizeConfig.iconSizeLarge,
+            ),
             onPressed: () {
               setState(() {
                 _showSearch = !_showSearch;
@@ -232,21 +329,15 @@ class _RateChartScreenState extends State<RateChartScreen> {
             tooltip: _showSearch ? l10n.tr('hide_search') : l10n.tr('search_rate'),
           ),
           if (_isLoadingFromNetwork)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: FlowerSpinner(size: 20),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () => _loadRateChart(forceRefresh: true),
-              tooltip: l10n.tr('refresh'),
+            Padding(
+              padding: EdgeInsets.all(SizeConfig.spaceRegular),
+              child: FlowerSpinner(size: SizeConfig.iconSizeMedium),
             ),
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: FlowerSpinner(size: 48),
+          ? Center(
+              child: FlowerSpinner(size: SizeConfig.iconSizeHuge),
             )
           : _errorMessage != null
               ? _buildErrorView()
@@ -259,34 +350,37 @@ class _RateChartScreenState extends State<RateChartScreen> {
     
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(SizeConfig.spaceXLarge),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.receipt_long_outlined,
-              size: 64,
+              Icons.cloud_off_rounded,
+              size: SizeConfig.iconSizeHuge,
               color: AppTheme.warningColor,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: SizeConfig.spaceRegular),
             Text(
               l10n.tr('no_rate_chart'),
               style: TextStyle(
-                fontSize: 18,
+                fontSize: SizeConfig.fontSizeLarge,
                 fontWeight: FontWeight.w600,
                 color: context.textPrimaryColor,
               ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: SizeConfig.spaceSmall),
             Text(
-              _errorMessage!,
+              'No cached data available. Please connect to internet to download rate chart.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: SizeConfig.fontSizeRegular,
                 color: context.textSecondaryColor,
               ),
+              softWrap: true,
+              maxLines: 3,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: SizeConfig.spaceXLarge),
             ElevatedButton.icon(
               onPressed: () => _loadRateChart(forceRefresh: true),
               icon: const Icon(Icons.refresh),
@@ -305,48 +399,72 @@ class _RateChartScreenState extends State<RateChartScreen> {
   Widget _buildRateChartView() {
     final l10n = AppLocalizations();
     
-    return Column(
-      children: [
-        // Rate Chart Info Header
-        if (_rateChartInfo != null) _buildInfoHeader(),
-        
-        // Search Bar
-        if (_showSearch) _buildSearchBar(),
-        
-        // Rate Data Table
-        Expanded(
-          child: _filteredRateData.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.table_chart_outlined,
-                        size: 64,
-                        color: context.textSecondaryColor.withOpacity(0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _rateData.isEmpty ? l10n.tr('no_rate_data') : 'No matching rates found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: context.textSecondaryColor,
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadRateChart(forceRefresh: true);
+      },
+      color: AppTheme.primaryGreen,
+      child: Column(
+        children: [
+          // Rate Chart Info Header
+          if (_rateChartInfo != null) _buildInfoHeader(),
+          
+          // Search Bar
+          if (_showSearch) _buildSearchBar(),
+          
+          // Rate Data Table
+          Expanded(
+            child: _filteredRateData.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.6,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.table_chart_outlined,
+                              size: SizeConfig.iconSizeHuge,
+                              color: context.textSecondaryColor.withOpacity(0.5),
+                            ),
+                            SizedBox(height: SizeConfig.spaceRegular),
+                            Text(
+                              _getEmptyStateMessage(),
+                              style: TextStyle(
+                                fontSize: SizeConfig.fontSizeMedium,
+                                color: context.textSecondaryColor,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            if (_rateData.isNotEmpty) ...[
+                              SizedBox(height: SizeConfig.spaceRegular),
+                              TextButton.icon(
+                                onPressed: _clearSearch,
+                                icon: Icon(Icons.clear, size: SizeConfig.iconSizeSmall),
+                                label: Text(l10n.tr('clear_search')),
+                              ),
+                            ],
+                            if (_rateData.isEmpty && _currentChannelData == null && _allChannelsData.isNotEmpty) ...[
+                              SizedBox(height: SizeConfig.spaceRegular),
+                              Text(
+                                _getAvailableChannelsMessage(),
+                                style: TextStyle(
+                                  fontSize: SizeConfig.fontSizeSmall,
+                                  color: context.textSecondaryColor.withOpacity(0.7),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      if (_rateData.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        TextButton.icon(
-                          onPressed: _clearSearch,
-                          icon: const Icon(Icons.clear),
-                          label: Text(l10n.tr('clear_search')),
-                        ),
-                      ],
-                    ],
-                  ),
-                )
-              : _buildRateTable(),
-        ),
-      ],
+                    ),
+                  )
+                : _buildRateTable(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -355,7 +473,7 @@ class _RateChartScreenState extends State<RateChartScreen> {
     final l10n = AppLocalizations();
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(SizeConfig.spaceRegular),
       decoration: BoxDecoration(
         color: isDark
             ? AppTheme.primaryGreen.withOpacity(0.1)
@@ -375,15 +493,21 @@ class _RateChartScreenState extends State<RateChartScreen> {
               Icon(
                 Icons.search,
                 color: AppTheme.primaryGreen,
-                size: 20,
+                size: SizeConfig.iconSizeLarge,
               ),
-              const SizedBox(width: 8),
-              Text(
-                l10n.tr('search_rate'),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: context.textPrimaryColor,
+              SizedBox(width: SizeConfig.spaceSmall),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    l10n.tr('search_rate'),
+                    style: TextStyle(
+                      fontSize: SizeConfig.fontSizeRegular,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimaryColor,
+                    ),
+                  ),
                 ),
               ),
               const Spacer(),
@@ -392,10 +516,10 @@ class _RateChartScreenState extends State<RateChartScreen> {
                   _clrController.text.isNotEmpty)
                 TextButton.icon(
                   onPressed: _clearSearch,
-                  icon: const Icon(Icons.clear, size: 16),
+                  icon: Icon(Icons.clear, size: SizeConfig.iconSizeSmall),
                   label: Text(l10n.tr('clear')),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: EdgeInsets.symmetric(horizontal: SizeConfig.spaceSmall),
                   ),
                 ),
             ],
@@ -410,7 +534,7 @@ class _RateChartScreenState extends State<RateChartScreen> {
                   hint: 'e.g., 3.5',
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: SizeConfig.spaceMedium),
               Expanded(
                 child: _buildSearchField(
                   controller: _snfController,
@@ -418,7 +542,7 @@ class _RateChartScreenState extends State<RateChartScreen> {
                   hint: 'e.g., 8.5',
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: SizeConfig.spaceMedium),
               Expanded(
                 child: _buildSearchField(
                   controller: _clrController,
@@ -426,15 +550,24 @@ class _RateChartScreenState extends State<RateChartScreen> {
                   hint: 'e.g., 26',
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: SizeConfig.spaceMedium),
               ElevatedButton(
                 onPressed: _searchRate,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryGreen,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SizeConfig.spaceXLarge,
+                    vertical: SizeConfig.spaceRegular,
+                  ),
                 ),
-                child: Text(l10n.tr('find')),
+                child: Text(
+                  l10n.tr('find'),
+                  style: TextStyle(
+                    fontSize: SizeConfig.fontSizeMedium,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -451,13 +584,26 @@ class _RateChartScreenState extends State<RateChartScreen> {
     return TextField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      style: TextStyle(
+        fontSize: SizeConfig.fontSizeLarge,
+        fontWeight: FontWeight.w600,
+      ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+        labelStyle: TextStyle(
+          fontSize: SizeConfig.fontSizeRegular,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        hintStyle: TextStyle(
+          fontSize: SizeConfig.fontSizeRegular,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
+        ),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: SizeConfig.spaceMedium,
+          vertical: SizeConfig.spaceMedium,
+        ),
         filled: true,
         fillColor: context.surfaceColor,
       ),
@@ -471,7 +617,7 @@ class _RateChartScreenState extends State<RateChartScreen> {
     
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(SizeConfig.spaceRegular),
       decoration: BoxDecoration(
         color: isDark
             ? AppTheme.primaryGreen.withOpacity(0.15)
@@ -491,22 +637,26 @@ class _RateChartScreenState extends State<RateChartScreen> {
               Icon(
                 Icons.receipt_long,
                 color: AppTheme.primaryGreen,
-                size: 20,
+                size: SizeConfig.iconSizeMedium,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: SizeConfig.spaceSmall),
               Expanded(
-                child: Text(
-                  _rateChartInfo!['fileName'] ?? l10n.tr('rate_chart'),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimaryColor,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _rateChartInfo!['fileName'] ?? l10n.tr('rate_chart'),
+                    style: TextStyle(
+                      fontSize: SizeConfig.fontSizeMedium,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimaryColor,
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: SizeConfig.spaceSmall),
           _buildInfoRow(
             l10n.tr('channel'),
             _rateChartInfo!['channel'] ?? 'N/A',
@@ -526,21 +676,25 @@ class _RateChartScreenState extends State<RateChartScreen> {
             ),
           if (_cacheTimestamp != null && _isOffline)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(top: SizeConfig.spaceXSmall),
               child: Row(
                 children: [
                   Icon(
                     Icons.cloud_off,
-                    size: 14,
+                    size: SizeConfig.iconSizeSmall,
                     color: AppTheme.warningColor,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Offline - Last synced: ${_formatDateTime(_cacheTimestamp!)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.warningColor,
-                      fontStyle: FontStyle.italic,
+                  SizedBox(width: SizeConfig.spaceXSmall),
+                  Flexible(
+                    child: Text(
+                      'Offline - Last synced: ${_formatDateTime(_cacheTimestamp!)}',
+                      style: TextStyle(
+                        fontSize: SizeConfig.fontSizeXSmall,
+                        color: AppTheme.warningColor,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      softWrap: true,
+                      maxLines: 2,
                     ),
                   ),
                 ],
@@ -553,23 +707,29 @@ class _RateChartScreenState extends State<RateChartScreen> {
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: EdgeInsets.only(top: SizeConfig.spaceXSmall),
       child: Row(
         children: [
           Text(
             '$label: ',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: SizeConfig.fontSizeSmall,
               color: context.textSecondaryColor,
               fontWeight: FontWeight.w500,
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              color: context.textPrimaryColor,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: SizeConfig.fontSizeSmall,
+                  color: context.textPrimaryColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
@@ -582,14 +742,14 @@ class _RateChartScreenState extends State<RateChartScreen> {
     final isDark = context.isDarkMode;
     
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(SizeConfig.spaceRegular),
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
             color: context.borderColor,
             width: 1,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
         ),
         child: Column(
           children: [
@@ -669,29 +829,41 @@ class _RateChartScreenState extends State<RateChartScreen> {
 
   Widget _buildHeaderCell(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.primaryGreen,
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceSmall,
+        vertical: SizeConfig.spaceMedium,
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: SizeConfig.fontSizeSmall,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.primaryGreen,
+          ),
+          textAlign: TextAlign.center,
         ),
-        textAlign: TextAlign.center,
       ),
     );
   }
 
   Widget _buildDataCell(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: context.textPrimaryColor,
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceSmall,
+        vertical: SizeConfig.spaceSmall,
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: SizeConfig.fontSizeSmall,
+            color: context.textPrimaryColor,
+          ),
+          textAlign: TextAlign.center,
         ),
-        textAlign: TextAlign.center,
       ),
     );
   }

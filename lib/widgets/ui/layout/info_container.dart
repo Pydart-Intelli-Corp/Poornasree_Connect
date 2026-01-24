@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 class InfoContainer extends StatelessWidget {
   final String text;
@@ -21,6 +22,7 @@ class InfoContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final isDark = context.isDarkMode;
     final bgColor =
         backgroundColor ?? (isDark ? AppTheme.darkBg2 : AppTheme.lightBg2);
@@ -28,36 +30,37 @@ class InfoContainer extends StatelessWidget {
     final icnColor = iconColor ?? AppTheme.primaryGreen;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.radiusLarge,
+        vertical: SizeConfig.spaceRegular - 2,
+      ),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(borderRadius ?? 12),
+        borderRadius: BorderRadius.circular(
+          borderRadius ?? SizeConfig.radiusRegular,
+        ),
         border: Border.all(
           color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+          width: SizeConfig.normalize(1),
         ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(SizeConfig.spaceSmall),
             decoration: BoxDecoration(
               color: AppTheme.primaryGreen.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
             ),
-            child: Icon(
-              icon,
-              color: icnColor,
-              size: 18,
-            ),
+            child: Icon(icon, color: icnColor, size: SizeConfig.iconSizeMedium),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceMedium),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
                 color: txtColor,
-                fontSize: 13,
+                fontSize: SizeConfig.fontSizeSmall,
                 fontWeight: FontWeight.w500,
                 height: 1.4,
                 letterSpacing: 0.2,

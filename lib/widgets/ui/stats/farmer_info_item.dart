@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 /// A single info item used in the farmer card row
 /// Shows an icon, label, and value with a vertical divider option
@@ -26,17 +27,17 @@ class FarmerInfoItem extends StatelessWidget {
         children: [
           if (showDivider) ...[
             Container(height: 25, width: 1, color: color.withOpacity(0.3)),
-            const SizedBox(width: 8),
+            SizedBox(width: SizeConfig.spaceSmall),
           ],
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: EdgeInsets.all(SizeConfig.spaceXSmall),
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 16),
+            child: Icon(icon, color: color, size: SizeConfig.iconSizeMedium),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: SizeConfig.spaceSmall),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -47,7 +48,7 @@ class FarmerInfoItem extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      fontSize: 8,
+                      fontSize: SizeConfig.fontSizeXSmall,
                       color: context.textSecondaryColor,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,
@@ -55,17 +56,17 @@ class FarmerInfoItem extends StatelessWidget {
                     maxLines: 1,
                   ),
                 ),
-                const SizedBox(height: 1),
+                SizedBox(height: SizeConfig.spaceTiny),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: SizeConfig.fontSizeRegular,
                     fontWeight: FontWeight.bold,
                     color: color,
                     letterSpacing: 0.5,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                  softWrap: true,
+                  maxLines: 2,
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../l10n/app_localizations.dart';
+import '../../utils/helpers/size_config.dart';
 import '../../utils/utils.dart';
 import '../ui/ui.dart';
 import 'otp_verification_dialog.dart';
@@ -185,19 +186,20 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final theme = Theme.of(context);
 
     return Dialog(
       backgroundColor: theme.colorScheme.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceRegular),
         side: BorderSide(color: AppTheme.borderDark.withOpacity(0.5)),
       ),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(SizeConfig.spaceXLarge),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +207,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                 // Header
                 _buildHeader(theme),
 
-                const SizedBox(height: 24),
+                SizedBox(height: SizeConfig.spaceXLarge),
 
                 // Info Card
                 InfoContainer(
@@ -216,7 +218,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                   textColor: AppTheme.primaryBlue,
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: SizeConfig.spaceXLarge),
 
                 // User Password Section
                 _buildSectionTitle(
@@ -225,7 +227,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                   theme,
                   status: _userPasswordStatus,
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: SizeConfig.spaceSmall),
                 // Current Password Display with View/Change buttons
                 _buildCurrentPasswordDisplay(
                   currentPassword: _currentUserPassword,
@@ -233,7 +235,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                   passwordType: 'User',
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: SizeConfig.spaceXLarge),
 
                 // Supervisor Password Section
                 _buildSectionTitle(
@@ -242,7 +244,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                   theme,
                   status: _supervisorPasswordStatus,
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: SizeConfig.spaceSmall),
                 // Current Password Display with View/Change buttons
                 _buildCurrentPasswordDisplay(
                   currentPassword: _currentSupervisorPassword,
@@ -250,7 +252,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                   passwordType: 'Supervisor',
                 ),
 
-                const SizedBox(height: 28),
+                SizedBox(height: SizeConfig.spaceLarge + 4),
 
                 // Close Button
                 SizedBox(
@@ -273,18 +275,18 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(10),
+          padding: EdgeInsets.all(SizeConfig.spaceSmall + 2),
           decoration: BoxDecoration(
             color: AppTheme.primaryBlue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(SizeConfig.spaceSmall + 2),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.lock_outline,
             color: AppTheme.primaryBlue,
-            size: 24,
+            size: SizeConfig.iconSizeLarge,
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: SizeConfig.spaceMedium),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,7 +297,7 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: SizeConfig.spaceTiny),
               Text(
                 _machineId,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -321,8 +323,12 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: AppTheme.textSecondary),
-        const SizedBox(width: 8),
+        Icon(
+          icon,
+          size: SizeConfig.iconSizeSmall,
+          color: AppTheme.textSecondary,
+        ),
+        SizedBox(width: SizeConfig.spaceSmall),
         Text(
           title,
           style: theme.textTheme.bodyMedium?.copyWith(
@@ -364,20 +370,23 @@ class _PasswordSettingsDialogState extends State<PasswordSettingsDialog> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceSmall,
+        vertical: SizeConfig.spaceTiny,
+      ),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: textColor),
-          const SizedBox(width: 4),
+          Icon(icon, size: SizeConfig.iconSizeXSmall, color: textColor),
+          SizedBox(width: SizeConfig.spaceXSmall),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: SizeConfig.fontSizeXSmall,
               fontWeight: FontWeight.w500,
               color: textColor,
             ),
@@ -484,7 +493,8 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
       CustomSnackbar.show(
         context,
         message: AppLocalizations().tr('no_password_set'),
-        submessage: AppLocalizations().tr('no_password_configured')
+        submessage: AppLocalizations()
+            .tr('no_password_configured')
             .replaceAll('{type}', widget.passwordType.toLowerCase()),
         isError: true,
       );
@@ -505,7 +515,8 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
       context,
       email: widget.userEmail!,
       title: AppLocalizations().tr('verify_identity'),
-      description: AppLocalizations().tr('verify_identity_desc')
+      description: AppLocalizations()
+          .tr('verify_identity_desc')
           .replaceAll('{type}', widget.passwordType.toLowerCase()),
       onSendOtp: widget.onSendOtp!,
       onVerifyOtp: widget.onVerifyOtp!,
@@ -519,9 +530,12 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
   void _showPasswordAlert() {
     PasswordRevealDialog.show(
       context,
-      title: '${AppLocalizations().tr(widget.passwordType == 'User' ? 'user_password' : 'supervisor_password')}',
+      title:
+          '${AppLocalizations().tr(widget.passwordType == 'User' ? 'user_password' : 'supervisor_password')}',
       password: widget.currentPassword!,
-      label: AppLocalizations().tr('machine_label').replaceAll('{id}', widget.machineId),
+      label: AppLocalizations()
+          .tr('machine_label')
+          .replaceAll('{id}', widget.machineId),
     );
   }
 
@@ -545,41 +559,52 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final hasPassword =
         widget.currentPassword != null && widget.currentPassword!.isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: SizeConfig.spaceMedium,
+        vertical: SizeConfig.spaceSmall + 2,
+      ),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
         border: Border.all(color: context.borderColor),
       ),
       child: Row(
         children: [
-          Icon(Icons.key_outlined, size: 16, color: AppTheme.textSecondary),
-          const SizedBox(width: 8),
+          Icon(
+            Icons.key_outlined,
+            size: SizeConfig.iconSizeSmall,
+            color: AppTheme.textSecondary,
+          ),
+          SizedBox(width: SizeConfig.spaceSmall),
           Text(
             'Current: ',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            style: TextStyle(
+              fontSize: SizeConfig.fontSizeSmall,
+              color: AppTheme.textSecondary,
+            ),
           ),
           Expanded(
             child: widget.isLoading
                 ? Row(
                     children: [
                       SizedBox(
-                        width: 14,
-                        height: 14,
+                        width: SizeConfig.iconSizeSmall - 2,
+                        height: SizeConfig.iconSizeSmall - 2,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: AppTheme.textSecondary,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: SizeConfig.spaceSmall),
                       Text(
                         'Loading...',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: SizeConfig.fontSizeSmall,
                           color: AppTheme.textSecondary,
                           fontStyle: FontStyle.italic,
                         ),
@@ -589,7 +614,7 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
                 : Text(
                     !hasPassword ? 'Not set' : '••••••',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: SizeConfig.fontSizeSmall,
                       fontWeight: hasPassword
                           ? FontWeight.w600
                           : FontWeight.normal,
@@ -605,13 +630,15 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
               GestureDetector(
                 onTap: _handleViewPassword,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SizeConfig.spaceSmall + 2,
+                    vertical: SizeConfig.spaceXSmall,
                   ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryGreen.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(
+                      SizeConfig.spaceXSmall + 2,
+                    ),
                     border: Border.all(
                       color: AppTheme.primaryGreen.withOpacity(0.3),
                     ),
@@ -621,14 +648,14 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
                     children: [
                       Icon(
                         Icons.visibility_outlined,
-                        size: 14,
+                        size: SizeConfig.iconSizeSmall - 2,
                         color: AppTheme.primaryGreen,
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: SizeConfig.spaceXSmall),
                       Text(
                         'View',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: SizeConfig.fontSizeSmall,
                           color: AppTheme.primaryGreen,
                           fontWeight: FontWeight.w600,
                         ),
@@ -637,19 +664,21 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
                   ),
                 ),
               ),
-            const SizedBox(width: 8),
+            SizedBox(width: SizeConfig.spaceSmall),
             // Change button
             if (widget.onChangePassword != null)
               GestureDetector(
                 onTap: _handleChangePassword,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SizeConfig.spaceSmall + 2,
+                    vertical: SizeConfig.spaceXSmall,
                   ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryBlue.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(
+                      SizeConfig.spaceXSmall + 2,
+                    ),
                     border: Border.all(
                       color: AppTheme.primaryBlue.withOpacity(0.3),
                     ),
@@ -659,14 +688,14 @@ class _CurrentPasswordWidgetState extends State<_CurrentPasswordWidget> {
                     children: [
                       Icon(
                         Icons.edit_outlined,
-                        size: 14,
+                        size: SizeConfig.iconSizeSmall - 2,
                         color: AppTheme.primaryBlue,
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: SizeConfig.spaceXSmall),
                       Text(
                         hasPassword ? 'Change' : 'Set',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: SizeConfig.fontSizeSmall,
                           color: AppTheme.primaryBlue,
                           fontWeight: FontWeight.w600,
                         ),

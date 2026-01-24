@@ -27,12 +27,12 @@ class HistoryNavigator extends StatelessWidget {
         historyCount - historyIndex; // 1-based position from oldest
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: SizeConfig.spaceSmall, vertical: SizeConfig.spaceXSmall),
       decoration: BoxDecoration(
         color: isViewingHistory
             ? const Color(0xFF3b82f6).withOpacity(0.15)
             : context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(SizeConfig.spaceMedium),
         border: Border.all(
           color: isViewingHistory
               ? const Color(0xFF3b82f6).withOpacity(0.5)
@@ -47,16 +47,16 @@ class HistoryNavigator extends StatelessWidget {
           GestureDetector(
             onTap: historyIndex < historyCount - 1 ? onPrevious : null,
             child: Container(
-              padding: const EdgeInsets.all(3),
+              padding: EdgeInsets.all(SizeConfig.spaceXSmall),
               decoration: BoxDecoration(
                 color: historyIndex < historyCount - 1
                     ? const Color(0xFF3b82f6).withOpacity(0.2)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
               ),
               child: Icon(
                 Icons.chevron_left_rounded,
-                size: 14,
+                size: SizeConfig.iconSizeSmall,
                 color: historyIndex < historyCount - 1
                     ? const Color(0xFF3b82f6)
                     : context.textSecondaryColor,
@@ -68,24 +68,24 @@ class HistoryNavigator extends StatelessWidget {
           GestureDetector(
             onTap: isViewingHistory ? onGoToLive : null,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              padding: EdgeInsets.symmetric(horizontal: SizeConfig.spaceSmall, vertical: 1),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (isViewingHistory) ...[
-                    const Icon(
+                    Icon(
                       Icons.history_rounded,
-                      size: 10,
+                      size: SizeConfig.iconSizeSmall,
                       color: Color(0xFF3b82f6),
                     ),
-                    const SizedBox(width: 3),
+                    SizedBox(width: SizeConfig.spaceXSmall),
                   ],
                   Text(
                     isViewingHistory
                         ? '$currentPosition/$historyCount'
                         : AppLocalizations().tr('live'),
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: SizeConfig.fontSizeXSmall,
                       fontWeight: FontWeight.bold,
                       color: isViewingHistory
                           ? const Color(0xFF3b82f6)
@@ -102,16 +102,16 @@ class HistoryNavigator extends StatelessWidget {
           GestureDetector(
             onTap: historyIndex > 0 ? onNext : null,
             child: Container(
-              padding: const EdgeInsets.all(3),
+              padding: EdgeInsets.all(SizeConfig.spaceXSmall),
               decoration: BoxDecoration(
                 color: historyIndex > 0
                     ? const Color(0xFF3b82f6).withOpacity(0.2)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(SizeConfig.spaceSmall),
               ),
               child: Icon(
                 Icons.chevron_right_rounded,
-                size: 14,
+                size: SizeConfig.iconSizeSmall,
                 color: historyIndex > 0
                     ? const Color(0xFF3b82f6)
                     : context.textSecondaryColor,

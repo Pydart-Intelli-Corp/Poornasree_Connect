@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../utils/utils.dart';
+import '../../../utils/helpers/size_config.dart';
 
 class PremiumTextField extends StatelessWidget {
   final TextEditingController controller;
@@ -25,22 +26,19 @@ class PremiumTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SizeConfig.init(context);
     final isDark = context.isDarkMode;
 
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkBg2 : AppTheme.lightBg2,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(SizeConfig.radiusRegular),
       ),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         style: TextStyle(
-          fontSize: 15,
+          fontSize: SizeConfig.fontSizeRegular,
           fontWeight: FontWeight.w500,
           color: context.textPrimaryColor,
           letterSpacing: 0.3,
@@ -49,33 +47,34 @@ class PremiumTextField extends StatelessWidget {
           labelText: labelText,
           labelStyle: TextStyle(
             color: context.textSecondaryColor,
-            fontSize: 14,
+            fontSize: SizeConfig.fontSizeRegular + 2,
             letterSpacing: 0.3,
           ),
           hintText: hintText,
           hintStyle: TextStyle(
             color: context.textSecondaryColor.withOpacity(0.5),
-            fontSize: 14,
+            fontSize: SizeConfig.fontSizeRegular,
             letterSpacing: 0.3,
           ),
           prefixIcon: Container(
-            margin: const EdgeInsets.all(10),
-            padding: const EdgeInsets.all(8),
+            margin: EdgeInsets.all(SizeConfig.spaceSmall),
+            padding: EdgeInsets.all(SizeConfig.spaceSmall),
             decoration: BoxDecoration(
-              color: iconBackgroundColor ??
+              color:
+                  iconBackgroundColor ??
                   AppTheme.primaryGreen.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusSmall),
             ),
             child: Icon(
               icon,
               color: iconColor ?? AppTheme.primaryGreen,
-              size: 18,
+              size: SizeConfig.iconSizeMedium - 2,
             ),
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 18,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: SizeConfig.spaceRegular,
+            vertical: SizeConfig.spaceRegular + 2,
           ),
           floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),

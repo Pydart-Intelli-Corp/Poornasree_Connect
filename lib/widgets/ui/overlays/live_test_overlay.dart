@@ -115,7 +115,7 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
                 : Icons.science_rounded;
 
             final headerText = isComplete
-                ? (allReceived ? AppLocalizations().tr('test_complete') : AppLocalizations().tr('test_complete'))
+                ? (allReceived ? AppLocalizations().tr('test_complete') : AppLocalizations().tr('test_timeout'))
                 : AppLocalizations().tr('testing');
 
             final subText = isComplete
@@ -123,9 +123,9 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
                 : '${AppLocalizations().tr('waiting_for_machines').replaceAll('{count}', widget.machines.length.toString())}';
 
             return Positioned(
-              top: MediaQuery.of(context).padding.top + 12,
-              left: 12,
-              right: 12,
+              top: MediaQuery.of(context).padding.top + SizeConfig.spaceMedium,
+              left: SizeConfig.spaceMedium,
+              right: SizeConfig.spaceMedium,
               child: SlideTransition(
                 position: _slideAnimation,
                 child: FadeTransition(
@@ -144,15 +144,15 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
                       child: Material(
                         color: Colors.transparent,
                         child: Container(
-                          constraints: const BoxConstraints(
-                            maxWidth: 400,
-                            minWidth: 300,
+                          constraints: BoxConstraints(
+                            maxWidth: SizeConfig.normalize(360),
+                            minWidth: SizeConfig.normalize(280),
                           ),
                           decoration: BoxDecoration(
                             color: isDark
                                 ? const Color(0xFF1E1E1E).withOpacity(0.95)
                                 : Colors.white.withOpacity(0.98),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(SizeConfig.radiusLarge),
                             border: Border.all(
                               color: headerColor.withOpacity(0.3),
                               width: 1.5,
@@ -186,7 +186,7 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
 
                               // Machine list
                               Padding(
-                                padding: const EdgeInsets.all(16),
+                                padding: EdgeInsets.all(SizeConfig.spaceRegular),
                                 child: Column(
                                   children: widget.machines.asMap().entries.map(
                                     (entry) {
@@ -248,12 +248,12 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
     required String subText,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(SizeConfig.spaceRegular),
       decoration: BoxDecoration(
         color: headerColor.withOpacity(0.1),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(SizeConfig.radiusLarge),
+          topRight: Radius.circular(SizeConfig.radiusLarge),
         ),
       ),
       child: Row(
@@ -261,7 +261,7 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
           isComplete
               ? AnimatedHeaderIcon(icon: headerIcon, color: headerColor)
               : PulsingIcon(icon: headerIcon, color: headerColor),
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceMedium),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,16 +269,16 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
                 Text(
                   headerText,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: SizeConfig.fontSizeLarge,
                     fontWeight: FontWeight.bold,
                     color: headerColor,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: SizeConfig.spaceTiny),
                 Text(
                   subText,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: SizeConfig.fontSizeSmall,
                     color: context.textSecondaryColor,
                   ),
                 ),
@@ -295,10 +295,11 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
               icon: Icon(
                 Icons.close_rounded,
                 color: context.textSecondaryColor,
+                size: SizeConfig.iconSizeSmall,
               ),
               onPressed: _handleDismiss,
               tooltip: AppLocalizations().tr('close'),
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(SizeConfig.spaceXSmall),
               constraints: const BoxConstraints(),
             ),
           ),
@@ -312,13 +313,13 @@ class _LiveTestOverlayState extends State<LiveTestOverlay>
 class PulsingIcon extends StatefulWidget {
   final IconData icon;
   final Color color;
-  final double size;
+  final double? size;
 
   const PulsingIcon({
     super.key,
     required this.icon,
     required this.color,
-    this.size = 44,
+    this.size,
   });
 
   @override
@@ -352,16 +353,17 @@ class _PulsingIconState extends State<PulsingIcon>
 
   @override
   Widget build(BuildContext context) {
+    final iconSize = widget.size ?? SizeConfig.iconSizeXLarge;
     return ScaleTransition(
       scale: _scaleAnimation,
       child: Container(
-        width: widget.size,
-        height: widget.size,
+        width: iconSize,
+        height: iconSize,
         decoration: BoxDecoration(
           color: widget.color.withOpacity(0.15),
           shape: BoxShape.circle,
         ),
-        child: Icon(widget.icon, color: widget.color, size: widget.size * 0.55),
+        child: Icon(widget.icon, color: widget.color, size: iconSize * 0.55),
       ),
     );
   }
@@ -371,13 +373,13 @@ class _PulsingIconState extends State<PulsingIcon>
 class AnimatedHeaderIcon extends StatefulWidget {
   final IconData icon;
   final Color color;
-  final double size;
+  final double? size;
 
   const AnimatedHeaderIcon({
     super.key,
     required this.icon,
     required this.color,
-    this.size = 44,
+    this.size,
   });
 
   @override
@@ -413,22 +415,23 @@ class _AnimatedHeaderIconState extends State<AnimatedHeaderIcon>
 
   @override
   Widget build(BuildContext context) {
+    final iconSize = widget.size ?? SizeConfig.iconSizeXLarge;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         return Transform.scale(
           scale: _scaleAnimation.value,
           child: Container(
-            width: widget.size,
-            height: widget.size,
+            width: iconSize,
+            height: iconSize,
             decoration: BoxDecoration(
               color: widget.color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
             ),
             child: Icon(
               widget.icon,
               color: widget.color,
-              size: widget.size * 0.55,
+              size: iconSize * 0.55,
             ),
           ),
         );
@@ -504,33 +507,33 @@ class _LiveMachineStatusRowState extends State<LiveMachineStatusRow>
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(vertical: SizeConfig.spaceXSmall + 2),
       child: Row(
         children: [
           // Machine icon
           Container(
-            width: 36,
-            height: 36,
+            width: SizeConfig.iconSizeLarge,
+            height: SizeConfig.iconSizeLarge,
             decoration: BoxDecoration(
               color: widget.received
                   ? const Color(0xFF10B981).withOpacity(0.15)
                   : context.surfaceColor,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(SizeConfig.radiusMedium),
             ),
             child: Icon(
               Icons.precision_manufacturing_rounded,
               color: widget.received ? const Color(0xFF10B981) : context.textSecondaryColor,
-              size: 20,
+              size: SizeConfig.iconSizeSmall,
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: SizeConfig.spaceMedium),
 
           // Machine name
           Expanded(
             child: Text(
               '${AppLocalizations().tr('machine')} ${widget.machineId}',
               style: TextStyle(
-                fontSize: 15,
+                fontSize: SizeConfig.fontSizeMedium,
                 fontWeight: FontWeight.w600,
                 color: context.textPrimaryColor,
               ),
@@ -545,35 +548,35 @@ class _LiveMachineStatusRowState extends State<LiveMachineStatusRow>
                     scale: _scaleAnimation,
                     child: Container(
                       key: const ValueKey('received'),
-                      width: 32,
-                      height: 32,
+                      width: SizeConfig.iconSizeLarge,
+                      height: SizeConfig.iconSizeLarge,
                       decoration: BoxDecoration(
                         color: const Color(0xFF10B981).withOpacity(0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check_rounded,
-                        color: Color(0xFF10B981),
-                        size: 20,
+                        color: const Color(0xFF10B981),
+                        size: SizeConfig.iconSizeSmall,
                       ),
                     ),
                   )
                 : widget.isComplete
                 ? Container(
                     key: const ValueKey('failed'),
-                    width: 32,
-                    height: 32,
+                    width: SizeConfig.iconSizeLarge,
+                    height: SizeConfig.iconSizeLarge,
                     decoration: BoxDecoration(
                       color: const Color(0xFFEF4444).withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
-                      color: Color(0xFFEF4444),
-                      size: 20,
+                      color: const Color(0xFFEF4444),
+                      size: SizeConfig.iconSizeSmall,
                     ),
                   )
-                : const FlowerSpinner(key: ValueKey('loading'), size: 24),
+                : FlowerSpinner(key: const ValueKey('loading'), size: SizeConfig.iconSizeMedium),
           ),
         ],
       ),
@@ -585,13 +588,13 @@ class _LiveMachineStatusRowState extends State<LiveMachineStatusRow>
 class AnimatedStatusIcon extends StatefulWidget {
   final bool received;
   final Duration delay;
-  final double size;
+  final double? size;
 
   const AnimatedStatusIcon({
     super.key,
     required this.received,
     this.delay = Duration.zero,
-    this.size = 32,
+    this.size,
   });
 
   @override
@@ -640,8 +643,9 @@ class _AnimatedStatusIconState extends State<AnimatedStatusIcon>
 
   @override
   Widget build(BuildContext context) {
+    final iconSize = widget.size ?? SizeConfig.iconSizeLarge;
     if (!_showIcon) {
-      return SizedBox(width: widget.size, height: widget.size);
+      return SizedBox(width: iconSize, height: iconSize);
     }
 
     return AnimatedBuilder(
@@ -652,8 +656,8 @@ class _AnimatedStatusIconState extends State<AnimatedStatusIcon>
           child: Transform.rotate(
             angle: _rotateAnimation.value,
             child: Container(
-              width: widget.size,
-              height: widget.size,
+              width: iconSize,
+              height: iconSize,
               decoration: BoxDecoration(
                 color: widget.received
                     ? const Color(0xFF10B981)
@@ -674,7 +678,7 @@ class _AnimatedStatusIconState extends State<AnimatedStatusIcon>
               child: Icon(
                 widget.received ? Icons.check_rounded : Icons.close_rounded,
                 color: Colors.white,
-                size: widget.size * 0.625,
+                size: iconSize * 0.625,
               ),
             ),
           ),
