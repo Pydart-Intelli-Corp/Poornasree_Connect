@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "."
+		},
+		{
+			"path": "C:/temp/machineapi"
 		}
 	],
 	"settings": {}
