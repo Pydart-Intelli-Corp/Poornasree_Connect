@@ -82,8 +82,9 @@ class BluetoothService {
   // SharedPreferences key for auto-connect
   static const String _autoConnectKey = 'bluetooth_auto_connect';
 
-  // Constants - Updated to match ESP32 BLE name format
+  // Constants - Updated to match ESP32 BLE name format (supports both Lactosure and Poornasree)
   static const String deviceNamePrefix = 'Lactosure - Sl.No - ';
+  static const String deviceNamePrefix2 = 'Poornasree - Sl.No - ';
   static const Duration scanDuration = Duration(seconds: 8);
   static const Duration autoScanInterval = Duration(seconds: 15);
 
@@ -388,10 +389,17 @@ class BluetoothService {
   }
 
   /// Extract serial number from BLE device name
-  /// e.g., "Lactosure - Sl.No - 201" -> "201"
+  /// e.g., "Lactosure - Sl.No - 201" or "Poornasree - Sl.No - 201" -> "201"
   String? _extractSerialNumber(String deviceName) {
+    String? prefix;
     if (deviceName.startsWith(deviceNamePrefix)) {
-      final serialPart = deviceName.substring(deviceNamePrefix.length).trim();
+      prefix = deviceNamePrefix;
+    } else if (deviceName.startsWith(deviceNamePrefix2)) {
+      prefix = deviceNamePrefix2;
+    }
+    
+    if (prefix != null) {
+      final serialPart = deviceName.substring(prefix.length).trim();
       // Return only numeric part
       final numericSerial = serialPart.replaceAll(RegExp(r'[^0-9]'), '');
       return numericSerial.isNotEmpty ? numericSerial : null;
@@ -409,8 +417,8 @@ class BluetoothService {
       final deviceName = device.platformName;
       final rssi = result.rssi;
 
-      // Filter for Lactosure devices only (matching "Lactosure - Sl.No - XXX" pattern)
-      if (deviceName.startsWith(deviceNamePrefix)) {
+      // Filter for Poornasree/Lactosure devices only (matching "Lactosure/Poornasree - Sl.No - XXX" pattern)
+      if (deviceName.startsWith(deviceNamePrefix) || deviceName.startsWith(deviceNamePrefix2)) {
         // Check if device already exists
         final exists = _lactosureDevices.any(
           (d) => d.remoteId == device.remoteId,

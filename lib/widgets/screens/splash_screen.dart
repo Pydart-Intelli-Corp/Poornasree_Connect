@@ -444,7 +444,7 @@ class _SplashScreenState extends State<SplashScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Bluetooth is currently turned off. This app uses Bluetooth to connect with Lactosure milk testing machines.',
+                'Bluetooth is currently turned off. This app uses Bluetooth to connect with Poornasree milk testing machines.',
                 style: TextStyle(
                   fontSize: SizeConfig.fontSizeRegular,
                   height: 1.5,

@@ -4,7 +4,7 @@ import '../../services/bluetooth_service.dart';
 import '../../utils/config/theme.dart';
 import '../../l10n/app_localizations.dart';
 
-/// Professional Bluetooth device dropdown with Lactosure-BLE filtering
+/// Professional Bluetooth device dropdown with Poornasree-BLE filtering
 class BluetoothDropdown extends StatefulWidget {
   final void Function(BluetoothDevice)? onDeviceSelected;
   final BluetoothDevice? selectedDevice;

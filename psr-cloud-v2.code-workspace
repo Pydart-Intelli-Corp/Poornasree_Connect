@@ -7,7 +7,10 @@
 			"path": "."
 		},
 		{
-			"path": "C:/temp/machineapi"
+			"path": "../wifi_dongle"
+		},
+		{
+			"path": "../wifi-ble"
 		}
 	],
 	"settings": {}
